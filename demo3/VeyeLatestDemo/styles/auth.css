@@ -1,0 +1,252 @@
+/* ============================================================
+   VEYE — Onboarding auth screens (Login + Signup)
+   Matched to Figma "Desk Onboard A" (28:53) and
+   "Desk Onboard A - Signup" (123:2). 1440x900 reference.
+   ============================================================ */
+
+.auth {
+  display: flex;
+  min-height: 100vh;
+  background: var(--cream);
+}
+
+/* ---------- Left media panel (photo + logo + vertical tagline) ---------- */
+.auth__media {
+  position: relative;
+  flex: 0 0 51.4%;          /* 740 / 1440 */
+  overflow: hidden;
+}
+.auth__photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* subtle top-left darkening so the white logo stays legible */
+.auth__media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(155deg, rgba(0,0,0,.42) 0%, rgba(0,0,0,0) 42%);
+  pointer-events: none;
+}
+.auth__logo {
+  position: absolute;
+  top: 48px;
+  left: 56px;
+  width: 140px;
+  z-index: 2;
+}
+.auth__tagline {
+  position: absolute;
+  right: 34px;
+  bottom: 52px;
+  z-index: 2;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: var(--white);
+  font-weight: 600;
+  font-size: 45px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ---------- Right form panel ---------- */
+.auth__panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 60px;
+}
+.auth__form { width: 100%; max-width: var(--col); }  /* 440 */
+
+.auth__title {
+  font-weight: 600;
+  font-size: 45px;
+  line-height: 1;
+  color: var(--green-900);
+}
+.auth__subtitle {
+  margin-top: 22px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.auth__fields {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;              /* login: 50h + 20 gap = 70 pitch */
+}
+.auth__fields--tight { gap: 10px; }  /* signup: 50h + 10 gap = 60 pitch */
+
+/* ---------- Field ---------- */
+.field { position: relative; }
+.field__input {
+  width: 100%;
+  height: var(--field-h);          /* 50 */
+  border-radius: var(--r-field);   /* 10 */
+  background: var(--white);
+  border: 1px solid transparent;
+  padding: 0 44px 0 32px;
+  font-size: 18px;
+  color: var(--ink);
+}
+.field__input::placeholder { color: var(--muted); }   /* #A1A1A1 */
+.field__eye {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.field__eye svg { width: 20px; height: 20px; }
+.field__eye .icon-off { display: none; }
+.field__eye.is-on .icon-on { display: none; }
+.field__eye.is-on .icon-off { display: block; }
+
+/* ---------- Remember / help row ---------- */
+.auth__row {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  letter-spacing: .7px;
+  color: var(--green-900);
+  cursor: pointer;
+  user-select: none;
+}
+.check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.check__box {
+  width: 20px; height: 20px;
+  flex: 0 0 20px;
+  border-radius: var(--r-sm);      /* 5 */
+  background: var(--white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.check input:checked + .check__box::after {
+  content: "";
+  width: 11px; height: 11px;
+  border-radius: 3px;
+  background: var(--green-900);
+}
+.link {
+  font-size: 14px;
+  letter-spacing: .7px;
+  color: var(--green-900);
+}
+.link:hover { text-decoration: underline; }
+
+/* ---------- Legal text ---------- */
+.legal {
+  font-size: 14px;
+  line-height: 1.25;
+  letter-spacing: .7px;
+  color: var(--green-900);
+}
+.legal a { text-decoration: underline; }
+.legal--terms { margin-top: 10px; }
+.legal--privacy { margin-top: 32px; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--field-h);          /* 50 */
+  border-radius: var(--r-field);   /* 10 */
+  font-size: 18px;
+  letter-spacing: .9px;
+  text-transform: uppercase;
+  transition: filter .15s ease;
+}
+.btn:hover { filter: brightness(.96); }
+.btn--primary { background: var(--green-900); color: var(--white); }
+.btn--lime    { background: var(--green-500); color: var(--green-900); }
+.btn--mt      { margin-top: 14px; }
+
+/* ---------- "Don't have a Veye account?" divider ---------- */
+.divider {
+  margin-top: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 18px;
+  color: var(--green-900);
+  white-space: nowrap;
+}
+.divider::before, .divider::after {
+  content: "";
+  width: 80px;
+  border-top: .5px solid var(--green-900);
+}
+.divider + .btn { margin-top: 32px; }
+
+/* ---------- Responsive ---------- */
+/* Between the 1280 design width and the 900px stack point the 51.4% photo
+   leaves the panel less than the form's 416px min-content, which pushed a
+   39px horizontal scroll at 1024. Let the panel shrink and give the form
+   room by trimming the side padding — widths above 1100 are untouched. */
+@media (max-width: 1100px) {
+  .auth__panel { min-width: 0; padding: 40px 28px; }
+  .auth__form { min-width: 0; }
+}
+@media (max-width: 900px) {
+  .auth { flex-direction: column; }
+  .auth__media { flex: 0 0 220px; width: 100%; }
+  .auth__tagline { display: none; }
+  .auth__panel { padding: 32px 20px 48px; }
+  .auth__title { font-size: 36px; }
+}
+
+
+/* ---------- Password recovery dialog (prototype flow) ---------- */
+.link--btn { background: none; border: none; padding: 0; cursor: pointer;
+  font: inherit; color: inherit; text-decoration: underline; }
+
+.pwd { width: min(440px, calc(100vw - 40px)); border: none; border-radius: 18px;
+  padding: 28px 30px 30px; background: var(--cream); color: var(--ink);
+  box-shadow: 0 24px 64px rgba(20, 40, 20, .25); }
+.pwd::backdrop { background: rgba(20, 35, 22, .45); }
+.pwd__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pwd__title { font-weight: 600; font-size: 26px; line-height: 1.1; color: var(--green-900); margin: 0 0 6px; }
+.pwd__close { flex: 0 0 auto; width: 32px; height: 32px; border: none; border-radius: 50%;
+  background: transparent; color: var(--green-900); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; }
+.pwd__close svg { width: 18px; height: 18px; }
+.pwd__close:hover { background: rgba(26, 72, 43, .08); }
+.pwd__sub { font-size: 15.5px; line-height: 1.5; margin: 2px 0 16px; }
+.pwd__opt { display: block; width: 100%; text-align: left; cursor: pointer;
+  background: #fff; border: 1px solid rgba(26, 72, 43, .18); border-radius: 12px;
+  padding: 13px 16px; margin: 0 0 10px; font: inherit; color: inherit; }
+.pwd__opt:hover { border-color: var(--green-900); }
+.pwd__opt b { display: block; font-weight: 600; color: var(--green-900); font-size: 16px; }
+.pwd__opt span { display: block; font-size: 13.5px; line-height: 1.45; margin-top: 2px; }
+.pwd__label { display: block; font-size: 14px; font-weight: 600; color: var(--green-900); margin: 4px 0 8px; }
+.pwd__err { color: #B3402F; font-size: 13.5px; margin: 8px 0 0; }
+.pwd__go { display: flex; width: 100%; margin-top: 16px; text-decoration: none; }
+.pwd__back { display: block; width: 100%; margin-top: 10px; background: none; cursor: pointer;
+  border: 1px solid rgba(26, 72, 43, .25); border-radius: 999px; height: 44px;
+  font: inherit; font-size: 15px; color: var(--green-900); }
+.pwd__back:hover { border-color: var(--green-900); }
+.pwd__helplink { display: block; text-align: center; margin-top: 12px; color: var(--green-900); }
+.pwd__proto { background: #FDF6E3; border: 1px solid #E4D9B8; border-radius: 10px;
+  padding: 11px 14px; font-size: 13.5px; line-height: 1.5; color: #6B5D2E; margin: 0 0 4px; }

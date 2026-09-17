@@ -1,0 +1,117 @@
+/* ============================================================================
+   Veye Admin — base: reset, typography, focus, accessibility primitives
+   ============================================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-body);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- headings -------------------------------------------------------------
+   Kumbh Sans carries page and section headings; Teachers carries everything a
+   user reads at length. No third family. */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--ink-heading);
+  line-height: var(--lh-heading);
+  margin: 0;
+  font-weight: 600;
+}
+h1 { font-size: var(--fs-page-title); letter-spacing: -.6px; line-height: var(--lh-tight); }
+h2 { font-size: var(--fs-section); letter-spacing: -.2px; }
+h3 { font-size: var(--fs-card-title); letter-spacing: -.1px; }
+h4 { font-size: var(--fs-body-lg); letter-spacing: 0; }
+
+p { margin: 0; }
+
+a {
+  color: var(--text-link);
+  text-decoration-color: color-mix(in srgb, var(--text-link) 35%, transparent);
+  text-underline-offset: 3px;
+}
+a:hover { text-decoration-color: currentColor; }
+
+img, svg, video { display: block; max-width: 100%; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* ---- focus ----------------------------------------------------------------
+   WCAG 2.2: focus must be visible AND not obscured. Sticky bars in this app
+   carry scroll-margin so a focused control is never parked underneath one. */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--line-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+.rail :focus-visible,
+.topbar :focus-visible { outline-color: var(--green-primary); }
+
+/* Anything that can be scrolled to sits clear of the sticky chrome. */
+[id] { scroll-margin-top: calc(var(--topbar-h) + var(--s-6)); }
+
+/* ---- screen-reader only ---------------------------------------------------- */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+/* `:focus`, not only `:focus-visible`. A skip link is reached by keyboard by
+   definition, and `:focus-visible` does not match when focus arrives
+   programmatically — which left the link a 1x1 invisible target. */
+.sr-only-focusable:focus,
+.sr-only-focusable:focus-visible {
+  position: fixed; top: var(--s-3); left: var(--s-3);
+  width: auto; height: auto; margin: 0; padding: var(--s-3) var(--s-5);
+  clip: auto; clip-path: none; white-space: normal;
+  background: var(--green-primary); color: var(--text-on-dark);
+  border-radius: var(--r-btn); z-index: 999; box-shadow: var(--shadow-overlay);
+}
+
+/* ---- text helpers ----------------------------------------------------------- */
+.t-muted   { color: var(--text-muted); }
+.t-strong  { color: var(--text-strong); font-weight: 600; }
+.t-support { font-size: var(--fs-support); color: var(--text-muted); }
+.t-eyebrow {
+  font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: 1.1px;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.t-num {
+  font-family: var(--font-display); font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--ink-heading);
+}
+.t-nowrap { white-space: nowrap; }
+
+/* ---- utility -------------------------------------------------------------- */
+.stack   { display: flex; flex-direction: column; }
+.row     { display: flex; align-items: center; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); }
+.wrap    { flex-wrap: wrap; }
+.grow    { flex: 1 1 auto; min-width: 0; }
+.gap-1 { gap: var(--s-1); } .gap-2 { gap: var(--s-2); } .gap-3 { gap: var(--s-3); }
+.gap-4 { gap: var(--s-4); } .gap-5 { gap: var(--s-5); } .gap-6 { gap: var(--s-6); }
+.hidden  { display: none !important; }
+
+/* Scrollbars: present but quiet — never a hard black edge. */
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong); border-radius: var(--r-pill);
+  border: 3px solid var(--surface-page);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--sage); }
+
+/* Selection uses the brand rather than the browser default blue. */
+::selection { background: var(--tint-lime); color: var(--ink-heading); }

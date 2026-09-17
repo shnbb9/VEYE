@@ -1,0 +1,694 @@
+/* ============================================================================
+   Veye Admin Console — client edition
+   Everything this edition adds on top of the shared vocabulary: the Phase 2
+   badge, the dedicated sign-in composition, the editorial Home layout, the
+   chart primitives, and the Content, Settings and Profile surfaces.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- the rail -- */
+.rail__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Eight destinations, so the labels are allowed to breathe rather than clip. */
+.nav-link span { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
+
+/* --------------------------------------------------------- Phase 2 badge ----
+   Supplements, Resources and Fitness are Coming Soon in the member product.
+   Wherever their administration would appear, this badge appears beside the
+   label. Restrained on purpose: it must never out-shout the thing it labels. */
+.p2 {
+  display: inline-flex; align-items: center; flex: 0 0 auto;
+  font-family: var(--font-body); font-size: 11px; font-weight: 700;
+  letter-spacing: .4px; line-height: 1;
+  padding: 3px 7px; border-radius: var(--r-pill);
+  background: var(--cream-warm-2); color: #8A6A2A;
+  border: 1px solid #E6D6B0; white-space: nowrap;
+  vertical-align: 2px;
+}
+/* On a dark or tinted surface the badge keeps the same weight. */
+.nav-link .p2, .subnav__btn .p2, .modeswitch__btn .p2 { margin-left: 6px; }
+
+/* A Phase 2 control is a real button that explains itself instead of leading
+   somewhere unfinished. It reads as available-but-not-yet, never as broken. */
+[data-phase2] { cursor: pointer; }
+.tile[data-phase2], .feature.is-locked { background: var(--surface-soft); }
+.tile[data-phase2] .tile__icon { background: var(--cream-warm-2); color: #8A6A2A; }
+
+/* ------------------------------------------------------------ global search -- */
+.results {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+  background: var(--surface-card); border: 1px solid var(--line);
+  border-radius: var(--r-card); box-shadow: var(--shadow-overlay);
+  padding: var(--s-2); z-index: var(--z-dropdown); max-height: 60vh; overflow-y: auto;
+}
+.results__row {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 9px var(--s-4); border-radius: var(--r-sm);
+  text-decoration: none; color: inherit;
+}
+.results__row:hover, .results__row:focus-visible { background: var(--tint-lime); }
+.results__label { font-size: var(--fs-body); font-weight: 600; color: var(--text-strong); }
+.results__sub { font-size: var(--fs-chip); color: var(--text-muted); }
+.results__none { padding: var(--s-4); font-size: var(--fs-support); color: var(--text-muted); }
+
+/* --------------------------------------------------------------- help modal -- */
+.helpgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); }
+.helpcard {
+  padding: var(--s-4) var(--s-5); border: 1px solid var(--line);
+  border-radius: var(--r-field); background: var(--surface-softer);
+}
+.helpcard h3 { font-size: var(--fs-body-lg); margin-bottom: 4px; }
+@media (max-width: 640px) { .helpgrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* =========================================================================
+   SIGN IN
+   A dedicated full-screen composition. The authenticated rail and utility bar
+   are removed from the page entirely — not hidden behind the panel.
+   ========================================================================= */
+/* The rail is removed from the page, so the main column has to move into the
+   first grid track. Left at `grid-column: 2` it creates an empty implicit first
+   column and the whole sign-in composition sits inset from the left edge. */
+body.is-auth-screen .app { grid-template-columns: minmax(0, 1fr); }
+body.is-auth-screen .main { grid-column: 1; min-height: 100vh; }
+body.is-auth-screen #main-content { display: block; }
+/* The `hidden` attribute alone is not enough here. `[hidden] { display: none }`
+   is a user-agent rule, and `.rail { display: flex }` in layout.css beats it on
+   specificity — so the emptied rail kept its `height: 100vh` and pushed the
+   whole sign-in composition 720px down the page. */
+body.is-auth-screen .rail,
+body.is-auth-screen .topbar { display: none !important; }
+
+.auth {
+  display: grid; grid-template-columns: 55fr 45fr;
+  min-height: 100vh; background: var(--surface-page);
+}
+
+/* Left — one restrained lifestyle visual, the mark, and the product line. */
+.auth__media {
+  position: relative; overflow: hidden;
+  background: var(--green-deep);
+  display: flex; align-items: center; padding: var(--s-12) var(--s-10);
+}
+.auth__photo {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: 62% center;
+}
+/* A green wash ties the panel to the brand rather than to the picture. It is
+   weighted towards the left, where the mark and the wording sit, so the copy
+   stays legible over the bright part of the photograph. */
+.auth__media::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg,
+    rgba(38,62,22,.90) 0%, rgba(40,66,24,.78) 34%, rgba(46,74,26,.46) 68%, rgba(46,74,26,.30) 100%);
+}
+.auth__sub { color: rgba(255,253,249,.92); }
+.auth__over { position: relative; z-index: 1; max-width: 30ch; }
+.auth__mark { width: 132px; height: auto; margin-bottom: var(--s-8); }
+.auth__tag {
+  font-family: var(--font-display); font-weight: 300;
+  font-size: 40px; line-height: 1.12; letter-spacing: -1px; color: #FFFDF9;
+}
+.auth__sub {
+  margin-top: var(--s-4); font-size: var(--fs-body-lg); line-height: 1.6;
+  color: rgba(255,253,249,.82);
+}
+
+/* Right — the cream form panel. */
+.auth__panel {
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--s-10) var(--s-9);
+  background: var(--cream-warm);
+}
+.auth__form { width: 100%; max-width: 384px; }
+.auth__brand { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-9); }
+.auth__brand img { width: 96px; height: auto; }
+.auth__kicker {
+  font-size: var(--fs-chip); font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--green-primary); background: var(--surface-card);
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 10px;
+}
+.auth__form h1 { font-size: 32px; letter-spacing: -.7px; }
+.auth__lede { margin-top: var(--s-2); color: var(--text-muted); font-size: var(--fs-body-lg); }
+.auth__fields { margin-top: var(--s-7); display: flex; flex-direction: column; gap: var(--s-5); }
+.auth__row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s-4); flex-wrap: wrap; margin-top: var(--s-5);
+}
+.auth__submit { margin-top: var(--s-6); }
+.auth__legal {
+  margin-top: var(--s-7); padding-top: var(--s-5); border-top: 1px solid var(--line-strong);
+  font-size: var(--fs-support); color: var(--text-muted); line-height: 1.6;
+}
+
+/* Show / hide password sits inside the field, clear of the text. */
+.field--pw { position: relative; }
+.field--pw .input { padding-right: 46px; }
+.field__reveal {
+  position: absolute; right: 6px; bottom: 5px;
+  width: 34px; height: 34px; display: grid; place-items: center;
+  background: transparent; border: 0; border-radius: var(--r-sm); color: var(--text-muted);
+}
+.field__reveal:hover { color: var(--green-primary); background: var(--surface-softer); }
+
+@media (max-width: 900px) {
+  .auth { grid-template-columns: minmax(0, 1fr); }
+  .auth__media { display: none; }
+  .auth__panel { align-items: flex-start; padding: var(--s-8) var(--s-5) var(--s-10); }
+  .auth__form { max-width: 440px; margin: 0 auto; }
+}
+@media (max-width: 480px) {
+  .auth__panel { padding: var(--s-7) var(--s-4) var(--s-9); }
+  .auth__form h1 { font-size: 27px; }
+}
+
+/* =========================================================================
+   HOME — an editorial composition, not a grid of equal cards
+   ========================================================================= */
+.hgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.62fr) minmax(0, 1fr);
+  gap: var(--grid-gutter);
+  align-items: start;
+}
+.hgrid--flip { grid-template-columns: minmax(0, 1fr) minmax(0, 1.62fr); }
+/* The trend is the anchor; the priority rail beside it is deliberately narrow. */
+.hgrid--anchor { grid-template-columns: minmax(0, 2.05fr) minmax(0, 1fr); }
+@media (max-width: 1120px) { .hgrid, .hgrid--flip, .hgrid--anchor { grid-template-columns: minmax(0, 1fr); } }
+
+/* Four figures as a 2x2 block on a phone rather than four full-width cards,
+   which pushed the first chart three screens down (measured: 519px of metrics
+   before anything else, chart top at 1267px).
+   `.kpis.kpis--quad` on purpose: a later single-class `.kpis` rule below sets
+   one column for every other metric band, and a single class would lose to it
+   on source order alone. */
+@media (max-width: 900px) {
+  .kpis.kpis--quad { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpis.kpis--quad .kpi { border-left: 1px solid var(--line); border-top: 1px solid var(--line); padding: var(--s-5) var(--s-4); }
+  .kpis.kpis--quad .kpi:nth-child(-n+2) { border-top: 0; }
+  .kpis.kpis--quad .kpi:nth-child(odd) { border-left: 0; }
+  .kpis.kpis--quad .kpi__value { font-size: 27px; }
+  .kpis.kpis--quad .kpi__note { font-size: 11px; }
+}
+
+/* Home's one health summary: a line, three figures and two ways into Insights. */
+.summary {
+  display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+  gap: var(--s-7); align-items: center;
+  padding: var(--s-6) var(--s-7);
+  background: var(--surface-card); border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+.summary__line { margin-top: var(--s-2); font-size: var(--fs-body-lg); color: var(--text-body); line-height: 1.55; }
+.summary__figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.summary__go { display: flex; flex-direction: column; gap: var(--s-2); }
+.summary__go .btn { justify-content: space-between; gap: var(--s-3); }
+@media (max-width: 1120px) {
+  .summary { grid-template-columns: minmax(0, 1fr); gap: var(--s-5); }
+  .summary__go { flex-direction: row; flex-wrap: wrap; }
+}
+@media (max-width: 640px) {
+  .summary { padding: var(--s-5); }
+  .summary__figs { grid-template-columns: minmax(0, 1fr); gap: var(--s-3); }
+  .summary__go .btn { flex: 1 1 100%; }
+}
+
+/* Three headline figures, set as one band rather than three cards. */
+.kpis {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
+  background: var(--surface-card); border: 1px solid var(--line);
+  border-radius: var(--r-card); overflow: hidden;
+}
+.kpi { padding: var(--s-6) var(--s-7); border-left: 1px solid var(--line); min-width: 0; }
+.kpi:first-child { border-left: 0; }
+.kpi__label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-support); color: var(--text-muted); }
+.kpi__label svg { color: var(--green-medium); flex: 0 0 auto; }
+.kpi__value {
+  display: block; margin-top: var(--s-3);
+  font-family: var(--font-display); font-weight: 600; font-size: 38px; line-height: 1;
+  letter-spacing: -1px; color: var(--ink-heading); font-variant-numeric: tabular-nums;
+}
+.kpi__note { display: block; margin-top: var(--s-2); font-size: var(--fs-chip); color: var(--text-muted); }
+@media (max-width: 900px) {
+  .kpis { grid-template-columns: minmax(0, 1fr); }
+  .kpi { border-left: 0; border-top: 1px solid var(--line); }
+  .kpi:first-child { border-top: 0; }
+}
+
+/* The onboarding funnel: a set of tapering bars that read as a drop-off. */
+.funnel { display: flex; flex-direction: column; gap: var(--s-3); }
+.fstep { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-3); align-items: baseline; }
+.fstep__label { font-size: var(--fs-support); color: var(--text-body); }
+.fstep__n {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-body);
+  color: var(--text-strong); font-variant-numeric: tabular-nums;
+}
+.fstep__bar {
+  grid-column: 1 / -1; height: 26px; border-radius: var(--r-sm);
+  background: var(--tint-neutral); overflow: hidden; display: block;
+}
+.fstep__fill {
+  display: block; height: 100%; border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--green-medium), var(--sage));
+}
+/* The attention hue is a fill colour: as 13px text on white it measures 2.29:1.
+   The deeper amber used for attention copy elsewhere measures 5.24:1. */
+.fstep__drop { grid-column: 1 / -1; font-size: var(--fs-chip); color: #96601F; font-weight: 600; }
+
+/* Priority list on Home. */
+.attn { display: flex; flex-direction: column; }
+.attn__row {
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: var(--s-4); align-items: center; width: 100%; text-align: left;
+  padding: var(--s-4) var(--s-6); border: 0; border-top: 1px solid var(--line);
+  background: transparent; text-decoration: none; color: inherit;
+}
+.attn__row:first-child { border-top: 0; }
+.attn__row:hover { background: var(--surface-softer); }
+.attn__dot {
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--tint-neutral); color: var(--text-muted);
+}
+.attn__dot--high { background: var(--tint-significant); color: #A03A29; }
+.attn__dot--medium { background: var(--tint-attention); color: #96601F; }
+/* Both are spans inside a span, so they must be told to stack. Left inline they
+   run together on one line — "New blood results to look at Cara Morgan". */
+.attn__title { display: block; font-weight: 600; color: var(--text-strong); font-size: var(--fs-body); }
+.attn__meta { display: block; margin-top: 2px; font-size: var(--fs-support); color: var(--text-muted); }
+
+/* =========================================================================
+   CHARTS
+   Every chart on every screen carries a table or text alternative underneath,
+   inside a <details> so it never competes with the picture.
+   ========================================================================= */
+.chartbox { position: relative; }
+.lchart { width: 100%; height: 230px; display: block; overflow: visible; }
+.lchart--sm { height: 150px; }
+.lchart .grid-line { stroke: var(--line); stroke-width: 1; }
+.lchart .area { fill: url(#veyeArea); }
+.lchart .line { fill: none; stroke: var(--green-primary); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.lchart .line--alt { stroke: var(--status-info); stroke-width: 2; stroke-dasharray: 5 5; }
+.lchart .dot { fill: var(--surface-card); stroke: var(--green-primary); stroke-width: 2; }
+.lchart .axis-label { font-size: 11px; fill: var(--text-muted); font-family: var(--font-body); }
+
+.bars { display: flex; flex-direction: column; gap: var(--s-3); }
+.bar { display: grid; grid-template-columns: 148px minmax(0, 1fr) 52px; gap: var(--s-4); align-items: center; }
+.bar__label { font-size: var(--fs-support); color: var(--text-body); min-width: 0; }
+.bar__track { display: block; height: 14px; border-radius: var(--r-pill); background: var(--tint-neutral); overflow: hidden; }
+.bar__fill { display: block; height: 100%; min-height: 14px; border-radius: var(--r-pill); background: var(--sage); }
+.bar__fill--deep { background: var(--green-medium); }
+.bar__fill--warn { background: var(--status-attention); }
+.bar__fill--risk { background: var(--status-significant); }
+.bar__fill--info { background: var(--status-info); }
+.bar__n {
+  text-align: right; font-family: var(--font-display); font-weight: 600;
+  font-size: var(--fs-support); color: var(--text-strong); font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) { .bar { grid-template-columns: 104px minmax(0, 1fr) 44px; gap: var(--s-3); } }
+
+/* Vertical column chart, used where a month-by-month shape reads better. */
+.cols { display: flex; align-items: flex-end; gap: 6px; height: 168px; }
+.col { flex: 1 1 0; min-width: 6px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.col__bar { display: block; border-radius: 4px 4px 0 0; background: var(--sage); min-height: 3px; }
+.col__bar--now { background: var(--green-primary); }
+.colaxis { display: flex; gap: 6px; margin-top: var(--s-2); }
+.colaxis span { flex: 1 1 0; min-width: 0; text-align: center; font-size: 11px; color: var(--text-muted); }
+
+.chart-alt { margin-top: var(--s-4); border-top: 1px solid var(--line); padding-top: var(--s-3); }
+.chart-alt > summary {
+  font-size: var(--fs-support); color: var(--text-muted); cursor: pointer;
+  list-style: none; display: inline-flex; align-items: center; gap: 6px; min-height: 24px;
+}
+.chart-alt > summary::-webkit-details-marker { display: none; }
+.chart-alt > summary::before { content: "▸"; color: var(--green-medium); }
+.chart-alt[open] > summary::before { content: "▾"; }
+.chart-alt > summary:hover { color: var(--green-primary); }
+.chart-alt .table { margin-top: var(--s-3); }
+
+/* =========================================================================
+   SHARED SURFACES
+   ========================================================================= */
+
+/* A two-line stat used inside cards. */
+.mini { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mini__n {
+  font-family: var(--font-display); font-weight: 600; font-size: 24px; line-height: 1;
+  color: var(--ink-heading); font-variant-numeric: tabular-nums;
+}
+.mini__l { font-size: var(--fs-chip); color: var(--text-muted); }
+.minirow { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--s-5); }
+
+/* A labelled key/value block used across Member 360, Settings and Profile. */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s-5); }
+.fact dt { font-size: var(--fs-chip); color: var(--text-muted); }
+.fact dd { margin: 3px 0 0; font-size: var(--fs-body); color: var(--text-strong); font-weight: 600; }
+
+/* Editorial lead panel used at the top of several screens. */
+.lead {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-7);
+  align-items: center; padding: var(--s-7) var(--s-8);
+  background: var(--cream-warm); border: 1px solid var(--line);
+  border-radius: var(--r-card); position: relative; overflow: hidden;
+  margin-bottom: var(--s-6);
+}
+.lead::after {
+  content: ""; position: absolute; right: -140px; bottom: -180px;
+  width: 380px; height: 380px; border-radius: 50%;
+  background: var(--sage-light); opacity: .3; pointer-events: none;
+}
+.lead > * { position: relative; z-index: 1; }
+.lead h2 { font-size: 24px; }
+.lead p { margin-top: var(--s-2); color: var(--text-body); max-width: 62ch; }
+@media (max-width: 900px) { .lead { grid-template-columns: minmax(0, 1fr); gap: var(--s-5); } }
+
+/* A row layout for settings and document lists. */
+.rows { display: flex; flex-direction: column; }
+.rowitem {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: var(--s-4); align-items: center;
+  padding: var(--s-5) var(--s-6); border-top: 1px solid var(--line);
+}
+.rowitem:first-child { border-top: 0; }
+.rowitem__icon {
+  width: 40px; height: 40px; border-radius: var(--r-field); flex: 0 0 auto;
+  display: grid; place-items: center; background: var(--tint-lime); color: var(--green-primary);
+}
+.rowitem__icon--warn { background: var(--tint-attention); color: #96601F; }
+.rowitem__icon--off { background: var(--tint-neutral); color: var(--text-muted); }
+.rowitem__title { font-weight: 600; color: var(--text-strong); display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.rowitem__meta { margin-top: 3px; font-size: var(--fs-support); color: var(--text-muted); }
+.rowitem__side { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .rowitem { grid-template-columns: 40px minmax(0, 1fr); }
+  .rowitem__side { grid-column: 1 / -1; justify-content: flex-start; }
+}
+
+/* Feature availability rows. */
+.feature { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-4); align-items: center; padding: var(--s-4) var(--s-6); border-top: 1px solid var(--line); }
+.feature:first-child { border-top: 0; }
+.feature__name { font-weight: 600; color: var(--text-strong); display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.feature__desc { margin-top: 2px; font-size: var(--fs-support); color: var(--text-muted); }
+
+/* Legal document body preview. */
+.doctext {
+  white-space: pre-wrap; font-size: var(--fs-support); line-height: 1.65;
+  color: var(--text-body); background: var(--surface-softer);
+  border: 1px solid var(--line); border-radius: var(--r-field);
+  padding: var(--s-5); max-height: 340px; overflow-y: auto;
+}
+
+/* Profile layout. */
+.prof { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: var(--grid-gutter); align-items: start; }
+@media (max-width: 1120px) { .prof { grid-template-columns: minmax(0, 1fr); } }
+.avatarbig {
+  width: 84px; height: 84px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center; background: var(--tint-lime); color: var(--green-primary);
+  font-family: var(--font-display); font-weight: 600; font-size: 30px;
+}
+
+/* Preference checkbox stack. The box itself is 20px, but the whole row is the
+   clickable target: the <label> wraps the input, so a pointer anywhere on the
+   label toggles it. The row is held above 32px so that target is comfortable. */
+.prefs { display: flex; flex-direction: column; gap: var(--s-4); }
+.pref {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-3); align-items: start; min-height: 32px; cursor: pointer;
+}
+.pref input[type="checkbox"] { width: 20px; height: 20px; }
+.pref__label { font-weight: 600; color: var(--text-strong); font-size: var(--fs-body); }
+.pref__desc { font-size: var(--fs-support); color: var(--text-muted); margin-top: 2px; }
+
+/* An inline note that qualifies a figure. */
+.qualify {
+  display: flex; align-items: flex-start; gap: 6px;
+  font-size: var(--fs-chip); color: var(--text-muted); margin-top: var(--s-3);
+}
+.qualify svg { flex: 0 0 auto; margin-top: 1px; }
+
+/* Mood markers. v1 used emoji; they render differently on every device, read as
+   decoration, and carry meaning only if the emoji font cooperates. These use the
+   console's own icon set, a tinted surface, a title and hidden text — so the
+   meaning survives without colour, without emoji and without a mouse. */
+.moodrow { display: flex; flex-wrap: wrap; gap: 4px; }
+.moodday {
+  width: 26px; height: 26px; border-radius: var(--r-sm); flex: 0 0 auto;
+  display: grid; place-items: center;
+  background: var(--tint-neutral); border: 1px solid var(--line);
+  color: var(--text-muted);
+}
+.moodday--5 { background: var(--tint-positive); border-color: #A8CE85; color: #3D5B12; }
+.moodday--4 { background: #F0F7E4; border-color: #CFE3B4; color: #47651C; }
+.moodday--3 { background: var(--tint-neutral); border-color: var(--line-strong); color: var(--text-muted); }
+.moodday--2 { background: var(--tint-attention); border-color: #E7BE8A; color: #8A5A1B; }
+.moodday--1 { background: var(--tint-significant); border-color: #E5A99B; color: #9A3625; }
+/* A key, because a row of coloured squares means nothing on its own. */
+.moodkey {
+  display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5);
+  margin-top: var(--s-4); font-size: var(--fs-chip); color: var(--text-muted);
+}
+.moodkey__item { display: inline-flex; align-items: center; gap: 6px; }
+.moodkey .moodday { width: 20px; height: 20px; }
+
+/* A disclosure that opens reference detail without adding a card. */
+.disclose > summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px;
+  font-size: var(--fs-support); font-weight: 600; color: var(--green-primary);
+  cursor: pointer; list-style: none;
+}
+.disclose > summary::-webkit-details-marker { display: none; }
+.disclose > summary svg { transition: transform 170ms var(--ease); }
+.disclose[open] > summary svg { transform: rotate(90deg); }
+.disclose > summary:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .disclose > summary svg { transition: none; } }
+
+/* =========================================================================
+   FIXES CARRIED FORWARD
+   ========================================================================= */
+
+/* Programmatic focus moves to the page heading on every route change so a
+   keyboard or screen-reader user lands in the new content. That focus must not
+   paint a permanent outline around the heading — :focus-visible still applies
+   everywhere a person actually tabs. */
+#main-content h1[tabindex="-1"]:focus,
+#main-content h1[tabindex="-1"]:focus-visible { outline: none; }
+#main-content:focus, #main-content:focus-visible { outline: none; }
+
+/* Target size: sort buttons and breadcrumb links were 22px tall. */
+.th-sort { min-height: 24px; }
+.breadcrumb a { display: inline-flex; align-items: center; min-height: 24px; }
+
+/* Section headers must be allowed to wrap rather than widen the page. */
+.sec { flex-wrap: wrap; }
+.sec > * { min-width: 0; }
+.tabs { min-width: 0; max-width: 100%; }
+
+/* The arc dial needs a default tone if a screen forgets to set one. */
+.arc__dial { --tone: var(--sage); --pct: 0; }
+
+/* Tables inside cards never push the page wider than the viewport.
+   `position: relative` is load-bearing, not decoration. `.sr-only` is
+   `position: absolute`, and an absolutely positioned element is only clipped by
+   an ancestor's overflow when that ancestor is also its containing block. With
+   a static wrapper, the screen-reader text inside a button in a wide table was
+   positioned against the viewport instead, escaped the scroller, and pushed the
+   whole page 99px wider at 1024. Making the scroller positioned contains it. */
+.table-wrap { overflow-x: auto; position: relative; }
+.modeswitch, .flaglist, .subnav { position: relative; }
+
+/* A control that reads as a link but does something in place rather than
+   navigating. Never href="#": that is a link that goes nowhere. */
+.linkbtn {
+  appearance: none; background: none; border: 0; padding: 0;
+  font: inherit; color: var(--text-link); text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--text-link) 35%, transparent);
+  min-height: 24px;
+}
+.linkbtn:hover { text-decoration-color: currentColor; }
+
+/* A card title is the second level under the page heading, so it is an <h2>.
+   The shared class sets no size, and an unstyled h2 would jump to the section
+   scale — this holds it at the card scale it had as an h3. */
+.card__title { font-size: var(--fs-card-title); letter-spacing: -.1px; }
+
+/* ------------------------------------------------------- Member 360 header --
+   The shared `.m360__who` is a horizontal flex row. This edition stacks an
+   identity block above a definition list inside it, so it has to be a column —
+   left as a row the facts list was squeezed to 87px and spilled the page. */
+.m360__who { display: block; min-width: 0; }
+.m360__hn { text-align: left; }
+.m360__actions { justify-content: flex-start; }
+
+/* ---------------------------------------------------------- narrow widths -- */
+@media (max-width: 900px) {
+  /* The Member 360 header is a two-column grid whose second track is `auto`.
+     At phone width that track resolves to the dial's natural size and pushes
+     the row past the viewport, which is what dragged `.facts` out with it. */
+  .m360 { grid-template-columns: minmax(0, 1fr); padding: var(--s-5); }
+  .review3 { grid-template-columns: minmax(0, 1fr); }
+  .stories { grid-template-columns: minmax(0, 1fr); }
+  .editor2 { grid-template-columns: minmax(0, 1fr); }
+  .editor2__side { position: static; }
+}
+@media (max-width: 640px) {
+  .facts { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  .minirow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); }
+  .arc { gap: var(--s-4); }
+  .arc__dial { width: 88px; height: 88px; }
+  .arc__dial::after { width: 68px; height: 68px; }
+  .storyline__axis { left: 15px; }
+  .sl-item { grid-template-columns: 32px minmax(0, 1fr); }
+  .sl-item__when { grid-column: 1 / -1; text-align: left; padding-left: 46px; margin-bottom: 4px; }
+  .sl-item__mark { grid-row: 2; }
+  .caseband { grid-template-columns: 96px minmax(0, 1fr) 40px; gap: var(--s-3); }
+  .step { grid-template-columns: 44px minmax(0, 1fr); }
+  .step > :last-child { grid-column: 1 / -1; }
+  .instr { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  .instr__versions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Loading indicator inside a button. Reduced motion stops the spin — the
+   disabled state and the "Saving…" label still carry the meaning. */
+.spinner {
+  width: 14px; height: 14px; flex: 0 0 auto; display: inline-block;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; animation: veye-spin .7s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes veye-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; opacity: .6; } }
+
+
+/* =========================================================================
+   DEPTH AND LIGHT
+   -------------------------------------------------------------------------
+   The three levels defined in tokens.css, applied. Read that comment first —
+   the short version is that level 1 is every ordinary card, level 2 is the one
+   thing a screen is about, and level 3 is anything genuinely floating above the
+   page.
+
+   What deliberately does NOT move:
+     - a static information card, on hover or otherwise;
+     - each KPI in the figures band — the band is one raised object, and four
+       tiles bouncing separately reads as a toy;
+     - anything inside a raised card. One shadow per object.
+
+   What may lift, by 2px and never more, with the same cue on keyboard focus:
+     a portal card, a program tile, a story card. All three are links.
+   ========================================================================= */
+
+/* ---- level 2: raised anchors ------------------------------------------- */
+.lead,
+.kpis,
+.summary,
+.m360,
+.card--anchor,
+.hgrid--anchor > .card:first-child {
+  box-shadow: var(--shadow-lift), var(--highlight-top);
+}
+
+/* The figures band moves as one object or not at all. */
+.kpi { transition: background var(--t-fast) var(--ease); }
+.kpi:hover { background: var(--surface-softer); }
+
+/* ---- light pools -------------------------------------------------------
+   At most two in a viewport, never behind a table, and always beneath the
+   content: `z-index: 0` on the pseudo-element with the children lifted to 1. */
+.lead { background-image: var(--pool-lime); }
+
+.summary {
+  position: relative; overflow: hidden;
+  background-image: var(--pool-peach);
+}
+
+.m360 { background-image: var(--pool-sage); }
+
+/* ---- Member 360: three things, told apart by surface rather than by more
+   words. Identity sits on the card itself; the health story gets its own
+   inset panel; the operational actions sit below a rule inside it. -------- */
+.m360__hn {
+  background: var(--surface-softer);
+  border: 1px solid var(--line);
+  border-radius: var(--r-field);
+  padding: var(--s-5) var(--s-6);
+}
+.m360__actions {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-4);
+}
+
+/* ---- the sign-in composition -------------------------------------------
+   Structurally unchanged: the same 55/45 split, the same photograph, the same
+   single column below 900px. The form area gains a surface of its own so it
+   reads as a panel resting on the cream rather than as cream with fields on
+   it, and a light source at the top left. */
+.auth__panel { background-image: var(--pool-lime); }
+
+.auth__form {
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-lift), var(--highlight-top);
+  padding: var(--s-9) var(--s-8);
+}
+
+@media (max-width: 480px) {
+  .auth__form { padding: var(--s-7) var(--s-5); }
+}
+
+
+/* =========================================================================
+   DISPLAY PREFERENCES
+   -------------------------------------------------------------------------
+   Four choices from Your profile → Display, applied as classes on the ROOT
+   element so a preference reaches modals, drawers, menus and toasts, which are
+   appended to <body> and are not inside the page.
+
+   Density never touches the sign-in screen, a button, a switch or any other
+   touch target: it takes space out of table rows, list rows and form stacks,
+   which is where a dense administrator actually loses screen. Nothing here
+   drops a control below the 24x24 minimum.
+   ========================================================================= */
+
+/* ---- Compact density ---------------------------------------------------- */
+.is-density-compact body:not(.is-auth-screen) .table tbody td { padding: 9px var(--s-4); }
+.is-density-compact body:not(.is-auth-screen) .table--compact tbody td { padding: 5px var(--s-4); }
+.is-density-compact body:not(.is-auth-screen) .table--roomy tbody td { padding: var(--s-3) var(--s-4); }
+.is-density-compact body:not(.is-auth-screen) .rowitem { padding: var(--s-3) var(--s-5); }
+.is-density-compact body:not(.is-auth-screen) .card__body { padding: var(--s-4) var(--s-5); }
+.is-density-compact body:not(.is-auth-screen) .card__head { padding: var(--s-4) var(--s-5); }
+.is-density-compact body:not(.is-auth-screen) .form-grid { gap: var(--s-4); }
+.is-density-compact body:not(.is-auth-screen) .stack.gap-5 { gap: var(--s-4); }
+.is-density-compact body:not(.is-auth-screen) .lead { padding: var(--s-5) var(--s-6); }
+.is-density-compact body:not(.is-auth-screen) .kpi { padding: var(--s-4) var(--s-5); }
+/* Editorial copy keeps its measure and its breathing room. */
+.is-density-compact .page__desc,
+.is-density-compact .summary__line,
+.is-density-compact .portal__info { line-height: var(--lh-body); }
+
+/* ---- Reduce motion, chosen rather than declared by the system -----------
+   This can only ADD stillness. There is no setting anywhere in this console
+   that turns animation back on against `prefers-reduced-motion: reduce` — the
+   media query in tokens.css is unconditional and no rule here can outrank it,
+   because none of them apply when it is active. */
+.is-motion-reduced *,
+.is-motion-reduced *::before,
+.is-motion-reduced *::after {
+  animation-duration: .001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ---- Table first --------------------------------------------------------
+   The chart stays exactly where it was. Its table alternative simply starts
+   open, which motion.js does by setting `open` on each disclosure as it
+   renders — a `<details>` cannot be opened from a stylesheet. */
+.is-table-first .chart-alt > summary { color: var(--text-strong); font-weight: 600; }
+
+
+/* "Where does this appear?" — one control per screen, in the page header.
+   Sits under the description rather than beside the title, so it never
+   competes with the page actions on the right. */
+.wherebtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: var(--s-3); min-height: 24px;
+  font-size: var(--fs-support);
+}
+.wherebtn svg { color: var(--green-medium); }

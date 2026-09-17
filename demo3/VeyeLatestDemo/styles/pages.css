@@ -1,0 +1,354 @@
+/* ============================================================
+   VEYE — inner website pages (About, Help, Pricing, Why Veye, Terms)
+   Builds on website.css tokens/components.
+   ============================================================ */
+
+.nav__links a.is-active { color: var(--w-green); }
+
+/* ---------------- Page banner (title header) ---------------- */
+/* Nested-page banner = exact Figma banner image (photo + blob + title baked), full width */
+.page-banner { position: relative; width: 100%; line-height: 0; background: #FFFDF9; }
+.page-banner__img { display: block; width: 100%; height: auto; }
+.page-banner--legacy { position: relative; height: 375px; overflow: hidden; background: #F9F9F9; }
+.page-banner__photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: right center; }
+.page-banner__blob { position: absolute; inset: 0; z-index: 1;
+  background: radial-gradient(125% 150% at 6% 50%, #FFF9F0 0%, #FFF9F0 28%, rgba(255,249,240,.75) 42%, rgba(255,249,240,0) 56%); }
+.page-banner__inner { position: relative; z-index: 2; max-width: var(--w-max); margin: 0 auto; padding: 0 24px; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+.page-banner__title { font-family: var(--f-head); font-weight: 600; font-size: 42px; color: var(--w-head); margin: 0 0 12px; }
+.page-banner__sub { font-family: var(--f-body); font-size: 16px; line-height: 1.2; color: #5E6175; max-width: 285px; }
+
+/* ---------------- Pricing ----------------
+   Exact values from the Figma node tree (Desktop Pricing, 1440x2749).
+   Content box x120 -> 1320 (1200 wide, no padding). */
+.container--pricing { max-width: 1200px; padding-left: 0; padding-right: 0; }
+/* the PROMO+ band used to supply the gap above the footer; with it gone the
+   section carries that space itself */
+.pricing { padding: 0 0 118px; text-align: center; }
+
+/* lead ink y568; banner ends y484 */
+.pricing__lead { font-family: var(--f-body); font-size: 40px; line-height: 1.1; letter-spacing: .8px; color: var(--w-green); margin: 93px 0 0; }
+
+/* beta card: x120 y649.7 1200x408.6 r10 #FFF */
+.pricing__beta { background: #FFFFFF; border-radius: 10px; width: 100%; margin: 38px 0 0; padding: 46px 0 0; min-height: 408.6px; }
+.pricing__beta p { font-family: var(--f-body); font-size: 36px; line-height: 39.6px; letter-spacing: .72px; color: var(--w-green); margin: 0 auto; max-width: 846px; }
+/* button: x593 y910 254x60 #B0E2A7 r4 */
+.pricing__beta .btn--hero { display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  width: 254px; height: 60px; margin: 52px 0 0; background: #B0E2A7; border-radius: 4px;
+  font-family: var(--f-head); font-weight: 600; font-size: 17px; letter-spacing: .34px; color: var(--w-green); }
+
+/* "Choose Duration" ink y1118 */
+.pricing__duration { font-family: var(--f-body); font-size: 40px; line-height: 1.1; letter-spacing: .8px; color: var(--w-green); margin: 58px 0 0; }
+
+/* cards y1199.4, 390x472.1 r10, pitch 407 */
+.plans { display: grid; grid-template-columns: repeat(3, 390px); justify-content: space-between; margin: 44px 0 0; }
+.plan { background: #FDF1DD; border-radius: 10px; padding: 0 40px; text-align: left; position: relative; height: 472.1px; }
+.plan--popular { background: #FFF6E7; box-shadow: none; }
+/* badge: x557 y1188.4 130x25 #FFB240 r10 (overhangs the card top) */
+.plan__badge { position: absolute; top: -11px; left: 30px; width: 130px; height: 25px; background: #FFB240;
+  border-radius: 10px; color: #F0FFCE; font-family: var(--f-body); font-size: 16px; letter-spacing: .32px;
+  display: flex; align-items: center; justify-content: center; padding: 0; }
+/* dot hangs 19px left of the text column (Figma: dot x+21, name x+63.5) */
+.plan__head { display: flex; align-items: center; gap: 22px; margin: 55px 0 0 -19px; }
+.plan__dot { width: 20.3px; height: 20.3px; border-radius: 50%; background: #FFFFFF; border: none; flex: none; }
+.plan--popular .plan__dot { background: #FFFFFF; box-shadow: inset 0 0 0 4.2px #FFF, 0 0 0 0 transparent; position: relative; }
+.plan--popular .plan__dot::after { content: ""; position: absolute; left: 4.2px; top: 4.2px; width: 12px; height: 12px; border-radius: 50%; background: #FFB240; }
+.plan__name { font-family: var(--f-body); font-size: 32px; line-height: 1; letter-spacing: .64px; color: var(--w-green); }
+.plan__desc { font-family: var(--f-body); font-size: 16px; line-height: 20.8px; letter-spacing: .32px; color: #384C0C; margin: 8px 0 0; width: 275px; }
+.plan__meta { display: flex; justify-content: space-between; font-family: var(--f-body); font-size: 16px;
+  line-height: 20.8px; letter-spacing: .32px; color: #39607B; margin: 0; position: absolute; left: 40px; right: 45px; top: 320px; }
+/* Figma LINE nodes: 310 wide at card-top +368.9 */
+.plan__divider { display: block; position: absolute; left: 40px; width: 310px; top: 371.9px; height: 1px;
+  border: none; margin: 0; background-image: repeating-linear-gradient(to right, #39607B 0 2px, transparent 2px 4px); }
+.plan__price { position: absolute; right: 18px; top: 384px; font-family: var(--f-body); font-size: 26px;
+  line-height: 1; letter-spacing: .52px; color: #39607B; text-align: right; }
+
+/* placeholder blocks: "SPACE FOR..." ink y1753.4, "Promo +" ink y2161.5 inside the y2041 band */
+.pricing__ph { text-align: center; font-family: var(--f-head); font-weight: 200; font-size: 40px; line-height: 48px;
+  letter-spacing: 1.6px; color: var(--w-green); text-transform: uppercase; margin: 71px 0 0; }
+.pricing-promo-band { background: #FBF7E3; margin-top: 151px; padding: 114px 0 82px; }
+.pricing__promo { font-family: var(--f-head); font-weight: 100; font-size: 60px; line-height: 1; letter-spacing: 0;
+  color: var(--w-green); text-align: center; text-transform: uppercase; margin: 0; padding: 0; }
+
+/* ---------------- Figma decorative glow ellipses (page layer) ----------------
+   The designer places blurred Ellipse shapes on the page frame, BELOW the opaque
+   section fills — so each ellipse only shows where a section background is
+   transparent. z-index:-1 reproduces that exactly: negative-z children paint
+   above the body background but below in-flow block backgrounds.
+   Positions/sizes are Figma frame coords (css px @1440), used verbatim. */
+.pglow { position: absolute; z-index: -1; border-radius: 50%; pointer-events: none; }
+
+/* Help — exact Figma ellipse layers (REST API). Figma LAYER_BLUR radius maps to
+   CSS blur() at radius/2 (Figma's radius is ~2x the gaussian sigma). */
+.pglow--help-1 { left: -151.1px; top: 185.4px;  width: 500px;  height: 388.1px; background: #FEDCB9; opacity: .4; filter: blur(90px); }
+.pglow--help-2 { left: -26px;    top: 1889px;   width: 1435px; height: 388px;   background: #FEDCB9; opacity: .4; filter: blur(90px); }
+.pglow--help-3 { left: 1210.3px; top: 272.7px;  width: 270px;  height: 270px;   background: #DEA366; opacity: .8; filter: blur(160px); }
+.pglow--help-4 { left: 1007px;   top: 814px;    width: 555px;  height: 183px;   background: #A4C655; opacity: .5; filter: blur(112.8px); }
+
+/* Decorative-glow containment.
+   The .pglow ellipses are page-absolute and deliberately bleed past the 1440
+   design frame. body was static, so they resolved against the initial
+   containing block and body's overflow-x could not clip them; the document
+   stayed ~110-190px wider than the viewport on desktop. Positioning body makes
+   it their containing block, and clipping the root stops body's overflow value
+   propagating to the viewport so body's own clip actually applies.
+   `clip` rather than `hidden` on both, so neither element becomes a scroll
+   container (hidden on one axis would force the other to auto). No content
+   layout is affected — only the decorative layer is bounded. */
+html { overflow-x: clip; }
+body.site { position: relative; overflow-x: clip; }
+
+.pricing, .why-diff, .reviews, .team, .terms { position: relative; }
+.pricing > .container, .why-diff > .container, .reviews > .container,
+.team > .container { position: relative; z-index: 1; }
+.terms > * { position: relative; z-index: 1; }
+
+
+/* Desktop About - 5 Figma glow ellipses (frame 4101px tall) */
+.pglow--about-1 { left: 268px; top: 209px; width: 939px; height: 327px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+.pglow--about-2 { left: 1160px; top: 752.6px; width: 162.1px; height: 182.9px; background: #A4C655; opacity: 1; filter: blur(112.8px); }
+.pglow--about-3 { left: 1340px; top: 1420px; width: 324.1px; height: 827.4px; background: #A4C655; opacity: 0.2; filter: blur(112.8px); }
+.pglow--about-4 { left: -226px; top: 2611px; width: 324px; height: 809.8px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+.pglow--about-5 { left: 622px; top: 3493px; width: 970.2px; height: 388.1px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+
+/* Desktop Pricing - 4 Figma glow ellipses (frame 2749px tall) */
+.pglow--pricing-1 { left: -101px; top: 585px; width: 500px; height: 362px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+.pglow--pricing-2 { left: 841px; top: 699px; width: 475px; height: 322px; background: #A4C655; opacity: 0.7; filter: blur(112.8px); }
+.pglow--pricing-3 { left: 1421.7px; top: 1477.1px; width: 144.9px; height: 444.6px; background: #DEA366; opacity: 0.8; filter: blur(160px); }
+.pglow--pricing-4 { left: 0px; top: 2066px; width: 1490px; height: 288px; background: #A4C655; opacity: 0.4; filter: blur(112.8px); }
+
+/* Desktop Why Veye - 6 Figma glow ellipses (frame 4225px tall) */
+.pglow--why-1 { left: 1219.8px; top: 163.7px; width: 270px; height: 270px; background: #DEA366; opacity: 0.8; filter: blur(160px); }
+.pglow--why-2 { left: 1237px; top: 511px; width: 313.4px; height: 359.7px; background: #A4C655; opacity: 0.2; filter: blur(112.8px); }
+.pglow--why-3 { left: 96.2px; top: 534.8px; width: 500px; height: 497.7px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+.pglow--why-4 { left: 295px; top: 1450px; width: 449px; height: 360px; background: #A4C655; opacity: 0.2; filter: blur(112.8px); }
+.pglow--why-5 { left: 638px; top: 1816px; width: 400px; height: 398.2px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+.pglow--why-6 { left: 210px; top: 2400px; width: 400px; height: 398.2px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+
+/* Desktop Terms of Use - 3 Figma glow ellipses (frame 2791px tall) */
+.pglow--terms-1 { left: 1242.6px; top: 764.5px; width: 313.4px; height: 517px; background: #A4C655; opacity: 0.2; filter: blur(112.8px); }
+.pglow--terms-2 { left: -325.4px; top: 1286.1px; width: 500px; height: 497.7px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+.pglow--terms-3 { left: 65.4px; top: 2229px; width: 1058.1px; height: 497.7px; background: #FEDCB9; opacity: 0.4; filter: blur(90px); }
+
+/* ---------------- Help ----------------
+   All values measured off Desktop Help@2x.png (÷2 for css @1440).
+   Figma content box: x 120 -> 1322 (1202 wide), i.e. the 1200 box with no padding. */
+.container--help { max-width: 1200px; padding-left: 0; padding-right: 0; }
+
+/* Real search input sitting on the field drawn into the banner art.
+   Measured off banner-help.png: x 36.562%-74.201%, y 41.935%-56.048%. */
+.page-banner--help { position: relative; }
+/* the art box is what the search overlay is measured against */
+.page-banner__art { position: relative; line-height: 0; }
+.help-search { position: absolute; left: 36.562%; top: 41.935%; width: 37.639%; height: 14.113%;
+  display: flex; align-items: center; background: transparent; border-radius: 8px; overflow: hidden; }
+.help-search__input { flex: 1; height: 100%; border: none; background: transparent;
+  padding: 0 26px; font-family: var(--f-head); font-size: 18px; color: var(--w-green); outline: none; }
+/* Client 26/07: the label now reads "Search". The words baked into the banner art
+   were erased, so the real placeholder is shown instead of being hidden. */
+.help-search__input::placeholder { color: #1E5935; opacity: 1; }
+.help-search__btn { color: #1E5935; }
+/* the field box is sized as a percentage of the banner art but the type was a
+   fixed 18px, so below desktop the placeholder outgrew the box and pushed past
+   the viewport. The type now scales with the art it sits in. */
+@media (max-width: 1024px) {
+  .help-search__input { font-size: 2.34vw; padding: 0 3.4vw; }
+  .help-search__btn { width: 7.3vw; }
+  .help-search__btn svg { width: 2.9vw; height: 2.9vw; }
+}
+.help-search__input:focus,
+.help-search__input:not(:placeholder-shown) { background: #FAF8F4; }
+.help-search__btn { width: 56px; height: 100%; border: none; background: transparent; color: transparent; cursor: pointer; }
+.help-search__btn svg { width: 22px; height: 22px; }
+
+/* Figma centres this slightly left of the page centre (ink 309.5 -> 1063.5) */
+.help__intro { text-align: center; font-family: var(--f-head); font-weight: 300; font-size: 38px;
+  letter-spacing: .76px; color: var(--w-green); margin: 92px 67px 0 0; }
+
+/* Category buttons sit on a tinted band: Figma y 680 -> 987, fill #FDF6EA */
+.help-cats { background: #FDF6EA; padding: 51px 0 47px; margin-top: 75px; }
+.help-cats__row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.help-cats__row--tall { grid-template-columns: repeat(2, 1fr); margin-top: 30px; }
+.help-cat { height: 64px; border: 1px solid #769A25; border-radius: 6px; background: #FDF8EE;
+  font-family: var(--f-head); font-weight: 300; font-size: 18px; color: var(--w-green);
+  cursor: pointer; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 16px; }
+.help-cats__row--tall .help-cat { height: 114px; }
+.help-cat.is-active { background: #1E5935; border-color: #1E5935; color: #fff; }
+
+.help { padding: 70px 0 0; position: relative; overflow: hidden; }
+.help > .container { position: relative; z-index: 1; }
+.help__cat { font-family: var(--f-head); font-weight: 300; font-size: 40px; color: var(--w-green); margin: 0 0 52px; }
+/* Figma columns flow independently: left x120, right x779.5 -> 542.5 wide, 117 gap */
+.faq { display: grid; grid-template-columns: 1fr 1fr; gap: 117px; align-items: start; }
+.faq__item { margin-bottom: 40px; }
+.faq__item:last-child { margin-bottom: 0; }
+.faq__q { font-family: var(--f-head); font-weight: 400; font-size: 24px; letter-spacing: .48px; color: var(--w-green); margin: 0 0 16px; }
+.faq__a { font-family: var(--f-body); font-size: 20px; line-height: 24px; letter-spacing: .4px; color: var(--w-head); margin: 0; }
+.help__more { display: block; width: 100%; text-align: center; font-family: var(--f-head); font-size: 22px;
+  color: var(--w-green); margin: 54px 0 0; background: none; border: none; cursor: pointer; padding: 0; }
+.help__more[hidden] { display: none; }
+.faq__empty { font-family: var(--f-body); font-size: 20px; letter-spacing: .4px; color: var(--w-head); margin: 0; }
+.faq__empty[hidden], .faq__col[hidden], .faq__item[hidden] { display: none; }
+
+/* Contact band: Figma y 1950 -> 2320, fill #FBF7E3 */
+.help-contact { background: #FBF7E3; margin-top: 71px; padding: 127px 0 142px; text-align: center; }
+.help-contact h3 { font-family: var(--f-head); font-weight: 200; font-size: 50px; color: var(--w-green); margin: 0 0 11px; }
+.help-contact p { font-family: var(--f-head); font-size: 22px; letter-spacing: 1.32px; color: var(--w-green); margin: 0; }
+
+/* ---------------- About ---------------- */
+/* Figma About frame uses a 1230px content box (105px inset at 1440), wider than
+   the site default 1200/24px. Scoped to About only so other pages are untouched. */
+.container--about { max-width: 1230px; padding-left: 0; padding-right: 0; }
+
+/* About — the client's revised banner intro, set in the slot the old baked copy
+   occupied before it was erased from banner-about.png. The banner is a
+   full-bleed image, so box and type are both sized in vw and stay locked to the
+   art at any desktop width. Measured slot: ink x240 y308 in the 2880x748
+   export, 16px/19 #5E6175. */
+.about-lead { position: absolute; left: 8.333%; top: 40.1%; width: 17%; margin: 0; z-index: 2;
+  font-family: var(--f-body); font-size: 1.1111vw; line-height: 1.3194vw;
+  letter-spacing: .0225em; color: #5E6175; }
+
+.about-tagline { text-align: center; font-family: var(--f-head); font-weight: 300; font-size: 38px; letter-spacing: -.38px; color: var(--w-green); max-width: 1015px; margin: 90px auto 102px; line-height: 1.25; }
+/* Figma: photo 65->732, gap 68, text 800->1335 (css px @1440) */
+/* Figma: photo overhangs the band 32.5px at the top and 5.5px at the bottom */
+.about-intro { display: grid; grid-template-columns: 1.182fr 1fr; gap: 72px; align-items: center; padding: 20px 0 0; }
+.about-intro__img { margin-left: -40px; width: calc(100% + 40px); margin-top: -53px; margin-bottom: -6px; align-self: start; }
+.about-intro__img img { width: 100%; border-radius: 0; display: block; }
+.about-intro__text { font-family: var(--f-body); font-size: 18px; line-height: 25px; letter-spacing: .37px; color: var(--w-body-ink); max-width: 490px; }
+.about-intro__text p { margin: 0 0 25px; }
+.about-intro__text p:last-child { margin-bottom: 0; }
+.about-band { background: #F8F3DF; }
+.team { padding: 30px 0 60px; }
+/* Figma: indented to x=243.5 css (138.5 from the 105 content edge), box ~845-860 wide, no tracking */
+.team-lead { font-family: var(--f-head); font-weight: 300; font-size: 32px; line-height: 1.4; letter-spacing: .64px; color: var(--w-green); max-width: 885px; margin: 40px 0 40px 138px; text-align: left; }
+.team-title { font-family: var(--f-head); font-weight: 600; font-size: 50px; letter-spacing: -1.5px; color: var(--w-head); margin: 40px 0 30px; }
+.team-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 44px 70px; margin-bottom: 20px; }
+/* Figma advisor columns start at 105 / 525.5 / 955.5 css -> pitch ~425 in a 1230 box */
+.team-grid--advisors { grid-template-columns: repeat(3, 1fr); gap: 44px 46px; }
+.team-grid--solo { grid-template-columns: minmax(0, 490px); }
+/* Figma organic blob headshots: 574x500 @2x transparent PNGs, shown at 287x250 css.
+   The blob outline is baked into the PNG alpha — no border-radius/mask here. */
+.member { position: relative; }
+.member__photo { width: 287px; height: 250px; margin-bottom: 21px;
+  background-repeat: no-repeat;
+  background-position: left top;
+  background-size: contain; }
+/* LinkedIn badge sits in the blob's bottom-left notch (Figma: 2,454 @2x from blob origin) */
+.member__linkedin { position: absolute; left: 1px; top: 227px; width: 30px; height: 30px; z-index: 2; }
+.member__linkedin img { display: block; width: 100%; height: 100%; }
+.member__name { font-family: var(--f-head); font-weight: 300; font-size: 23px; letter-spacing: .46px; color: var(--w-green); margin: 0; }
+.member__role { font-family: var(--f-head); font-weight: 300; font-size: 15px; letter-spacing: .3px; color: #112839; margin: 2px 0 12px; }
+/* Figma bio: 16px / 22px line box (measured: line pitch 22.0css, line width 330.5css) */
+.member__bio { font-family: var(--f-body); font-size: 16px; line-height: 1.375; color: #222; margin: 0; max-width: 418px; }
+/* the founder bio arrives from the client as two paragraphs */
+.member__bio + .member__bio { margin-top: 14px; }
+.team-grid--advisors .member__bio { max-width: 356px; }
+.about-cta { text-align: center; background: #FFFBF4; padding: 46px 0 34px; font-family: var(--f-head); font-weight: 200; font-size: 40px; color: var(--w-green); }
+/* Client 26/07: "at the bottom let's put a Start the Process button" */
+.about-start { background: #FFFBF4; padding: 0 20px 56px; text-align: center; }
+
+/* ---------------- Terms ----------------
+   Figma: single text block x370 y591.5 w700, Teachers 18px/21.6 ls0 #222222 */
+.terms { max-width: 700px; margin: 0 auto; padding: 123px 0 120px; position: relative; }
+/* Figma renders the numbered headings in the same regular weight as the body,
+   with one blank line above and below each (2 x 21.6px line-height). */
+.terms h2 { font-family: var(--f-body); font-weight: 400; font-size: 18px; line-height: 21.6px; color: #222222; margin: 21.6px 0; }
+.terms p { font-family: var(--f-body); font-size: 18px; line-height: 21.6px; letter-spacing: 0; color: #222222; margin: 0; }
+
+/* Pricing — "Pricing Plans Under Construction" placeholder replacing the
+   temporary priced cards (client 26/07: durations are ~3 months out). */
+.plans-soon { background: #FDF1DD; border-radius: 10px; margin: 58px 0 0;
+  padding: 74px 40px 78px; text-align: center; }
+.plans-soon__mark { display: block; width: 54px; margin: 0 auto 22px; opacity: .55; }
+.plans-soon__mark img { width: 100%; display: block; }
+.plans-soon__title { font-family: var(--f-body); font-size: 40px; line-height: 1.1;
+  letter-spacing: .8px; color: var(--w-green); margin: 0; }
+.plans-soon__note { font-family: var(--f-body); font-size: 18px; line-height: 1.5;
+  letter-spacing: .36px; color: #5E6175; margin: 16px auto 0; max-width: 560px; }
+
+/* Help — the client's intro paragraph sits in the banner, in the slot the old
+   copy occupied before it was erased from banner-help.png. The banner is a
+   full-bleed image, so the box and the type are both sized in vw: everything
+   inside it then scales with the art at any desktop width. Measured slot:
+   ink x239 y304 in the 2880x744 export, 16px/19 #5E6175. */
+.help__lead { position: absolute; left: 8.299%; top: 39.4%; width: 19.5%; margin: 0; z-index: 2;
+  font-family: var(--f-body); font-size: 1.1111vw; line-height: 1.3194vw;
+  letter-spacing: .0225em; color: #5E6175; }
+
+/* Help — "Ask a Question" prototype panel (no AI/API/storage behind it) */
+.help-ask { max-width: 620px; margin: 18px auto 0; text-align: left; }
+.help-ask__label { display: block; font-family: var(--f-body); font-size: 15px;
+  letter-spacing: .3px; color: var(--w-green); margin: 0 0 8px; }
+.help-ask__row { display: flex; gap: 10px; }
+.help-ask__input { flex: 1; min-width: 0; height: 46px; border: 1px solid #E0E6D2; border-radius: 8px;
+  background: #fff; padding: 0 14px; font-family: var(--f-body); font-size: 16px; color: var(--w-green); outline: none; }
+.help-ask__input:focus { border-color: #A4C655; }
+.help-ask__input::placeholder { color: #A1A1A1; }
+.help-ask__submit { flex: none; height: 46px; padding: 0 22px; border: none; border-radius: 8px;
+  background: #446514; color: #fff; cursor: pointer; font-family: var(--f-body); font-size: 15px; letter-spacing: .6px; }
+.help-ask__submit:hover { filter: brightness(1.08); }
+.help-ask__done { font-family: var(--f-body); font-size: 15px; color: #446514; margin: 12px 0 0; }
+
+/* ---------------- Responsive ---------------- */
+@media (max-width: 1024px) {
+  .pricing__beta p { font-size: 28px; line-height: 33px; padding: 0 24px; }
+  .pricing__beta { min-height: 0; padding-bottom: 34px; }
+  /* the 67px right margin is a Figma desktop offset; it pushes the heading
+     off-screen once the viewport is narrow, so it is dropped below 1024 */
+  .help__intro { margin-right: 0; padding: 0 20px; }
+  .container--help { padding-left: 20px; padding-right: 20px; }
+  .faq { gap: 40px; }
+  /* below desktop the banner slot is too small to hold readable type, so the
+     same paragraph drops out of the art and flows under the banner instead */
+  .help__lead { position: static; width: auto; max-width: 720px; margin: 22px auto 0;
+    padding: 0 20px; text-align: center; font-size: 17px; line-height: 24px; }
+}
+@media (max-width: 1024px) {
+  .plans { grid-template-columns: 1fr; max-width: 460px; }
+  .about-intro { grid-template-columns: 1fr; gap: 32px; }
+  /* the 138px left margin is a Figma desktop offset; below desktop the team
+     introduction just uses the available width */
+  .team-lead { margin: 32px 0; max-width: none; }
+  .team-grid, .team-grid--advisors { grid-template-columns: 1fr; }
+  /* below desktop the banner slot is too small for readable type, so the intro
+     drops out of the art and flows under the banner instead */
+  .about-lead { position: static; width: auto; max-width: 720px; margin: 22px auto 0;
+    padding: 0 20px; text-align: center; font-size: 17px; line-height: 24px; }
+  .faq { grid-template-columns: 1fr; }
+  .page-banner__blob { background: linear-gradient(180deg, rgba(255,249,240,.9), rgba(255,249,240,.35)); }
+}
+@media (max-width: 620px) {
+  .page-banner__title { font-size: 28px; }
+  .pricing__lead, .pricing__duration, .help__intro { font-size: 26px; padding-left: 20px; padding-right: 20px; margin-right: 0; }
+  /* three fixed columns do not fit a phone; stack them two-up and let labels wrap */
+  .help-cats__row, .help-cats__row--tall { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .help-cat { height: auto; min-height: 64px; min-width: 0; font-size: 15px; padding: 10px 8px; }
+  .help-cats__row--tall .help-cat { height: auto; min-height: 64px; }
+  .pricing__beta p { font-size: 22px; line-height: 28px; padding: 0 20px; }
+  .pricing__beta { padding-top: 32px; min-height: 0; padding-bottom: 32px; }
+  .pricing { padding-bottom: 64px; }
+  .help-contact p { padding: 0 20px; }
+  .about-cta { font-size: 26px; padding: 34px 20px 24px; }
+  .about-start { padding: 0 20px 40px; }
+  .help__lead { font-size: 16px; line-height: 23px; }
+  /* at phone size the field drawn into the banner art is only ~14px tall, which
+     cannot hold readable text. The real input leaves the overlay and sits under
+     the banner as a normal field. Desktop placement is untouched. */
+  .help-search { position: static; width: calc(100% - 40px); height: auto; max-width: 420px;
+    margin: 16px auto 0; background: #FFFFFF; border: 1px solid #C9D9B6;
+    border-radius: 8px; overflow: visible; }
+  .help-search__input { font-size: 16px; padding: 0 14px; height: 46px; }
+  .help-search__btn { width: 46px; height: 46px; color: #1E5935; flex: none; }
+  .help-search__btn svg { width: 20px; height: 20px; }
+  .help-ask__row { flex-direction: column; }
+  .help-ask__submit { width: 100%; }
+  .plans-soon { padding: 46px 22px 50px; }
+  .plans-soon__title { font-size: 26px; }
+  .plans-soon__note { font-size: 16px; }
+  .help-contact h3 { font-size: 30px; }
+  .about-tagline { font-size: 24px; }
+  .team-lead { font-size: 22px; }
+  .team-title { font-size: 30px; }
+  .split__title { font-size: 30px; }
+  .terms h2 { font-size: 22px; }
+}

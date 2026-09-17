@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Veye Admin Console</title>
+<meta name="description" content="Veye Admin Console — client prototype. Synthetic data only.">
+
+<link rel="icon" href="assets/img/veye-mark.svg">
+
+<!-- Brand typography, requested exactly as the enterprise reference edition
+     requests it. `display=swap` means a browser with no network paints
+     immediately in the system fallback rather than waiting on the request. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@300;400;500;600;700&family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/tokens.css?v=6">
+<link rel="stylesheet" href="css/base.css?v=3">
+<link rel="stylesheet" href="css/layout.css?v=3">
+<link rel="stylesheet" href="css/components.css?v=6">
+<link rel="stylesheet" href="css/screens.css?v=8">
+<link rel="stylesheet" href="css/client.css?v=6">
+<link rel="stylesheet" href="css/motion.css?v=6">
+<link rel="stylesheet" href="css/responsive.css?v=3">
+</head>
+<body>
+
+<a class="sr-only sr-only-focusable" href="#main-content">Skip to main content</a>
+
+<div class="app" id="app">
+  <!-- Rail and top bar are rendered by js/app.js. -->
+  <nav class="rail" id="rail" aria-label="Main"></nav>
+
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main id="main-content" tabindex="-1"></main>
+  </div>
+</div>
+
+<!-- Live region for route and status announcements. -->
+<div id="a11y-live" class="sr-only" role="status" aria-live="polite"></div>
+
+<!-- Classic scripts, loaded in dependency order.
+     Deliberately NOT type="module": this console has to open by double-clicking
+     index.html, and browsers block module scripts on file:// URLs. Everything
+     registers on one window.Veye namespace. -->
+<script src="js/mock-data.js?v=13"></script>
+<script src="js/icons.js?v=4"></script>
+<script src="js/components/ui.js?v=3"></script>
+<script src="js/router.js?v=3"></script>
+<script src="js/state.js?v=13"></script>
+<script src="js/charts.js?v=3"></script>
+<script src="js/motion.js?v=6"></script>
+<script src="js/helpers.js?v=8"></script>
+
+<script src="js/screens/login.js?v=6"></script>
+<script src="js/screens/home.js?v=6"></script>
+<script src="js/screens/members.js?v=6"></script>
+<script src="js/screens/member-360.js?v=9"></script>
+<script src="js/screens/care-studio.js?v=14"></script>
+<script src="js/screens/care-program.js?v=6"></script>
+<script src="js/screens/assessments.js?v=9"></script>
+<script src="js/screens/assessment-editor.js?v=12"></script>
+<script src="js/screens/companion.js?v=11"></script>
+<script src="js/screens/requests.js?v=2"></script>
+<script src="js/screens/content.js?v=12"></script>
+<script src="js/screens/insights.js?v=9"></script>
+<script src="js/screens/settings.js?v=11"></script>
+<script src="js/screens/profile.js?v=6"></script>
+
+<script src="js/app.js?v=12"></script>
+</body>
+</html>

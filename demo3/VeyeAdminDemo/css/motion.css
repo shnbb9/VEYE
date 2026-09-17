@@ -1,0 +1,657 @@
+/* ============================================================================
+   Veye Admin Console v2 — motion, deferred rendering and the refined shell
+   ----------------------------------------------------------------------------
+   Everything here is additive polish. Remove the whole file and the console is
+   still complete and correct — only flatter.
+
+   The reduced-motion block at the end is not a courtesy: it is the definition of
+   correct behaviour for anyone who has asked their system for less movement.
+   ============================================================================ */
+
+/* =========================================================================
+   ROUTE ENTRANCE
+   The route content fades and rises. Fixed chrome does not move.
+   ========================================================================= */
+.route-enter { opacity: 0; transform: translateY(9px); }
+.route-enter--in {
+  opacity: 1; transform: none;
+  transition: opacity var(--t-enter) var(--ease-out), transform var(--t-enter) var(--ease-out);
+}
+
+/* A major below-fold section, the first time it is reached. Whole sections
+   only — a row, a field or a repeated card never carries data-reveal. */
+.reveal {
+  opacity: 0; transform: translateY(14px);
+  transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out);
+}
+.reveal--in { opacity: 1; transform: none; }
+
+/* The first four blocks arrive one beat after another. --enter-i is set by
+   enterContent(); nothing deeper than these four ever carries it. */
+.route-enter .route-block { opacity: 0; transform: translateY(8px); }
+.route-enter--in .route-block {
+  opacity: 1; transform: none;
+  transition: opacity var(--t-enter) var(--ease-out), transform var(--t-enter) var(--ease-out);
+  transition-delay: calc(var(--enter-i, 0) * var(--stagger));
+}
+
+/* =========================================================================
+   SHELL REFINEMENTS
+   ========================================================================= */
+
+/* The rail carries the organisation and what the console is, not an
+   environment badge. "Prototype" beside the logo made the product look
+   unfinished; that fact now lives in the account menu. */
+.rail__sub {
+  font-size: var(--fs-chip); color: var(--text-muted);
+  letter-spacing: .2px;
+}
+.app.is-rail-collapsed .rail__sub { display: none; }
+
+/* A clickable row should feel clickable before it is clicked. */
+.nav-link {
+  transition: background 170ms cubic-bezier(.2,.8,.2,1),
+              color 170ms cubic-bezier(.2,.8,.2,1);
+}
+.nav-link:hover { background: var(--surface-softer); }
+.nav-link:active { background: var(--tint-neutral); }
+/* The active marker slides rather than blinking between destinations. */
+.nav-link.is-active::before {
+  transition: height 180ms cubic-bezier(.2,.8,.2,1), opacity 180ms cubic-bezier(.2,.8,.2,1);
+}
+
+/* Environment note at the foot of the account menu. */
+.menu__env {
+  border-top: 1px solid var(--line);
+  margin-top: var(--s-2); padding: var(--s-3) var(--s-4) var(--s-1);
+  font-size: 11px; color: var(--text-muted); line-height: 1.45;
+}
+
+/* The phone search control. Hidden wherever the real field fits. */
+.topbar__searchbtn { display: none; }
+
+.sheetsearch { position: relative; }
+.sheetsearch .input { padding-left: 42px; height: 48px; font-size: var(--fs-body-lg); }
+.sheetsearch__icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); pointer-events: none;
+}
+.results--sheet {
+  position: static; margin-top: var(--s-4); box-shadow: none;
+  border: 1px solid var(--line); max-height: 46vh;
+}
+.results--sheet .results__row { padding: 12px var(--s-4); min-height: 44px; }
+
+/* =========================================================================
+   PURPOSEFUL MICRO-INTERACTION
+   ========================================================================= */
+
+/* A card that can be opened lifts 2px. A card that only holds content does not
+   move at all — the lift is the signal that it is a control. */
+.tile, .story, .ccard {
+  transition: transform 170ms cubic-bezier(.2,.8,.2,1),
+              box-shadow 170ms cubic-bezier(.2,.8,.2,1),
+              border-color 170ms cubic-bezier(.2,.8,.2,1);
+}
+.tile:hover, .story:hover, .ccard:hover,
+.tile:focus-visible, .story:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raised);
+}
+.tile:active, .story:active { transform: translateY(0); }
+
+/* Buttons acknowledge the press. */
+.btn { transition: background 140ms var(--ease), border-color 140ms var(--ease), transform 90ms var(--ease); }
+.btn:active { transform: translateY(1px); }
+
+/* A trailing arrow leans towards where it goes. Keyboard focus gets exactly
+   the same movement as hover — the cue is about the control, not the pointer.
+   Only the LAST icon in a control moves: a leading icon is an identifier and
+   sliding it would look like the label had come loose. */
+.quick__btn > svg:last-child,
+.btn > svg:last-child {
+  transition: transform 180ms var(--ease-out);
+}
+.quick__btn:hover > svg:last-child,
+.quick__btn:focus-visible > svg:last-child,
+.btn:hover > svg:last-child,
+.btn:focus-visible > svg:last-child {
+  transform: translateX(3px);
+}
+.quick__btn { transition: background 150ms var(--ease), border-color 150ms var(--ease); }
+
+/* An icon button is a fixed square with a centred glyph, so it has no
+   horizontal padding. `.btn--sm` is declared later than `.icon-btn` and was
+   adding 12px each side: on a 32px button that leaves 8px of content box and
+   the icon rendered 6x20 instead of 16x16. Five controls were affected —
+   Companion previous/next, the drawer close, and two step controls. */
+.icon-btn { padding: 0; }
+
+/* A bar that is still on screen when its value changes eases to the new width
+   rather than jumping. The entrance grow in motion.js sets its own transition
+   and clears it afterwards, so this takes over from then on. */
+.bar__fill { transition: width var(--t-settle) var(--ease-settle); }
+
+/* Rows that lead somewhere. */
+.attn__row, .rowitem, .work, .flag, .qrow, .results__row {
+  transition: background 150ms cubic-bezier(.2,.8,.2,1);
+}
+
+/* Sub-navigation: the underline travels rather than jumping. The bar is
+   positioned by motion.js; the per-item border stays as the fallback for any
+   navigation the script has not reached, and is handed over only once the bar
+   actually exists. */
+.subnav__btn { transition: color 170ms var(--ease), border-color 170ms var(--ease); }
+.subnav__ink {
+  position: absolute; left: 0; top: 0; height: 2px; width: 0;
+  background: var(--green-primary); border-radius: 2px; pointer-events: none;
+}
+.subnav.has-ink .subnav__btn[aria-current="page"] { border-bottom-color: transparent; }
+
+/* The Phase 2 section item is a button, not a link, so it needs the metrics a
+   button does not inherit. It stays keyboard-reachable on purpose: it is the
+   control that explains why the section is not here yet. */
+.subnav__btn--p2 {
+  display: inline-flex; align-items: center;
+  line-height: var(--lh-body); cursor: pointer;
+}
+
+/* Bars and rings animate the property they already hold, so a browser that
+   cannot animate it simply shows the final value. */
+.bar__fill, .fstep__fill, .caseband__fill { will-change: width; }
+
+/* =========================================================================
+   DEFERRED RENDERING
+   `content-visibility` lets the browser skip layout and paint for a section it
+   cannot see. `contain-intrinsic-size` reserves a sensible height so the
+   scrollbar does not jump as the reader travels down the page.
+   Applied only to long, below-fold, non-interactive-on-arrival sections.
+   ========================================================================= */
+.defer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+.defer--short { contain-intrinsic-size: auto 260px; }
+.defer--tall  { contain-intrinsic-size: auto 720px; }
+
+/* A skeleton is shown only while real deferred work is outstanding. It is never
+   used to imitate loading that is not happening. */
+.skeleton-chart {
+  height: 230px; border-radius: var(--r-field);
+  background: linear-gradient(100deg, var(--tint-neutral) 30%, var(--surface-softer) 50%, var(--tint-neutral) 70%);
+  background-size: 220% 100%;
+  animation: veye-shimmer 1.4s linear infinite;
+}
+@keyframes veye-shimmer { from { background-position: 120% 0; } to { background-position: -20% 0; } }
+
+/* =========================================================================
+   INTERACTIVE CHARTS
+   ========================================================================= */
+.chart {
+  position: relative;
+  /* The chart is one focusable widget; arrow keys move within it and Tab leaves
+     it. Focus is never trapped. */
+}
+.chart__plot { position: relative; margin-top: var(--s-4); }
+.chart__svg { display: block; width: 100%; overflow: visible; }
+.chart__svg:focus { outline: none; }
+.chart__svg:focus-visible { outline: 2px solid var(--line-focus); outline-offset: 3px; border-radius: var(--r-sm); }
+
+.chart .grid-line { stroke: var(--line); stroke-width: 1; }
+.chart .axis-label { font-size: 11px; fill: var(--text-muted); font-family: var(--font-body); }
+.chart .series-line {
+  fill: none; stroke: var(--green-primary); stroke-width: 2.5;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.chart .series-line--b { stroke: var(--status-info); }
+.chart .series-area { fill: url(#veyeChartArea); }
+.chart .series-dot { fill: var(--surface-card); stroke: var(--green-primary); stroke-width: 2; }
+.chart .series-dot--b { stroke: var(--status-info); }
+
+/* The vertical guide and the active point. */
+.chart .guide { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 3 4; opacity: 0; }
+.chart.is-active .guide { opacity: 1; }
+.chart .active-dot { fill: var(--green-primary); stroke: var(--surface-card); stroke-width: 2.5; opacity: 0; }
+.chart .active-dot--b { fill: var(--status-info); }
+.chart.is-active .active-dot { opacity: 1; }
+.chart .guide, .chart .active-dot { transition: opacity 140ms var(--ease), transform 160ms cubic-bezier(.2,.8,.2,1); }
+
+/* Columns. */
+.chart .col-bar { fill: var(--sage); transition: fill 140ms var(--ease); }
+.chart .col-bar--now { fill: var(--green-primary); }
+.chart .col-bar.is-active { fill: var(--green-medium); }
+.chart .col-hit { fill: transparent; }
+
+/* Tooltip. Kept inside the chart box and flipped when it would overflow. */
+.chart__tip {
+  position: absolute; z-index: 5; pointer-events: none;
+  min-width: 116px; max-width: 220px;
+  padding: 9px 12px; border-radius: var(--r-field);
+  background: var(--surface-card); border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--fs-chip); color: var(--text-body);
+  opacity: 0; transform: translateY(4px);
+  transition: opacity 130ms var(--ease), transform 130ms var(--ease);
+}
+.chart.is-active .chart__tip { opacity: 1; transform: none; }
+.chart__tip b { display: block; font-size: var(--fs-support); color: var(--text-strong); }
+.chart__tip .tip-series { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.chart__tip .tip-swatch { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+
+/* The readout beside the chart. It carries the same numbers the tooltip does,
+   so exact values are never hover-only. */
+.chart__readout {
+  display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap;
+  min-height: 34px;
+}
+.chart__readout-value {
+  font-family: var(--font-display); font-weight: 600; font-size: 30px; line-height: 1;
+  color: var(--ink-heading); font-variant-numeric: tabular-nums;
+}
+.chart__readout-label { font-size: var(--fs-support); color: var(--text-muted); }
+.chart__hint { font-size: var(--fs-chip); color: var(--text-muted); margin-top: var(--s-2); }
+
+/* Legend. Real buttons, so they work by keyboard and report their state. */
+.chart__legend { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.legend-btn {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 28px;
+  padding: 4px 11px; border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: var(--surface-card);
+  font-size: var(--fs-chip); font-weight: 600; color: var(--text-muted);
+  transition: border-color 150ms var(--ease), color 150ms var(--ease), background 150ms var(--ease);
+}
+.legend-btn[aria-pressed="true"] { color: var(--text-strong); border-color: var(--line-strong); background: var(--surface-softer); }
+.legend-btn[aria-pressed="false"] { opacity: .62; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+
+/* Entrance drawing. The dash offset is set inline by the chart layer, which
+   knows each path's true length. */
+.chart .series-line.is-drawing { transition: stroke-dashoffset 900ms cubic-bezier(.3,.7,.3,1); }
+.chart .series-area.is-fading { opacity: 0; transition: opacity 620ms 240ms var(--ease); }
+.chart .series-area.is-fading.is-in { opacity: 1; }
+.chart .col-bar.is-growing { transition: transform 620ms cubic-bezier(.2,.8,.2,1); transform-origin: center bottom; }
+
+/* =========================================================================
+   MEMBER DIRECTORY
+   ========================================================================= */
+
+/* The header stays put while the rows travel. `--topbar-h` keeps it clear of
+   the sticky utility bar rather than sliding underneath it. */
+.table-wrap--sticky { overflow: visible; }
+.table-wrap--sticky thead th {
+  position: sticky; top: var(--topbar-h); z-index: 2;
+  background: var(--surface-card);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+/* A row you can open should say so before you click it. */
+.table--rows tbody tr { transition: background 140ms var(--ease); }
+.table--rows tbody tr:hover { background: var(--surface-softer); }
+.table--rows tbody tr:focus-within { background: var(--tint-lime); }
+
+.findbar__filters { display: contents; }
+.findbar__drawerbtn { display: none; }
+.findbar__spacer { flex: 1 1 auto; }
+.filtercount {
+  font-size: var(--fs-chip); font-weight: 600; color: var(--green-primary);
+  background: var(--tint-positive); border: 1px solid #C3DDA4;
+  border-radius: var(--r-pill); padding: 3px 10px; white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  /* Three selects and a search field in one row is a crowded strip on a phone.
+     They move into a drawer with room to read them. */
+  .findbar__filters { display: none; }
+  .findbar__drawerbtn { display: inline-flex; }
+  .table-wrap--sticky { overflow-x: auto; }
+  .table-wrap--sticky thead th { position: static; box-shadow: none; }
+}
+
+/* =========================================================================
+   CONTENT — split editing
+   Fields on the left, the same wording rendered on the right. Below 900px the
+   preview becomes a button, because two half-width columns help nobody.
+   ========================================================================= */
+.splitedit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-6); align-items: start; }
+.splitedit__previewbtn { display: none; }
+.wpreview {
+  border: 1px solid var(--line); border-radius: var(--r-card);
+  background: var(--surface-page); overflow: hidden;
+  position: sticky; top: 0;
+}
+.wpreview__chrome {
+  padding: 8px var(--s-4); background: var(--surface-softer);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-chip); color: var(--text-muted);
+}
+.wpreview__body { padding: var(--s-5); }
+.wpreview__field + .wpreview__field { margin-top: var(--s-5); }
+.wpreview__head {
+  margin-top: 4px; font-family: var(--font-display); font-weight: 600;
+  font-size: 21px; line-height: 1.25; color: var(--ink-heading);
+}
+.wpreview__text { margin-top: 4px; font-size: var(--fs-body); color: var(--text-body); line-height: 1.55; }
+
+@media (max-width: 900px) {
+  .splitedit { grid-template-columns: minmax(0, 1fr); }
+  .splitedit__preview { display: none; }
+  .splitedit__previewbtn { display: inline-flex; }
+}
+
+/* A card head is a row of title + control. On a phone the control was being
+   squeezed until its last option was clipped mid-word, so the row wraps and the
+   control takes the full width underneath. */
+@media (max-width: 640px) {
+  .card__head { flex-wrap: wrap; }
+  .card__head > .modeswitch,
+  .card__head > .btn,
+  .card__head > .row { flex: 1 1 100%; }
+  .card__head > .modeswitch { justify-content: space-between; }
+  .modeswitch__btn { flex: 1 1 auto; text-align: center; padding-inline: 12px; }
+}
+
+/* A small select was losing its last character under the dropdown chevron:
+   `.input--sm` sets a shorthand `padding`, which overrode the `padding-right`
+   `.select` reserves for the arrow. Restored at a higher specificity. */
+.select.input--sm { padding-right: 32px; }
+
+/* =========================================================================
+   SECTION NAVIGATION
+   Tabs on a wide screen, a labelled selector on a phone. Both are always in the
+   DOM; only one is ever shown, so the two can never disagree.
+   ========================================================================= */
+.sectionpick { display: none; }
+@media (max-width: 768px) {
+  .subnav { display: none; }
+  .sectionpick {
+    display: flex; align-items: center; gap: var(--s-3);
+    margin-bottom: var(--s-6);
+    padding: var(--s-3) var(--s-4);
+    background: var(--surface-card); border: 1px solid var(--line);
+    border-radius: var(--r-field);
+  }
+  .sectionpick__label {
+    flex: 0 0 auto; font-size: var(--fs-eyebrow); font-weight: 700;
+    letter-spacing: 1.1px; text-transform: uppercase; color: var(--text-muted);
+  }
+  .sectionpick__select { flex: 1 1 auto; min-width: 0; min-height: 40px; }
+}
+
+/* =========================================================================
+   COMPANION
+   Two panes, not three. The third column in v1 repeated the held-response
+   wording and took width from the conversation.
+   ========================================================================= */
+.review2 {
+  display: grid; grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--grid-gutter); align-items: start;
+}
+@media (max-width: 1024px) { .review2 { grid-template-columns: minmax(0, 1fr); } }
+
+.convo--wide { padding: var(--s-6) var(--s-7); }
+.convo--wide .msg { max-width: 74%; }
+
+/* Newly selected conversations reveal their bubbles in order. Short, once, and
+   removed entirely under reduced motion. */
+.msg--reveal { animation: veye-msg-in 260ms cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d, 0ms); }
+@keyframes veye-msg-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Where a held reply sits in the transcript. It is a placeholder, not a
+   message: no bubble, no reply text, because the member never received it.
+   The readable copy is in the decision panel below. */
+.msg--heldmark { max-width: 100%; align-self: stretch; }
+.msg__marker {
+  margin: 0; display: flex; align-items: center; gap: 8px;
+  padding: 10px var(--s-4);
+  border: 1px dashed var(--line-strong); border-radius: var(--r-sm);
+  background: var(--surface-softer);
+  color: var(--text-muted); font-size: var(--fs-support); line-height: 1.4;
+}
+.msg__marker svg { flex: none; }
+
+/* The decision panel stays with the workspace rather than scrolling away. */
+.held--pinned { position: sticky; bottom: var(--s-4); }
+
+@media (prefers-reduced-motion: reduce) {
+  .msg--reveal { animation: none; }
+}
+
+/* =========================================================================
+   ASSESSMENTS & RULES
+   ========================================================================= */
+
+/* One line where v1 had a five-line banner. The detail opens in a drawer. */
+.statusstrip {
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  padding: var(--s-3) var(--s-5); margin-bottom: var(--s-6);
+  background: var(--tint-attention); border: 1px solid #E7BE8A;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-support); color: #7A4E15;
+}
+.statusstrip--sm { margin-bottom: var(--s-5); }
+.statusstrip__icon { display: inline-flex; flex: 0 0 auto; color: #96601F; }
+.statusstrip__text { flex: 1 1 260px; min-width: 0; }
+@media (max-width: 640px) {
+  .statusstrip { border-radius: var(--r-card); }
+  .statusstrip .btn { width: 100%; }
+}
+
+/* A collapsed question row: identity, category, answer count and weight range.
+   The answers themselves open in a drawer. */
+.qlist { display: flex; flex-direction: column; }
+.qrow2 {
+  display: grid; grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: var(--s-4); align-items: center;
+  padding: var(--s-4) var(--s-6); border-top: 1px solid var(--line);
+  transition: background 140ms var(--ease);
+}
+.qrow2:first-child { border-top: 0; }
+.qrow2:hover, .qrow2:focus-within { background: var(--surface-softer); }
+.qrow2__n {
+  font-family: var(--font-display); font-weight: 600; font-size: var(--fs-support);
+  color: var(--green-primary); background: var(--tint-positive);
+  border-radius: var(--r-sm); padding: 5px 0; text-align: center;
+}
+.qrow2__q { font-weight: 600; color: var(--text-strong); font-size: var(--fs-body); }
+.qrow2__meta {
+  margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px var(--s-4);
+  font-size: var(--fs-chip); color: var(--text-muted); align-items: center;
+}
+@media (max-width: 640px) {
+  .qrow2 { grid-template-columns: 42px minmax(0, 1fr); }
+  .qrow2 > .btn { grid-column: 1 / -1; }
+}
+
+/* The action bar. Sticky at the foot of the editor so Preview and Save are
+   reachable from any panel without scrolling back. */
+.actionbar {
+  position: sticky; bottom: 0; z-index: 6;
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  margin-top: var(--s-8);
+  padding: var(--s-4) var(--s-6);
+  background: rgba(254, 251, 245, .94);
+  border: 1px solid var(--line); border-radius: var(--r-card);
+  box-shadow: 0 -2px 10px rgba(46, 61, 20, .05);
+}
+.actionbar__note { flex: 1 1 auto; font-size: var(--fs-support); color: var(--text-muted); }
+.actionbar__note.is-dirty { color: #96601F; font-weight: 600; }
+@media (max-width: 640px) {
+  .actionbar { padding: var(--s-3) var(--s-4); }
+  .actionbar__note { flex-basis: 100%; }
+  .actionbar .btn { flex: 1 1 auto; }
+}
+
+/* =========================================================================
+   FUTURE MODULES — the one Phase 2 area
+   Quiet by design. It sits at the foot of Programs and never competes with the
+   work that is actually available today.
+   ========================================================================= */
+.future {
+  margin-top: var(--s-10);
+  padding: var(--s-6) var(--s-7);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-card);
+  background: var(--surface-soft);
+}
+.future__head { display: flex; align-items: center; gap: var(--s-3); }
+.future__lede { margin-top: var(--s-2); font-size: var(--fs-support); color: var(--text-muted); max-width: 68ch; }
+.future__items {
+  margin-top: var(--s-5);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--s-4);
+}
+.future__item {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: var(--s-4); align-items: center; text-align: left; width: 100%;
+  padding: var(--s-4) var(--s-5);
+  background: var(--surface-card); border: 1px solid var(--line);
+  border-radius: var(--r-field); color: inherit;
+  transition: border-color 160ms var(--ease), background 160ms var(--ease);
+}
+.future__item:hover { border-color: var(--line-strong); background: var(--surface-softer); }
+.future__icon {
+  width: 38px; height: 38px; border-radius: var(--r-field);
+  display: grid; place-items: center;
+  background: var(--cream-warm-2); color: #8A6A2A;
+}
+.future__body { min-width: 0; }
+.future__name { display: block; font-weight: 600; color: var(--text-strong); }
+.future__desc { display: block; margin-top: 2px; font-size: var(--fs-chip); color: var(--text-muted); }
+@media (max-width: 640px) { .future { padding: var(--s-5); } }
+
+/* =========================================================================
+   OVERLAY EXIT
+   Modals and drawers already animate in (fade-in / pop-in / slide-in in
+   components.css). They used to vanish between frames on close, which reads as
+   a glitch rather than a dismissal. `is-closing` is added by mountOverlay,
+   which also returns focus to the opener and makes the panel inert first — so
+   nothing here is load-bearing, it only covers the 200 ms before the node goes.
+   ========================================================================= */
+.menu { animation: veye-menu-in 150ms var(--ease-out) both; transform-origin: top right; }
+.menu--left { transform-origin: top left; }
+.menu.is-closing { animation: veye-menu-out 130ms var(--ease) both; }
+@keyframes veye-menu-in  { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes veye-menu-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-3px) scale(.99); } }
+
+.modal-scrim.is-closing,
+.drawer-scrim.is-closing { animation: veye-fade-out 180ms var(--ease) both; }
+.modal-scrim.is-closing .modal { animation: veye-pop-out 180ms var(--ease) both; }
+.drawer-scrim.is-closing .drawer { animation: veye-slide-out 180ms var(--ease) both; }
+
+@keyframes veye-fade-out  { from { opacity: 1; } to { opacity: 0; } }
+@keyframes veye-pop-out   { from { transform: none; opacity: 1; } to { transform: scale(.985); opacity: 0; } }
+@keyframes veye-slide-out { from { transform: none; opacity: 1; } to { transform: translateX(20px); opacity: 0; } }
+
+/* =========================================================================
+   PHASE 2 TOAST
+   Opaque on every surface, bottom-right on desktop, a compact sheet on a phone.
+   ========================================================================= */
+.toast {
+  background: var(--surface-card);          /* never translucent over content */
+  border-color: var(--line-strong);
+  position: relative; overflow: hidden;
+  opacity: 0; transform: translateY(10px) scale(.985);
+  transition: opacity 200ms var(--ease), transform 240ms var(--ease-out);
+}
+.toast--in  { opacity: 1; transform: none; }
+.toast--out { opacity: 0; transform: translateY(6px) scale(.99); }
+.toast__title { line-height: 1.4; }
+
+/* How long is left. It is an indicator, never the only way to know something
+   happened — the text stays until the toast goes, and the region announces it. */
+.toast__timer {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--line); overflow: hidden;
+}
+.toast__timer i {
+  display: block; height: 100%; width: 100%;
+  background: var(--green-primary); transform-origin: left center;
+  animation: veye-toast-timer linear both;
+}
+.toast--info .toast__timer i { background: var(--status-info); }
+.toast--error .toast__timer i { background: var(--status-significant); }
+@keyframes veye-toast-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+@media (max-width: 640px) {
+  .toast-region {
+    left: 16px; right: 16px; bottom: 16px; width: auto;
+    /* clear of a phone's home indicator */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .toast {
+    padding: 12px 12px 12px 14px;
+    align-items: center;
+    border-radius: var(--r-card);
+    box-shadow: 0 10px 28px rgba(46, 61, 20, .22);
+  }
+  .toast__title { font-size: var(--fs-support); }
+  /* A 44px target, which is the whole point of the close control on a phone. */
+  .toast [data-x] { width: 44px !important; height: 44px !important; flex: 0 0 auto; }
+}
+
+/* =========================================================================
+   REDUCED MOTION
+   Everything above becomes instant. Nothing above is load-bearing, so nothing
+   is lost — tooltips, keyboard traversal, legends and every value still work.
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .route-enter, .route-enter--in { opacity: 1; transform: none; transition: none; }
+  .route-enter .route-block, .route-enter--in .route-block {
+    opacity: 1; transform: none; transition: none; transition-delay: 0s;
+  }
+  .reveal, .reveal--in { opacity: 1; transform: none; transition: none; }
+  .tile:hover, .story:hover, .ccard:hover,
+  .tile:focus-visible, .story:focus-visible { transform: none; }
+  .btn:active { transform: none; }
+  .subnav__ink { transition: none !important; }
+  .bar__fill { transition: none; }
+  .quick__btn > svg:last-child, .btn > svg:last-child { transition: none; }
+  .quick__btn:hover > svg:last-child, .quick__btn:focus-visible > svg:last-child,
+  .btn:hover > svg:last-child, .btn:focus-visible > svg:last-child { transform: none; }
+  .skeleton-chart { animation: none; background: var(--tint-neutral); }
+  .chart .series-line.is-drawing,
+  .chart .series-area.is-fading,
+  .chart .col-bar.is-growing { transition: none; }
+  .chart .guide, .chart .active-dot, .chart__tip { transition: none; }
+  .chart .series-area.is-fading { opacity: 1; }
+
+  /* The toast arrives and leaves instantly. The countdown bar is continuous
+     movement, so it goes entirely — the toast still times out, and the close
+     control is still there. */
+  .toast { opacity: 1; transform: none; transition: none; }
+  .toast--out { opacity: 0; }
+  .toast__timer { display: none; }
+
+  /* Overlays appear and go instantly. `is-closing` still hides the node
+     immediately, so the 200 ms before it is removed is invisible rather than a
+     dialog that lingers. */
+  .modal-scrim, .drawer-scrim, .modal, .drawer, .menu { animation: none !important; }
+  .modal-scrim.is-closing, .drawer-scrim.is-closing, .menu.is-closing { opacity: 0; }
+}
+
+
+/* ---------------------------------------------------------------------------
+   SIGN-IN ENTRANCE
+   ---------------------------------------------------------------------------
+   Once, on arrival, in four groups: the mark, the heading, the fields as one
+   object, and the primary action with the row and the legal line beside it.
+
+   Never per character and never per field — a form whose inputs arrive one at a
+   time cannot be typed into while it is still assembling itself, which is the
+   difference between an entrance and an obstacle. Nothing here delays when the
+   form becomes usable: every element is in the DOM, focusable and submittable
+   from the first frame, and the animation only affects how it looks.
+   --------------------------------------------------------------------------- */
+.auth-seq__step {
+  animation: veye-auth-in 460ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+@keyframes veye-auth-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-seq__step { animation: none; opacity: 1; transform: none; }
+}
+.is-motion-reduced .auth-seq__step { animation: none; opacity: 1; transform: none; }

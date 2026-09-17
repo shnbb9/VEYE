@@ -1,0 +1,153 @@
+/* Figma Why Veye content box: x120 -> 1320 (1200 wide, no padding) */
+.container--why { max-width: 1200px; padding-left: 0; padding-right: 0; }
+
+/* VEYE — Why Veye page. All values from the Figma node tree (Desktop Why Veye, 1440x4225). */
+
+/* "Veye works differently" x753.6 y595.3 45px; body x757.3 y661.5 w466 18px/21.6 */
+.why-diff { padding: 0; position: relative; }
+.why-diff__grid { display: grid; grid-template-columns: 634px 566px; gap: 0; align-items: start; padding-top: 128px; }
+.why-diff__title { font-family: var(--f-head); font-weight: 600; font-size: 45px; line-height: 36px; letter-spacing: -1.35px; color: var(--w-head); margin: 0 0 27px; }
+.why-diff__text { max-width: 466px; }
+.why-diff__text p { font-family: var(--f-body); font-size: 18px; line-height: 21.6px; letter-spacing: 0; color: #222222; margin: 0 0 18px; }
+.why-diff__text p:last-child { margin-bottom: 0; }
+
+/* Stat pills: 218.5x170.2 r100 — #E3F3E9 / #E6EED3 / #EEF0F1 */
+/* Stat pills: 218.5x170.2 r100 — #E3F3E9 / #E6EED3 / #EEF0F1 */
+.stats { position: relative; height: 420px; margin-top: 56px; }
+/* Client 26/07: the pills, rings and mark are the original Figma design; only
+   the wording changed, and it is shorter, so the block is optically centred
+   instead of carrying the old per-pill top padding. */
+.stat { position: absolute; width: 218.5px; height: 170.2px; border-radius: 100px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 16px; }
+.stat b { display: block; white-space: nowrap; margin-left: 2px; }
+/* Figma: each bubble carries an inner 190x146 r100 ring stroked 2px #FFFFFF */
+/* ::after paints above the card's text, so the ring is pushed behind it */
+.stat::after { content: ""; position: absolute; left: 14px; right: 15px; top: 12px; bottom: 12px;
+  border: 2px solid #FFFFFF; border-radius: 100px; pointer-events: none; z-index: 0; }
+.stat > * { position: relative; z-index: 1; }
+.stat b { font-family: var(--f-body); font-weight: 400; font-size: 36px; line-height: 36px; letter-spacing: .72px; color: var(--w-green); }
+.stat span { font-family: var(--f-body); font-size: 16px; line-height: 17.6px; letter-spacing: .32px; color: var(--w-green); margin-top: 8px; }
+.stat--1 { top: 0;     left: 0;     background: #E3F3E9; }
+.stat--2 { top: 36.7px; left: 314.9px; background: #E6EED3; }
+.stat--3 { top: 204.6px; left: 105px;  background: #EEF0F1; }
+/* Figma: five 23.6px solid stars on a 24.1px pitch, #E6AD58 */
+.stat__stars { display: flex; gap: 0.5px; width: 114px; height: 22.4px; color: #E6AD58; margin-bottom: 6px; }
+.stat__stars svg { width: 22.4px; height: 22.4px; display: block; }
+/* Figma places the mark's ink at x339 y761, 55x62. The brand SVG carries padding
+   inside its 32.5x34 viewBox, so the element is scaled up to land the ink exactly. */
+.stats__hex { position: absolute; top: 98.4px; left: 212.8px; width: 68.8px; height: 78.2px; z-index: 3; opacity: 1; }
+/* Three white 3px rings concentric on (364,786) in frame coords */
+.stats::before, .stats::after, .stats__ring {
+  content: ""; position: absolute; border-radius: 50%; border: 3px solid #FFFFFF;
+  pointer-events: none; z-index: 0;
+}
+.stats { isolation: isolate; }
+.stats::before { left: 64px;  top: -44px; width: 354px; height: 354px; }
+.stats::after  { left: 108px; top: 1px;   width: 264px; height: 264px; }
+.stats__ring   { left: 148px; top: 41px;  width: 184px; height: 184px; }
+.stat { z-index: 1; }
+
+/* Client 26/07: five named features (was six generic circles). Auto-fit keeps
+   the row centred and balanced at every width. */
+.why-features { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px 60px;
+  padding: 138px 0 0; margin: 0 -25px; }
+.why-feature { position: relative; flex: none; width: 154.2px; height: 154.2px; border-radius: 50%; border: none; background: #F0FFCE;
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 14px; }
+/* Figma: a 190x190 dashed ring sits behind each 154px bubble */
+.why-feature::before { content: ""; position: absolute; inset: -18px; border-radius: 50%;
+  border: 1px dashed #D8C8B7; pointer-events: none; }
+.why-feature span { font-family: var(--f-body); font-size: 15px; line-height: 18px; letter-spacing: .3px; color: var(--w-green); }
+
+/* Content blocks — Figma positions (frame coords, container starts at x120,
+   .why-blocks top anchored to the first image at y1460.2):
+     img1 x0.9   y1460.2 600x456.6   body x697.7 y1494.3
+     img2 x744.1 y1898.7 700x532.7   body x121.9 y2027.2
+     img3 x-0.4  y2546.6 500x380.5   body x592   y2599
+   accents 290x212: x331 y1440 #B0E2A7 | x724 y1879 #FEDCB9 | x231 y2526 #5F8F93 */
+.why-blocks { position: relative; height: 1500px; margin-top: 96px; }
+.why-block { position: absolute; margin: 0; }
+.why-block__media { position: relative; }
+.why-block__media img { display: block; width: 100%; height: 100%; border-radius: 0; }
+/* Blocks 1 and 3 are meant to bleed to the LEFT viewport edge and block 2 to the
+   RIGHT one. Those offsets were hard-coded for a 1440 stage, so at 1366 the
+   1200px container sits 37px further out and the blocks were clipped on both
+   sides. calc(50% - 50vw) is the distance from the container edge to the
+   viewport edge, so the bleed now tracks the viewport at any desktop width.
+   At 1440 this reproduces the approved positions (block 2 loses the 4px that
+   used to hang past the right edge). */
+.why-block--1 { left: calc(50% - 50vw + 0.9px);  top: 0;        width: 600px; height: 456.6px; }
+.why-block--2 { left: calc(50vw + 50% - 700px);  top: 438.5px;  width: 700px; height: 532.7px; }
+.why-block--3 { left: calc(50% - 50vw - 0.4px);  top: 1086.4px; width: 500px; height: 380.5px; }
+.why-block__body { position: absolute; width: 437.5px; }
+.why-body--1 { left: 577.7px; top: 34.1px; }
+.why-body--2 { left: 1.9px;   top: 567px; }
+.why-body--3 { left: 472px;   top: 1138.8px; }
+.why-block__title { font-family: var(--f-head); font-weight: 600; font-size: 55px; line-height: 44px; letter-spacing: -1.65px; color: var(--w-head); margin: 0 0 20px; }
+.why-block__sub { font-family: var(--f-head); font-weight: 300; font-size: 24px; line-height: 24px; letter-spacing: 0; color: var(--w-green); margin: 0 0 32px; }
+.why-block__text { font-family: var(--f-body); font-size: 16px; line-height: 20.8px; letter-spacing: .32px; color: #384C0C; margin: 0; }
+.why-accent { position: absolute; width: 18px; height: 212px; z-index: 0; border-radius: 10px; }
+.why-accent--1 { left: 211px; top: -20.2px;   background: #B0E2A7; }
+.why-accent--2 { left: 604px; top: 418.8px;   background: #FEDCB9; }
+.why-accent--3 { left: 111px; top: 1065.8px;  background: #5F8F93; }
+
+/* Reviews band y3083.7 h369.9 #EAF4E8; 5 cards 298x380 at pitch 334 starting x-62 */
+/* Figma: green band y3084; the "Reviews" heading sits 41px ABOVE the band top,
+   on the page background, not inside the band. */
+.reviews { background: linear-gradient(#EAF4E8 0 370px, transparent 370px); padding: 0; margin-top: 125px; display: flow-root; }
+.reviews__title { font-family: var(--f-head); font-weight: 600; font-size: 55px; line-height: 44px; letter-spacing: -1.65px; color: var(--w-head); margin: -41px 0 0; }
+.reviews__sub { font-family: var(--f-head); font-weight: 400; font-size: 24px; line-height: 24px; color: var(--w-green); margin: 16px 0 0; }
+.reviews__grid { display: flex; flex-direction: row-reverse; justify-content: center;
+  flex-wrap: wrap; gap: 30px; margin: 32px 0 0; }
+.review-card { width: 270px; display: flex; flex-direction: column; }
+.review { background: #fff; border-radius: 6px; width: 100%; height: 380px;
+  box-shadow: none; padding: 22px 20px; overflow: hidden; }
+.review__text { font-family: var(--f-body); font-size: 14px; line-height: 20px;
+  letter-spacing: .28px; color: #3B3F5C; margin: 0; }
+.review__name { text-align: center; font-family: var(--f-head); font-weight: 500;
+  font-size: 22px; line-height: 17.6px; color: #5E6175; margin: 26px 0 6px; }
+.review__name::before { content: "\2014\00a0"; }
+.review__loc { text-align: center; font-family: var(--f-body); font-size: 16px;
+  line-height: 17.6px; color: #000; margin: 0; }
+.reviews__disclaimer { background: #FFFAE0; border-radius: 5px; max-width: 750px; padding: 14px 22px;
+  margin: 40px auto 0; font-family: var(--f-body); font-size: 16px; line-height: 17.6px; color: #000; }
+
+@media (max-width: 1024px) {
+  .why-diff__grid { grid-template-columns: 1fr; gap: 40px; }
+  /* the three content sections leave the 1440 absolute stage and become a normal
+     column: image, then its copy, in the supplied order. Heights come from the
+     content, so each section pushes the next one down. */
+  .why-blocks { position: static; height: auto; margin-top: 64px;
+    display: flex; flex-direction: column; align-items: center; gap: 40px; }
+  .why-block { position: static; left: auto; top: auto; width: 100%; height: auto;
+    max-width: 640px; }
+  .why-block__media img { width: 100%; height: auto; }
+  .why-block__body { position: static; left: auto; top: auto; width: 100%; max-width: 640px; }
+  /* the accent squares are placed against the desktop stage and have no meaning
+     once the blocks stack */
+  .why-accent { display: none; }
+  /* the -25px bleed widens the feature row past the container once the container
+     is narrower than the 1440 stage */
+  .why-features { margin: 0; padding: 96px 20px 0; gap: 32px 40px; }
+  /* below desktop the reviews read top-to-bottom in the supplied order */
+  .reviews__grid { flex-direction: column; align-items: center; gap: 22px; }
+  .review-card { width: 100%; max-width: 520px; }
+  .review { height: auto; min-height: 200px; }
+  .reviews__disclaimer { width: auto; height: auto; margin-left: auto; }
+}
+@media (max-width: 620px) {
+  /* the overlapping cluster needs 533px; on a phone the same three pills stack
+     and stay centred. They keep their size, colours and r100 pill shape. */
+  .stats { position: static; height: auto; isolation: auto; margin-top: 44px;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+  .stat { position: static; left: auto; top: auto; }
+  .stats::before, .stats::after { display: none; }
+  /* the rings and the mark are decoration for the overlapping cluster, which no
+     longer exists once the pills stack. .stats is static here, so the mark would
+     otherwise resolve its absolute offsets against an outer ancestor. */
+  .stats .stats__ring, .stats .stats__hex { display: none; }
+  .why-features { gap: 28px 30px; }
+  .reviews__title, .why-block__title { font-size: 30px; line-height: 1.1; }
+  .why-diff__title { font-size: 28px; line-height: 1.1; }
+  .review-card, .review { width: 100%; }
+  .review { height: auto; min-height: 260px; }
+}
