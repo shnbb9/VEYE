@@ -1,0 +1,113 @@
+/* Production member-app additions on top of the verbatim prototype stylesheet
+   (dashboard.css). Kept deliberately small: link equivalents of controls the
+   prototype rendered as <button> (the app navigates with real routes), and the
+   honest holding treatment for modules that have no production slice yet. */
+
+/* Controls that are links here but buttons in the prototype: keep the
+   prototype's box, drop the anchor defaults. */
+a.health-badge-block, a.hn-anchor-cta, a.icon-btn, a.avatar, a.module-cta,
+a.activity-half, a.mini-card, .dash-companion-card__actions a, a.btn-primary, a.btn-ghost,
+a.quiz-back, a.module-find-out {
+  text-decoration: none;
+}
+a.icon-btn, a.activity-half { color: inherit; }
+a.icon-btn { color: #8DC412; }
+a.module-cta { color: #fff; }
+a.module-cta--ghost { color: #446514; }
+.dash-companion-card__actions a {
+  display: inline-flex; align-items: center; min-height: 34px; border: 0; border-radius: 7px;
+  padding: 7px 13px; background: var(--olive-medium); color: #fff;
+  font-family: 'Teachers', sans-serif; font-size: 13px; line-height: 1; cursor: pointer;
+  transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+}
+.dash-companion-card__actions a:hover { transform: translateY(-1px); background: var(--olive-heading); box-shadow: 0 6px 16px rgba(46, 74, 26, .16); }
+.dash-companion-card__actions a:focus-visible { outline: 2px solid #446514; outline-offset: 3px; }
+
+/* The prototype's .fade-in keyframe leaves opacity 0 until the animation runs;
+   React re-renders keep the class, so nothing here needs changing — but a
+   route-level hydration must never leave content invisible if the animation
+   is disabled by the reader. */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in { opacity: 1; transform: none; }
+}
+
+/* ---- Modules without a production vertical slice yet -------------------- */
+/* Same card language as the prototype's development sections (.mind-card,
+   .dev-note, .dev-more), so a not-yet-connected screen reads as part of the
+   product rather than a generic placeholder. */
+.hold-card { max-width: 620px; }
+.hold-card .dev-note { margin: 18px 0 0; text-align: left; }
+.hold-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 22px; }
+
+/* Health Number history screen: the prototype renders it inside the retake
+   result card; here it is its own route, so the card needs its own top margin. */
+.hn-history-page { max-width: 720px; }
+.hn-history-page .wizard-result-card { margin-top: 0; }
+
+/* ---- Session-aware chrome ------------------------------------------------- */
+/* Log out is a real action (it ends the API session), so it is a <button>
+   wearing the prototype's .nav-link box. */
+button.nav-link { width: 100%; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+/* The topbar avatar shows the signed-in member's initial instead of the
+   prototype's sample photograph. */
+.avatar--initial {
+  display: flex; align-items: center; justify-content: center;
+  background-image: none; background-color: var(--olive-medium); color: #fff;
+  font-family: 'Teachers', sans-serif; font-size: 30px; font-weight: 600; text-decoration: none;
+}
+
+/* ---- Settings: account-service states ------------------------------------ */
+.settings-photo--initial { display:flex; align-items:center; justify-content:center; background-image:none; background-color:var(--olive-medium);
+  color:#fff; font:600 44px 'Teachers',sans-serif; }
+.settings-fields input[readonly] { color:#5C7041; background:#F7F5EE; }
+.settings-toggle.is-unavailable { opacity:.62; }
+.settings-toggle.is-unavailable input:disabled + i { cursor:not-allowed; }
+a.settings-outline { text-decoration:none; box-sizing:border-box; }
+.settings-note { margin-top:12px; padding:10px 12px; border-radius:10px; background:#FFF7E9; color:#446514; }
+.settings-save:disabled, .settings-outline:disabled { opacity:.6; cursor:progress; }
+
+/* ---- Companion: states the static prototype could not have ---------------- */
+.msg-note { margin: 6px 0 0; font-family: 'Nunito Sans', sans-serif; font-size: 11.5px; color: var(--body-text-light); font-style: italic; }
+.chat-error { margin: 8px 0; font-family: 'Nunito Sans', sans-serif; font-size: 13px; color: var(--notify-red); }
+/* Provenance stays collapsed: one small "Sources · N" control, no inline citations. */
+.msg-sources { margin-top: 6px; }
+.msg-sources__toggle { padding-left: 0; }
+.msg-sources__list { list-style: none; margin: 4px 0 0; padding: 8px 12px; background: #fff; border: 1px solid var(--border-soft);
+  border-radius: 10px; font-family: 'Nunito Sans', sans-serif; font-size: 12px; color: var(--body-text); }
+.msg-sources__list li + li { margin-top: 4px; }
+.msg-sources__meta { color: var(--body-text-light); }
+.chat-send:disabled { opacity: .45; cursor: default; }
+
+/* ---- Guided experiences (Cara's decision trees run by Sprout) --------------- */
+.guided-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: 0 18px 6px; padding: 8px 14px; background: #F7FAEE; border: 1px solid rgba(68,101,20,.14); border-radius: 12px;
+  font-family: 'Teachers', sans-serif; font-size: 13px; letter-spacing: .3px; color: #446514; }
+.guided-bar__label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.guided-bar__dot { width: 8px; height: 8px; border-radius: 50%; background: #8DC412; flex: none; }
+.guided-bar__actions { display: inline-flex; gap: 6px; }
+.guided-bar__btn { border: 1px solid rgba(68,101,20,.35); background: #fff; color: #446514; border-radius: 999px; padding: 4px 12px;
+  font: 600 12px 'Teachers', sans-serif; letter-spacing: .4px; text-transform: uppercase; cursor: pointer; }
+.guided-bar__btn:hover { background: #FFF7E9; }
+.guided-bar__btn--quiet { border-color: transparent; color: var(--body-text-light); }
+.qr-btn--guided { background: #446514; color: #fff; border-color: #446514; }
+.qr-btn--guided:hover { background: #384C0C; }
+.qr-btn:disabled { opacity: .6; cursor: progress; }
+
+/* ---- Progress Trackers line graph (dashboard) ------------------------------ */
+.tracker-card { margin-top: 26px; padding: 22px 26px 20px; }
+.tracker-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.tracker-card__title { margin: 0; }
+.tracker-card__link { font-family: 'Teachers', sans-serif; font-size: 12.5px; letter-spacing: .6px; text-transform: uppercase; color: #446514;
+  text-decoration: none; border-bottom: 1px solid rgba(68,101,20,.35); }
+.tracker-card__link:hover { color: #384C0C; border-bottom-color: currentColor; }
+.tracker-graph__svg { width: 100%; height: auto; display: block; }
+.tracker-graph__axis { stroke: #DDE5D1; stroke-width: 1; }
+.tracker-graph__tick, .tracker-graph__empty { font-family: 'Nunito Sans', sans-serif; font-size: 11px; fill: var(--body-text-light); }
+.tracker-graph__empty { font-size: 13px; }
+.tracker-graph__legend { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 18px; }
+.tracker-graph__legend li { display: flex; align-items: center; gap: 8px; font-family: 'Nunito Sans', sans-serif; font-size: 12.5px; color: var(--body-text); min-width: 0; }
+.tracker-graph__swatch { width: 14px; height: 4px; border-radius: 2px; flex: none; }
+.tracker-graph__name { font-weight: 700; color: var(--olive-heading); flex: none; }
+.tracker-graph__value { color: var(--body-text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tracker-graph--compact .tracker-graph__legend { grid-template-columns: 1fr 1fr; }
+@media (max-width: 600px) { .tracker-card { padding: 18px 16px 16px; } .tracker-graph__legend { grid-template-columns: 1fr; } }

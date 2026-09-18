@@ -1,0 +1,192 @@
+/* ============================================================================
+   Veye Admin — design tokens
+   Direction: Veye Operations Atelier.
+
+   Colour values come from two places and where they disagree the difference is
+   recorded rather than silently resolved:
+     - The approved Operations Atelier reference render, sampled directly
+       (exec-756b3f43-…png). Its canvas measures #FEFBF5, its dark green
+       #456216, its active nav band #F2F2DD, its heading ink #2D3D0E.
+     - The written brand token list in RESEARCH_AND_DESIGN_DIRECTION.md, which
+       carries the finalized consumer build's values (#446514, #384C0C,
+       #FFF7E9).
+   The reference render is the client-approved artefact for this surface, so its
+   canvas and nav treatment win; the brand greens use the documented consumer
+   values, which sit within 2/255 of the sampled ones and keep continuity with
+   the member product. See qa/VISUAL_QA.md.
+   ============================================================================ */
+
+:root {
+  /* ---- brand greens ------------------------------------------------------ */
+  --ink-heading: #384C0C;        /* page + section headings */
+  --green-primary: #446514;      /* primary actions, active ink */
+  --green-deep: #2E4A1A;         /* deep utility, hover on primary */
+  --green-medium: #4D7A2E;       /* secondary emphasis */
+  --lime: #B7E355;               /* accent, active marker */
+  --brand-accent: #8DC412;       /* brightest brand note, used sparingly */
+
+  /* ---- canvas and surfaces ---------------------------------------------- */
+  --surface-page: #FEFBF5;       /* sampled from the approved render */
+  --surface-rail: #FEFCF7;       /* sidebar, a half-step lighter than page */
+  --surface-card: #FFFFFF;
+  --surface-soft: #FFFDF9;
+  --surface-softer: #FFFAF5;
+  --cream-warm: #FFF7E9;         /* documented consumer cream, for accents */
+  --cream-warm-2: #FBF6E8;
+
+  /* ---- supporting brand hues -------------------------------------------- */
+  --sage: #BFD9A8;
+  --sage-light: #D5E6B4;
+  --peach: #FEDCB9;
+
+  /* ---- status ------------------------------------------------------------
+     Never used alone: every status pairs colour with a label and an icon. */
+  --status-positive: #7DBE5F;
+  --status-attention: #E89A4A;
+  --status-significant: #D55E4A;
+  --status-info: #4FA4C6;
+  --status-info-soft: #7BB6D6;
+  --status-violet: #9B7AC6;
+  --status-neutral: #7A7F72;
+
+  /* status tints for chip backgrounds */
+  --tint-positive: #EFF6E6;
+  --tint-attention: #FDECD9;
+  --tint-significant: #FBE4DF;
+  --tint-info: #E4F1F7;
+  --tint-violet: #EFE9F7;
+  --tint-neutral: #F1F1EA;
+  --tint-lime: #F2F2DD;          /* sampled active nav band */
+
+  /* ---- text -------------------------------------------------------------- */
+  --text-strong: #2E3D14;
+  --text-body: #3F4A31;
+  /* Darkened from #6B7361. That value cleared 4.5:1 on the cream page but landed
+     at 4.28–4.47:1 on the warmer tints used for chips, held-reply panels and the
+     segmented switch — measured, not estimated. #626A58 clears 4.5:1 on every
+     surface in this console while staying an olive grey rather than a flat black. */
+  --text-muted: #626A58;
+  --text-on-dark: #FFFDF9;
+  --text-link: #446514;
+
+  /* ---- lines and edges --------------------------------------------------- */
+  --line: #E7E7D6;               /* olive-tinted hairline */
+  --line-strong: #D8DAC4;
+  --line-focus: #446514;
+
+  /* ---- depth — THREE LEVELS, AND ONLY THREE ------------------------------
+     A console reads as flat when everything sits on one plane and as noisy when
+     everything sits on its own. Three levels is enough to say what a thing is:
+
+       1  Resting surface  — an ordinary card. Hairline border, shadow barely
+                             there. Most of the console lives here.
+       2  Raised anchor    — the one thing a screen is actually about: a chart,
+                             a lead panel, the figures band, an open drawer.
+                             A broader, softer olive shadow, plus a faint top
+                             highlight so the edge catches light.
+       3  Floating overlay — menus, tooltips, modals, toasts. Genuinely above
+                             the page and blocking it.
+
+     The shadows are olive (the ink colour), never grey: a neutral shadow on a
+     cream canvas reads as dirt. Nothing gets a fourth level, and no nested
+     element inside a raised card carries its own shadow. */
+  --shadow-card: 0 1px 2px rgba(46, 61, 20, .05);
+  --shadow-raised: 0 2px 8px rgba(46, 61, 20, .06);
+  --shadow-lift: 0 12px 30px -14px rgba(46, 61, 20, .26), 0 2px 6px rgba(46, 61, 20, .05);
+  --shadow-overlay: 0 12px 32px rgba(46, 61, 20, .14);
+  --shadow-drawer: -8px 0 32px rgba(46, 61, 20, .12);
+  /* The top highlight that turns a flat white rectangle into a lit surface. */
+  --highlight-top: inset 0 1px 0 rgba(255, 255, 255, .92);
+
+  /* ---- light pools --------------------------------------------------------
+     Very low opacity washes of colours already in the palette. They give a
+     header or a lead panel somewhere for light to come from without becoming
+     decoration. Rules: at most two in a viewport, never behind dense table
+     text, no new image, and no contrast lost — every pool tops out at .18
+     alpha over a cream canvas, which moves body text contrast by under 0.1:1
+     (measured against #3F4A31 on #FEFBF5). */
+  --pool-lime: radial-gradient(78% 120% at 8% -10%, rgba(183, 227, 85, .17) 0%, rgba(183, 227, 85, 0) 62%);
+  --pool-sage: radial-gradient(70% 130% at 100% 0%, rgba(191, 217, 168, .20) 0%, rgba(191, 217, 168, 0) 60%);
+  --pool-peach: radial-gradient(64% 120% at 100% 0%, rgba(254, 220, 185, .26) 0%, rgba(254, 220, 185, 0) 58%);
+
+  /* ---- type --------------------------------------------------------------
+     The brand faces, requested in index.html exactly as the enterprise edition
+     requests them. Kumbh Sans carries page titles, section headings, key
+     metrics and deliberate display moments; Teachers carries body copy,
+     controls, navigation, table content, helper text and form content.
+     `display=swap` plus the system fallbacks after each name mean a browser
+     with no network paints immediately in a system face rather than waiting or
+     showing nothing. */
+  --font-display: 'Kumbh Sans', system-ui, -apple-system, sans-serif;
+  --font-body: 'Teachers', system-ui, -apple-system, sans-serif;
+
+  --fs-page-title: 34px;         /* brief: 30–38 */
+  --fs-section: 20px;            /* brief: 18–22 */
+  --fs-card-title: 18px;
+  --fs-body: 15px;               /* brief: 15–16 */
+  --fs-body-lg: 16px;
+  --fs-table: 14px;              /* brief: 14–15, never below */
+  --fs-support: 14px;            /* brief: >= 14 for meaningful copy */
+  --fs-chip: 13px;
+  --fs-eyebrow: 12px;
+
+  --lh-tight: 1.15;
+  --lh-heading: 1.25;
+  --lh-body: 1.55;
+
+  /* ---- spacing scale (4px base) ------------------------------------------ */
+  --s-1: 4px;   --s-2: 8px;   --s-3: 12px;  --s-4: 16px;
+  --s-5: 20px;  --s-6: 24px;  --s-7: 28px;  --s-8: 32px;
+  --s-9: 40px;  --s-10: 48px; --s-11: 56px; --s-12: 64px;
+
+  /* ---- layout — measured from the approved render at a 1440 canvas -------- */
+  --rail-w: 242px;               /* sidebar rule sampled at x=242 */
+  --rail-w-collapsed: 76px;
+  --topbar-h: 68px;
+  --page-pad: 30px;
+  --grid-gutter: 24px;
+  --drawer-w: 470px;
+  --content-max: 1600px;
+
+  /* ---- radii -------------------------------------------------------------- */
+  --r-card: 14px;
+  --r-field: 10px;
+  --r-btn: 10px;
+  --r-pill: 999px;
+  --r-sm: 8px;
+
+  /* ---- motion -------------------------------------------------------------
+     `--ease` is the general curve. `--ease-out` decelerates harder and is for
+     things arriving; `--ease-settle` is for a value moving to a new value after
+     a real filter or tab change, where it should come to rest rather than stop.
+     Every duration here is short enough to stay under a reader's attention. */
+  --t-fast: 120ms;
+  --t-base: 180ms;
+  --t-slow: 260ms;
+  --t-enter: 260ms;              /* route content; brief: 240–280 */
+  --t-toggle: 170ms;             /* a switch track filling and its thumb moving */
+  --t-settle: 420ms;             /* a figure or bar moving to a new value */
+  --stagger: 40ms;               /* between the first few blocks only */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --ease-out: cubic-bezier(.16, .84, .32, 1);
+  --ease-settle: cubic-bezier(.33, 1, .68, 1);
+
+  /* ---- z scale ------------------------------------------------------------ */
+  --z-rail: 20;
+  --z-topbar: 30;
+  --z-dropdown: 60;
+  --z-drawer: 70;
+  --z-modal: 80;
+  --z-toast: 90;
+}
+
+/* Respect a reduced-motion preference across the whole application. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-fast: 0ms; --t-base: 0ms; --t-slow: 0ms; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

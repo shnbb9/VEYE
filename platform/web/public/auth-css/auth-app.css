@@ -1,0 +1,16 @@
+/* Production add-ons for the approved auth screens: states the static
+   prototype did not need (validation errors, busy buttons, delivery notices,
+   the verification/reset result cards). Visual tokens come from tokens.css. */
+
+.auth__error { margin: 12px 0 0; color: #B3402F; font-size: 14px; letter-spacing: .5px; line-height: 1.4; }
+.auth__notice { margin: 14px 0 0; padding: 12px 16px; border-radius: 10px; background: #fff;
+  border: 1px solid rgba(26, 72, 43, .18); color: var(--green-900); font-size: 14px; line-height: 1.5; }
+.auth__notice--warn { background: #FDF6E3; border-color: #E4D9B8; color: #6B5D2E; }
+.auth__notice b { font-weight: 600; }
+.btn:disabled { opacity: .6; cursor: progress; filter: none; }
+a.btn { text-decoration: none; }
+.auth__links { margin-top: 20px; font-size: 14px; letter-spacing: .5px; color: var(--green-900); }
+.auth__links a { text-decoration: underline; }
+.field__input.is-invalid { border-color: #B3402F; }
+.auth__status { margin-top: 20px; font-size: 16px; line-height: 1.5; color: var(--ink); }
+.pwd__opt:disabled { cursor: default; opacity: .75; }

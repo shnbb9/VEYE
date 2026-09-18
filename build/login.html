@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="assets/web/wp/veye-ico.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veye — My Account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css?v=2">
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/auth.css?v=4">
+</head>
+<body>
+<main class="auth">
+  <!-- Left: photo + logo + vertical tagline -->
+  <section class="auth__media">
+    <img class="auth__photo" src="login-people.jpg" alt="">
+    <img class="auth__logo" src="assets/img/veye-logo-white.svg" alt="Veye">
+    <span class="auth__tagline">Nutrition Reimagined</span>
+  </section>
+
+  <!-- Right: login form -->
+  <section class="auth__panel">
+    <form class="auth__form" data-auth="login" action="dashboard.html" method="get" novalidate>
+      <h1 class="auth__title">My Account</h1>
+      <p class="auth__subtitle">Nice to see you!</p>
+
+      <div class="auth__fields">
+        <div class="field">
+          <input class="field__input" type="email" name="email" placeholder="Your Email" autocomplete="email">
+        </div>
+        <!-- No `name` on purpose. The form keeps method="get" as a no-JS
+             fallback, and a control without a name is never serialized, so the
+             password cannot reach the URL even if js/auth.js fails to load.
+             auth.js does not read this field. -->
+        <div class="field">
+          <input class="field__input" type="password" placeholder="Your Password" autocomplete="current-password">
+          <button type="button" class="field__eye" aria-label="Show password">
+            <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c7 0 10.5 7 10.5 7a18.3 18.3 0 0 1-3.4 4.1M6.5 8.3A18.2 18.2 0 0 0 1.5 12S5 19 12 19c1.4 0 2.7-.3 4-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+            <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="auth__row">
+        <label class="check">
+          <input type="checkbox" name="remember" checked>
+          <span class="check__box"></span>
+          Remember me
+        </label>
+        <button class="link link--btn" type="button" id="forgotPwBtn">Forgot your password?</button>
+      </div>
+
+      <p class="legal legal--terms">By signing in to Veye, you&rsquo;re agreeing to our <a href="terms.html">Terms and Conditions</a>, and <a href="privacy.html">Privacy Policy</a>.</p>
+
+      <button type="submit" class="btn btn--primary btn--mt">Login</button>
+
+      <div class="divider">Don&rsquo;t have a Veye account?</div>
+
+      <!-- "Start the process" runs the assessment first, then sign-up — same flow as "Get Started" -->
+      <a class="btn btn--lime" href="onboarding.html">Start the process</a>
+
+      <p class="legal legal--privacy">In this prototype, your demo information stays in this browser. Production privacy and security will be governed by Veye&rsquo;s final Privacy Policy and technical safeguards.</p>
+    </form>
+  </section>
+</main>
+
+<!-- Password recovery — polished PROTOTYPE flow (client, Functional Edits
+     260821). Three routes: email, text, support. Nothing is actually sent:
+     every confirmation says so, and account recovery itself needs the future
+     backend. -->
+<dialog class="pwd" id="pwDialog" aria-labelledby="pwTitle">
+  <div class="pwd__head">
+    <h2 class="pwd__title" id="pwTitle">Reset your password</h2>
+    <button class="pwd__close" type="button" id="pwClose" aria-label="Close">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+    </button>
+  </div>
+
+  <div class="pwd__step" data-pw-step="menu">
+    <p class="pwd__sub">Choose how you&rsquo;d like to get back into your account.</p>
+    <button class="pwd__opt" type="button" data-pw="email">
+      <b>Reset by email</b>
+      <span>In the live application, Veye would send a password-reset link to your email address.</span>
+    </button>
+    <button class="pwd__opt" type="button" data-pw="text">
+      <b>Reset by text</b>
+      <span>In the live application, Veye would text a one-time sign-in code to your phone.</span>
+    </button>
+    <button class="pwd__opt" type="button" data-pw="support">
+      <b>Contact support</b>
+      <span>Talk to the Veye team about your account.</span>
+    </button>
+  </div>
+
+  <div class="pwd__step" data-pw-step="email" hidden>
+    <label class="pwd__label" for="pwEmail">Email address</label>
+    <div class="field"><input class="field__input" type="email" id="pwEmail" placeholder="you@example.com" autocomplete="email"></div>
+    <p class="pwd__err" id="pwEmailErr" hidden>Please enter a valid email address.</p>
+    <button class="btn btn--primary pwd__go" type="button" id="pwSendEmail">Send reset link</button>
+    <button class="pwd__back" type="button" data-pw-back>Back</button>
+  </div>
+
+  <div class="pwd__step" data-pw-step="text" hidden>
+    <label class="pwd__label" for="pwPhone">Phone number</label>
+    <div class="field"><input class="field__input" type="tel" id="pwPhone" placeholder="(555) 000-1234" autocomplete="tel"></div>
+    <p class="pwd__err" id="pwPhoneErr" hidden>Please enter a phone number.</p>
+    <button class="btn btn--primary pwd__go" type="button" id="pwSendText">Send sign-in code</button>
+    <button class="pwd__back" type="button" data-pw-back>Back</button>
+  </div>
+
+  <div class="pwd__step" data-pw-step="support" hidden>
+    <p class="pwd__sub">Can&rsquo;t log in or reset your password? Contact us at help@veye.co</p>
+    <a class="btn btn--primary pwd__go" href="mailto:help@veye.co">Email help@veye.co</a>
+    <a class="pwd__helplink" href="help.html">Browse help &amp; FAQs instead</a>
+    <button class="pwd__back" type="button" data-pw-back>Back</button>
+  </div>
+
+  <div class="pwd__step" data-pw-step="done" hidden>
+    <p class="pwd__sub" id="pwDoneMsg"></p>
+    <p class="pwd__proto">Prototype demonstration &mdash; no email or text message was actually
+      sent. Real account recovery needs the future Veye backend.</p>
+    <button class="btn btn--primary pwd__go" type="button" id="pwDone">Back to sign in</button>
+  </div>
+</dialog>
+
+<script src="js/veye-calculations.js?v=5"></script>
+<script src="js/auth.js?v=5" defer></script>
+</body>
+</html>

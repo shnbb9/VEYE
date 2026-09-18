@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="assets/web/wp/veye-ico.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veye — Nutrition Reimagined</title>
+<meta name="description" content="Veye rejects the one-size-fits-all approach to managing weight and chronic disease. Optimize your health, prevent disease, and slow the aging process.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@100;200&family=Kumbh+Sans:wght@100;200;300;400;500;600;700&family=Teachers:wght@400;500;600&family=Outfit:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/website.css?v=41">
+</head>
+<body class="site">
+
+<!-- Announcement marquee -->
+<div class="announce">
+  <div class="announce__track">
+    <span class="announce__item">Notifications, Offers, Announcements, VIP Specials</span>
+    <span class="announce__item">Notifications, Offers, Announcements, VIP Specials</span>
+    <span class="announce__item">Notifications, Offers, Announcements, VIP Specials</span>
+    <span class="announce__item">Notifications, Offers, Announcements, VIP Specials</span>
+    <span class="announce__item">Notifications, Offers, Announcements, VIP Specials</span>
+    <span class="announce__item">Notifications, Offers, Announcements, VIP Specials</span>
+  </div>
+</div>
+
+<!-- Header -->
+<header class="nav">
+  <div class="container nav__inner">
+    <a class="nav__logo" href="index.html" aria-label="Veye home"><img src="assets/web/wp/veye-id.svg" alt="Veye"></a>
+    <ul class="nav__links" id="navLinks">
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="why-veye.html">Why Veye</a></li>
+      <li><a href="pricing.html">Pricing</a></li>
+      <li><a href="help.html">Help</a></li>
+      <li><a href="about.html">About</a></li>
+    </ul>
+    <div class="nav__right">
+      <a class="nav__user" href="login.html" aria-label="Sign in"><img src="assets/web/svg/user.svg" alt=""></a>
+      <a class="nav__cta" href="onboarding.html"><span>Get Started</span><span class="nav__cta-box"></span></a>
+      <button class="nav__burger" id="navBurger" aria-label="Menu"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<!-- Hero — the artwork is the same plate as before with the baked headline,
+     paragraph, button and stat cards erased from the cream panel; those are
+     set as live text below so they render sharply. Composition unchanged. -->
+<section class="hero">
+  <img class="hero__img" src="assets/web/wp/hero-1c-clean.jpg?v=1" alt="">
+  <div class="hero__copy">
+    <h1 class="hero__title">Change <em>you</em><span class="hero__tm">&trade;</span><br>can <em>live with</em></h1>
+    <p class="hero__sub">Veye rejects the traditional one-size-fits-all approach to managing weight challenges and other chronic diseases.</p>
+    <a class="hero__cta" href="onboarding.html">Let&rsquo;s do this! <span class="hero__cta-arrow" aria-hidden="true"></span></a>
+    <div class="hero__stats">
+      <div class="hero-stat hero-stat--yrs"><b>113+</b><span>Years<br>Combined<br>Experience</span></div>
+      <div class="hero-stat hero-stat--diet"><b>5x</b><span>Better<br>Than Diet<br>Alone</span></div>
+      <div class="hero-stat hero-stat--res"><b>10x</b><span>Better<br>Results</span><span class="hero-stat__stars" aria-label="5 out of 5">&#9733;&#9733;&#9733;&#9733;&#9733;</span></div>
+    </div>
+  </div>
+  <div class="hero__tagline">Nutrition Reimagined</div>
+</section>
+
+<!-- Conditions marquee -->
+<div class="conditions">
+  <!-- the item set is repeated once so translateX(-50%) lands on an
+       identical frame and the loop has no visible jump -->
+  <div class="conditions__track" id="condTrack">
+    <span>Diabetes</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Obesity</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Hypertension</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Pre-diabetes</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Autoimmune</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Cardiovascular</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Diabetes</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Obesity</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Hypertension</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Pre-diabetes</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Autoimmune</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Cardiovascular</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+  </div>
+</div>
+
+<!-- Video -->
+<section class="video">
+  <div class="container">
+    <div class="video__frame" id="videoFrame">
+      <video id="veyeVideo" playsinline preload="none" poster="assets/web/img/video-poster.png?v=2">
+        <source src="veye-intro.mp4" type="video/mp4">
+      </video>
+      <div class="video__label"><b>Veye in 60 seconds</b><br>How we make simple &amp; natural transforming your life</div>
+      <button class="video__play" id="videoPlay" aria-label="Play video"></button>
+    </div>
+  </div>
+</section>
+
+<!-- Science-terms marquee (replaces the "As seen in" media strip) -->
+<section class="press press--science">
+  <div class="conditions__track" id="sciTrack">
+    <span>Insulin Resistance</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Glucagon</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>AMPK</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>mTOR</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>NFkB</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Inflammation</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Omega 3</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Polyphenols</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Prebiotics</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Insulin Resistance</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Glucagon</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>AMPK</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>mTOR</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>NFkB</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Inflammation</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Omega 3</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Polyphenols</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+    <span>Prebiotics</span><img class="conditions__dot" src="assets/web/svg/veye-mark.svg" alt="">
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="howto" id="how-it-works">
+  <div class="howto__deco"></div>
+  <div class="container">
+    <h2 class="section-title">How it works</h2>
+    <div class="steps">
+      <div class="steps__line" aria-hidden="true">
+        <span class="steps__seg"></span>
+        <span class="steps__seg"></span>
+        <span class="steps__seg"></span>
+      </div>
+      <div class="step">
+        <div class="step__badge">1</div>
+        <div class="step__card">
+          <h3 class="step__title">Guided Set-up</h3>
+          <img class="step__img" src="assets/web/img/step1.png" alt="">
+          <p class="step__text">Veye&rsquo;s comprehensive processes are tailored to your individual health goals, current challenges, and dietary preferences.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__badge">2</div>
+        <div class="step__card">
+          <h3 class="step__title">Personalized Plan</h3>
+          <img class="step__img" src="assets/web/img/step2.png" alt="">
+          <p class="step__text">Veye creates a personalized meal and supplement plan based on your inputs and individualized to your specific health needs.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__badge">3</div>
+        <div class="step__card">
+          <h3 class="step__title">Continuous Monitoring</h3>
+          <img class="step__img" src="assets/web/img/step3.png" alt="">
+          <p class="step__text">Using our proprietary bio-analytics dashboard, Veye continuously monitors your health status and provides real-time adjustments to your plan.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step__badge">4</div>
+        <div class="step__card">
+          <h3 class="step__title">Proactive Management</h3>
+          <img class="step__img" src="assets/web/img/step4.png" alt="">
+          <p class="step__text">Armed with analytics, resources, and dietary guidance &mdash; you can take proactive measures in managing your health and achieve tangible improvements.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Assess and Register -->
+<section class="assess-section">
+<div class="container">
+  <section class="band band--assess">
+    <div class="band__media"><img src="assets/web/img/assess.png" alt=""></div>
+    <div class="band__body">
+      <h2 class="band__title">Assess and Register</h2>
+      <p class="band__text">Start the process and take our health assessment enabling Veye to learn more about your unique needs and health objectives, then sign up to make an action plan.</p>
+      <a class="btn btn--outline" href="onboarding.html">Take the quiz! <span class="btn-arrow"></span></a>
+    </div>
+  </section>
+</div>
+</section>
+
+<!-- Why Veye -->
+<section class="split split--why" id="why-veye">
+  <div class="split__body">
+    <h2 class="split__title">Why Veye</h2>
+    <p class="split__text">Unlike common diet platforms, Veye focuses on long-term health improvements, not ephemeral solutions. We serve people with chronic conditions &mdash; arming them with the analytics, resources, and the guidance they need to use food as medicine.</p>
+    <ul class="split__list">
+      <li>Food as medicine approach</li>
+      <li>Dedicated Bio-Analytics Dashboard</li>
+      <li>Personalized Meal and Supplement Plan</li>
+    </ul>
+    <p class="split__text">Through Veye&rsquo;s platform, you will make informed decisions about your health. It&rsquo;s empowering.</p>
+    <a class="btn btn--discover" href="why-veye.html">Discover More <span class="btn-arrow"></span></a>
+  </div>
+  <div class="split__media"><img src="assets/web/img/whyveye.png" alt=""></div>
+</section>
+
+<!-- Join Our Community -->
+<section class="split split--comm">
+  <div class="split__media"><img src="assets/web/img/community.png" alt=""></div>
+  <div class="split__body">
+    <h2 class="split__title">Join Our Community</h2>
+    <p class="split__text">Join Veye and join a community that values health above all. Experience these benefits when you sign up:</p>
+    <ul class="split__list">
+      <li>Regular health consultations</li>
+      <li>Access to a vast food catalog</li>
+      <li>Meal planner and reminder system</li>
+      <li>Supplement recommendations matching your health needs</li>
+    </ul>
+    <p class="split__text">Through Veye&rsquo;s platform, you will make informed decisions about your health. It&rsquo;s empowering.</p>
+    <a class="btn btn--comm" href="onboarding.html">Let&rsquo;s do this! <span class="btn-arrow"></span></a>
+    <p class="split__text" style="margin-top:22px">Veye transforms your approach to managing your chronic conditions. Take full control of your health journey.</p>
+  </div>
+</section>
+
+<!-- Key Features -->
+<section class="features">
+  <div class="container">
+    <h2 class="section-title">Key Features</h2>
+    <p class="features__sub">Equipped with state-of-the-art features, Veye represents a new era of health optimization.</p>
+    <div class="features__grid">
+      <div class="feature">
+        <div class="feature__deco"></div>
+        <div class="feature__num">1</div>
+        <img class="feature__icon" src="assets/web/wp/feat-bio.png" alt="">
+        <h3 class="feature__title">Bio-Analytics<br>Dashboard</h3>
+        <p class="feature__text">Track your health and assess the effectiveness of your nutritional program using Veye&rsquo;s user-friendly bio-analytics dashboard.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__deco"></div>
+        <div class="feature__num">2</div>
+        <img class="feature__icon" src="assets/web/wp/feat-food.png" alt="">
+        <h3 class="feature__title">Personalized<br>Food Catalog</h3>
+        <p class="feature__text">Explore our extensive food catalogue to build your personalized meal plan, with categories you individualize to cater to your taste buds while contributing to your improved health.</p>
+      </div>
+      <div class="feature">
+        <div class="feature__deco"></div>
+        <div class="feature__num">3</div>
+        <img class="feature__icon" src="assets/web/wp/feat-alarm.png" alt="">
+        <img class="feature__weekdays" src="assets/web/wp/feat-weekdays.png" alt="M T W T F S S">
+        <h3 class="feature__title">Meal/Supplement<br>Planner+Reminders</h3>
+        <p class="feature__text">Plan your meals in advance with our meal planner, helping you stick to your nutrition program. Create your own sample days, or use our templates. Veye builds your meal and supplement schedule around your life.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Ready to take the first step? (CTA) -->
+<div class="container">
+  <section class="band band--cta">
+    <div class="band__body">
+      <h2 class="band__title">Ready to take the first step?</h2>
+      <p class="band__text">Start your journey to better health and longevity with Veye&rsquo;s personalized, research-backed health programs. Say no to generic diet plans and say yes to a healthier, more enriched life.</p>
+      <a class="btn btn--outline" href="onboarding.html">Take the quiz! <span class="btn-arrow"></span></a>
+    </div>
+    <div class="band__media"><img src="assets/web/img/cta.png" alt=""></div>
+  </section>
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <img class="footer__logo" src="assets/web/svg/veye-logo-footer.svg" alt="Veye">
+      </div>
+      <div class="footer__col">
+        <ul>
+          <li><a href="#how-it-works">How it works</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="why-veye.html">Why Veye</a></li>
+          <li><span class="footer__soon" aria-disabled="true">Treatments <small>Coming soon</small></span></li>
+          <li><span class="footer__soon" aria-disabled="true">Gift Cards <small>Coming soon</small></span></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <ul>
+          <li><a href="about.html">About</a></li>
+          <li><a href="help.html">Resources</a></li>
+          <li><span class="footer__soon" aria-disabled="true">Partnerships <small>Coming soon</small></span></li>
+          <li><span class="footer__soon" aria-disabled="true">Affiliates <small>Coming soon</small></span></li>
+          <li><a href="about.html">Corporate</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <ul>
+          <li><span class="footer__soon" aria-disabled="true">LinkedIn <small>Coming soon</small></span></li>
+          <li><span class="footer__soon" aria-disabled="true">Facebook <small>Coming soon</small></span></li>
+          <li><span class="footer__soon" aria-disabled="true">Instagram <small>Coming soon</small></span></li>
+        </ul>
+      </div>
+      <div class="footer__connect">
+        <p>Stay connected with health tips, specials and the latest,<br>100% natural treatments from Veye.</p>
+        <a class="footer__signup" href="signup.html">Sign up <span class="nav__cta-box"></span></a>
+        <p class="footer__fine">By clicking &ldquo;Sign up,&rdquo; you acknowledge that you have read, understood, and accepted the Privacy Policy (including sensitive data processing) and Terms of Use.</p>
+        <div class="footer__stores">
+          <span class="footer__store" aria-disabled="true" title="Coming soon"><img src="assets/web/svg/badge-appstore.svg" alt="App Store — coming soon"></span>
+          <span class="footer__store" aria-disabled="true" title="Coming soon"><img src="assets/web/svg/badge-playstore.svg" alt="Google Play — coming soon"></span>
+        </div>
+        <p class="footer__stores-note">App Store and Google Play listings coming soon.</p>
+      </div>
+    </div>
+    <hr class="footer__divider">
+    <p class="footer__copy">&copy;2024 Veye LLC. All rights reserved. <a href="terms.html">Terms</a>. <a href="privacy.html">Privacy</a>.<br>This website is for informational purpose and should not be used as medical advice.</p>
+  </div>
+</footer>
+
+<script src="js/veye-calculations.js?v=5"></script>
+<script src="js/website.js" defer></script>
+</body>
+</html>

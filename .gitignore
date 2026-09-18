@@ -1,0 +1,120 @@
+# ============================================================================
+#  VEYE — code only in the repository history.
+#
+#  Tracked: the static prototypes (build/, admin-panel/prototype-client/), the
+#  platform application (platform/api, platform/web, docker, scripts), the
+#  permanent test suites and the launcher.
+#
+#  Not tracked (kept ON DISK only): every document and note, client files,
+#  design references and wireframes, environment files, keys and tokens,
+#  session/tool data, archives, generated and machine-local material.
+# ============================================================================
+
+# ---- documents, notes and internal material ----------------------------------
+*.md
+# runtime seed inputs for the Companion knowledge base — code, not documents
+!platform/api/app/seed/knowledge_content/*.md
+/*.txt
+*.docx
+*.doc
+*.pdf
+*.xlsx
+*.xls
+*.pptx
+*.ppt
+*.rtf
+*.odt
+Feedback_docs/
+FEEDBACK_DOCS_2/
+FEEDBACK3/
+client-inputs/
+docs/
+platform/docs/
+artifacts/
+.codex-temp/
+
+# ---- design references, wireframes, exports, archives -------------------------
+veye copy/
+Veye Website (1)/
+Veye Brand, Onboard + Dash/
+figma-data/
+build/assets/figma-ref/
+build/_legacy/
+build/.audit_tmp/
+admin-panel/archive/
+admin-panel/audit-*/
+admin-panel/docs/
+build/_preview-*.png
+_preview-*.png
+*-screenshot.png
+*-shot.png
+*.zip
+*.7z
+*.rar
+*.psd
+*.fig
+*.sketch
+
+# ---- environment files, keys, tokens, credentials ----------------------------
+.env
+.env.*
+*.env
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.token
+.token_seed*
+platform/.docker-cli/
+secrets/
+credentials*.json
+service-account*.json
+
+# ---- tool, session and agent data ---------------------------------------------
+.claude/
+.codex/
+.cursor/
+.mcp.json
+.idea/
+.vscode/
+
+# ---- databases and generated material -----------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+platform/api/var/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+node_modules/
+.next/
+out/
+coverage/
+test-output/
+platform/web/tsconfig.tsbuildinfo
+platform/web/next-env.d.ts
+
+# ---- temporary + scratch ---------------------------------------------------------
+_tmp-*
+*.tmp
+*.temp
+*.log
+*.crdownload
+*.partial
+tmp/
+scratch/
+
+# ---- OS / editor -----------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*~

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="assets/web/wp/veye-ico.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veye — Help</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@100;200;300;400;500;600;700&family=Teachers:wght@400;500;600&family=Outfit:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/website.css?v=41">
+<link rel="stylesheet" href="styles/pages.css?v=66">
+</head>
+<body class="site" data-page="help">
+<div id="site-nav"></div>
+
+<!-- Figma page-frame glow ellipses: painted below section fills (see .pglow) -->
+<span class="pglow pglow--help-1"></span>
+<span class="pglow pglow--help-2"></span>
+<span class="pglow pglow--help-3"></span>
+<span class="pglow pglow--help-4"></span>
+
+<!-- Banner: the search field is drawn into the Figma banner art; a real input is
+     overlaid on top of it so the control is actually usable. -->
+<section class="page-banner page-banner--help">
+  <!-- the search overlay is anchored to the art, not to the section: below
+       1024 the paragraph joins the flow here and would otherwise drag the
+       field down with it -->
+  <div class="page-banner__art">
+    <img class="page-banner__img" src="assets/web/figma/banner-help.png?v=4" alt="Help">
+    <form class="help-search" onsubmit="return false;">
+      <input class="help-search__input" type="search" placeholder="Search" aria-label="Search help topics">
+      <button class="help-search__btn" type="submit" aria-label="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      </button>
+    </form>
+  </div>
+  <!-- the old copy was baked into the banner art; it has been erased from the
+       PNG and replaced by the client's revised paragraph as live text. -->
+  <p class="help__lead">Veye is here to provide the support and guidance you need to effectively achieve your health goals. Whether you have questions about combining food or are interested in the science, Veye aims to give you up-to-date information.</p>
+</section>
+
+<h2 class="help__intro">Veye Life: feel better, look better, be healthier</h2>
+
+<section class="help-cats">
+  <div class="container container--help">
+    <div class="help-cats__row">
+      <button type="button" class="help-cat" data-cat="about">About Veye</button>
+      <button type="button" class="help-cat" data-cat="subscription">Subscription and My Account</button>
+      <button type="button" class="help-cat is-active" data-cat="diet" aria-pressed="true">Diet and Nutrition Terminology</button>
+    </div>
+    <div class="help-cats__row help-cats__row--tall">
+      <button type="button" class="help-cat" data-cat="platform">Using the Platform</button>
+      <button type="button" class="help-cat" data-cat="technical">Technical Issues</button>
+    </div>
+  </div>
+</section>
+
+<section class="help">
+  <div class="container container--help">
+    <h3 class="help__cat">Diet and Nutrition Terminology</h3>
+    <!-- Figma flows the two columns independently (rows do not line up), so the
+         items are split into explicit columns rather than a row-wise grid. -->
+    <div class="faq">
+      <div class="faq__col">
+        <div class="faq__item" data-cat="about">
+          <h4 class="faq__q">What is Veye?</h4>
+          <p class="faq__a">Veye programs help members manage disease, lose weight and take a proactive role in their own healthcare. Veye takes a nutritional approach to family health. Whether challenged by diabetes, heart disease, osteoporosis, infertility, asthma or the simple desire to improve quality of life, Veye will be there to offer detailed nutritional planning and day-to-day support. Veye makes it possible to put medical advice into action.</p>
+        </div>
+        <div class="faq__item" data-cat="subscription">
+          <h4 class="faq__q">What subscription am I on?</h4>
+          <p class="faq__a">Create an account to see the subscription options.</p>
+        </div>
+        <div class="faq__item" data-cat="platform">
+          <h4 class="faq__q">How do I use the Veye site?</h4>
+          <p class="faq__a">The Veye site is designed to be simple and easy to use. Veye uses an internal AI assistant to guide you at your pace, concentrate on the things that work best for you, and give you personalized tips and advice. You can start with a question to the Veye Companion, randomly click on the features that interest you, or go to the left column and take the time to set up your program.</p>
+        </div>
+        <div class="faq__item" data-cat="platform">
+          <h4 class="faq__q">Where should I start?</h4>
+          <p class="faq__a">For best results, after you sign in Veye suggests that you start by filling in the sections on the left in order. Create a baseline assessment by filling in a Progress Tracker of your choice, or filling in more than one. Try using the Mood Tracker, eventually understanding how food affects your mood.</p>
+        </div>
+        <div class="faq__item" data-cat="technical">
+          <h4 class="faq__q">I can&rsquo;t sign in to my account</h4>
+          <p class="faq__a">Check that you are using the email address you signed up with, and that Caps Lock is off. If you are still unable to sign in, close the tab and open Veye again before trying once more.</p>
+        </div>
+        <div class="faq__item" data-cat="technical">
+          <h4 class="faq__q">I forgot my password</h4>
+          <p class="faq__a">Use the show/hide control in the password field to confirm what you have typed. Password resets will be available from the sign-in screen; until then, email us and we will help you back in.</p>
+        </div>
+        <div class="faq__item" data-cat="technical">
+          <h4 class="faq__q">A page will not load or looks broken</h4>
+          <p class="faq__a">Refresh the page first. If that does not help, clear your browser cache and reload. A stale cached file is the most common cause of a page rendering incorrectly.</p>
+        </div>
+        <div class="faq__item" data-cat="diet">
+          <h4 class="faq__q">What is metabolism?</h4>
+          <p class="faq__a">Your metabolism is how you process and convert energy, and is controlled by AMPK. Metabolism controls your weight, mental focus, physical performance, how you age, and more. By following the Veye program you can control AMPK, and therefore your metabolism.</p>
+        </div>
+        <div class="faq__item" data-cat="diet">
+          <h4 class="faq__q">Is intermittent fasting good for you?</h4>
+          <p class="faq__a">Although intermittent fasting has shown promise in reducing senescent, or &ldquo;zombie&rdquo; cells, you can achieve the same effect without starving by eating a low calorie diet with the proper ratio of macronutrients. The Veye program restricts calories without sacrifice.</p>
+        </div>
+        <div class="faq__item" data-cat="diet">
+          <h4 class="faq__q">Why do I need to eat protein at every meal?</h4>
+          <p class="faq__a">To activate glucagon and AMPK, two important components to health.</p>
+        </div>
+        <div class="faq__item" data-cat="diet">
+          <h4 class="faq__q">How much protein do I need?</h4>
+          <p class="faq__a">Most women need 77grams per day and men 121grams, although this varies by the individual. The Veye program can help you determine your exact protein needs.</p>
+        </div>
+      </div>
+      <div class="faq__col">
+        <div class="faq__item" data-cat="about">
+          <h4 class="faq__q">How is Veye different from other diet programs?</h4>
+          <p class="faq__a">Veye goes far beyond what diet sites such as WW (Weight Watchers), Noom and Jenny Craig offer, and beyond what most nutritionists offer. Veye&rsquo;s proprietary systems are about more than weight loss &mdash; they are about improved health. The Veye nutritional program is based on peer reviewed and published Medical research. Veye maintains relationships with medical organizations, cutting edge thinkers, and sole practitioners.</p>
+        </div>
+        <div class="faq__item" data-cat="subscription">
+          <h4 class="faq__q">What is in My Account?</h4>
+          <p class="faq__a">To recover your account, go to the sign in section, enter your email and reset your password.</p>
+        </div>
+        <div class="faq__item" data-cat="platform">
+          <h4 class="faq__q">How do I set up my meals?</h4>
+          <p class="faq__a">Then make your food choices &mdash; this will help the Veye Companion customize your meals. After you have chosen the foods you like to eat, go to Your Days and the Veye Companion will help you create meals that work around your lifestyle, not the other way around. Before you start, the Veye Companion will give you the opportunity to explore the science behind our program.</p>
+        </div>
+        <div class="faq__item" data-cat="platform">
+          <h4 class="faq__q">What should I do every day?</h4>
+          <p class="faq__a">Finally, fill out the food diary as often as possible. The Veye Companion will assess your choices and let you know what meals are perfect for you, and what can be improved.</p>
+        </div>
+        <div class="faq__item" data-cat="technical">
+          <h4 class="faq__q">My progress does not seem to be saving</h4>
+          <p class="faq__a">Make sure you press Save on the screen you are filling in, and that your browser is not in private/incognito mode, which discards stored progress when the window closes.</p>
+        </div>
+        <div class="faq__item" data-cat="technical">
+          <h4 class="faq__q">Which browsers and devices does Veye support?</h4>
+          <p class="faq__a">Veye works on current versions of Chrome, Edge, Firefox and Safari, on desktop, tablet and phone. If you are on an older browser, updating it usually resolves display problems.</p>
+        </div>
+        <div class="faq__item" data-cat="technical">
+          <h4 class="faq__q">My issue is still not fixed</h4>
+          <p class="faq__a">Email <a href="mailto:help@veye.co">help@veye.co</a> with a short description of what happened and which page you were on, and we will take it from there.</p>
+        </div>
+        <div class="faq__item" data-cat="diet">
+          <h4 class="faq__q">What is the key to living longer?</h4>
+          <p class="faq__a">Calorie restriction is the only known way to increase longevity. The Veye program allows calorie restriction without hunger or deprivation.</p>
+        </div>
+        <div class="faq__item" data-cat="diet">
+          <h4 class="faq__q">Is a vegan diet the best one?</h4>
+          <p class="faq__a">The research is inconclusive, although Veye respects individuals who choose this lifestyle. It is hard to get adequate protein on a vegan diet. Veye can help you maintain a vegan diet, or make healthy choices whatever your dietary preference is.</p>
+        </div>
+        <div class="faq__item" data-cat="diet">
+          <h4 class="faq__q">Can you eat too much protein?</h4>
+          <p class="faq__a">Yes, it is important to have the right protein prescription for you and your lifestyle. Veye will give you your protein requirement and help you maintain lean muscle mass.</p>
+        </div>
+        <div class="faq__item" data-cat="diet">
+          <h4 class="faq__q">Is there protein in cantaloupe, broccoli?</h4>
+          <p class="faq__a">Although there may be trace amounts, there is not enough to activate glucagon or AMPK, and therefore these are not good protein sources.</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="faq__empty" hidden>No articles in this category yet.</p>
+
+    <!-- Client 26/07: no "load more" content yet; a robust internal AI is coming,
+         so this is an Ask a Question prototype (no AI/API/storage behind it). -->
+    <button type="button" class="help__more" id="helpAsk" aria-expanded="false" aria-controls="helpAskPanel">Ask a Question</button>
+    <div class="help-ask" id="helpAskPanel" hidden>
+      <label class="help-ask__label" for="helpAskInput">What would you like to know?</label>
+      <div class="help-ask__row">
+        <input class="help-ask__input" id="helpAskInput" type="text" placeholder="Type your question&hellip;" autocomplete="off">
+        <button type="button" class="help-ask__submit" id="helpAskSubmit">Submit</button>
+      </div>
+      <p class="help-ask__done" id="helpAskDone" hidden role="status">Thanks &mdash; your question has been noted.</p>
+    </div>
+  </div>
+</section>
+
+<section class="help-contact">
+  <div class="container container--help">
+    <h3>Don&rsquo;t find what you&rsquo;re looking for?</h3>
+    <p>Chat with us or email us at <a href="mailto:help@veye.co">help@veye.co</a></p>
+  </div>
+</section>
+
+<div id="site-footer"></div>
+<script src="js/site-chrome.js?v=4" defer></script>
+<script src="js/help.js?v=4" defer></script>
+</body>
+</html>

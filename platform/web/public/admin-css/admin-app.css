@@ -1,0 +1,23 @@
+/* Production admin additions on top of the verbatim prototype stylesheets:
+   states the static console did not have (disabled rail items for areas that
+   are not in production, loading rows, inline forms), all with the same
+   tokens. */
+.nav-link.is-disabled { color: var(--text-muted); cursor: not-allowed; opacity: .6; }
+.nav-link.is-disabled:hover { background: transparent; }
+.loading-row { padding: var(--s-6); color: var(--text-muted); font-size: var(--fs-support); }
+.errorbar { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-field); background: var(--tint-significant); color: #A8402D; font-size: var(--fs-support); }
+.inline-form { display: grid; gap: var(--s-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.inline-form .field--wide { grid-column: 1 / -1; }
+@media (max-width: 760px) { .inline-form { grid-template-columns: minmax(0, 1fr); } }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-5); font-size: var(--fs-support); }
+.kv dt { color: var(--text-muted); }
+.kv dd { color: var(--text-strong); word-break: break-word; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.tagrow { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.tag { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: var(--r-pill); background: var(--surface-softer); border: 1px solid var(--line); font-size: 12.5px; color: var(--text-body); }
+.msg__sources { margin-top: 6px; font-size: var(--fs-chip); color: var(--text-muted); }
+.stackgap > * + * { margin-top: var(--s-5); }
+.metric-row--wrap { flex-wrap: wrap; }
+.metric-row--wrap > * + * { border-left: 0; }
+.filelabel { display: inline-flex; align-items: center; gap: var(--s-2); }
+.filelabel input { max-width: 260px; }

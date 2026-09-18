@@ -1,0 +1,18 @@
+/* Production additions to the verbatim prototype onboarding stylesheet
+   (tokens.css / base.css / quiz.css). Kept minimal. */
+
+/* Option cards are real <button>s here (keyboard-operable); keep the
+   prototype's box and text treatment. */
+button.opt { width: 100%; text-align: center; }
+.quiz__options--yn button.opt, .quiz__options--stack button.opt { width: 120px; }
+.opt--other > span:first-child { cursor: pointer; }
+.opt--other > span:first-child:focus-visible { outline: 2px solid var(--green-900); outline-offset: 2px; }
+
+/* The API answers: a calculation failure shows here, in the quiz voice. */
+.quiz__error { margin: -30px 0 24px; font-size: 14px; line-height: 19px; color: #C0563F; text-align: center; max-width: 620px; }
+
+/* The stored calculation version of the result just shown. */
+.result__version { margin: 18px 0 0; font-size: 13px; color: var(--green-900); opacity: .8; }
+
+/* Result actions are links and buttons alike; both take the pill treatment. */
+a.quiz__btn { text-decoration: none; }

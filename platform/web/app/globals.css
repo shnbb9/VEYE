@@ -1,0 +1,44 @@
+@import url("https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@400;500;600;700&family=Teachers:wght@500;600;700&display=swap");
+
+:root {
+  --ink: #294407;
+  --deep: #38670b;
+  --leaf: #80c800;
+  --leaf-soft: #b6e85b;
+  --cream: #fff8ea;
+  --paper: #ffffff;
+  --line: #dfe8cd;
+  --muted: #6f7d5c;
+  --warning: #a65d13;
+  --shadow: 0 18px 45px rgba(49, 77, 14, 0.1);
+}
+
+/* Truly global rules only. Each surface carries its own approved stylesheet:
+   the public site (marketing-css + the .public-site scope below), the member
+   application (member-css) and the onboarding assessment (onboarding-css).
+   Everything that used to live here for the foundation scaffold now loads only
+   with the admin console, which loads the admin prototype stylesheets. */
+* { box-sizing: border-box; }
+html { background: var(--cream); color: var(--ink); }
+body { margin: 0; }
+
+/* The public site deliberately retains the approved standalone marketing CSS.
+   The class scopes its document-level base rules away from the member app. */
+.public-site { position:relative; margin:0; min-height:100vh; font-family:var(--f-body, "Teachers", sans-serif); color:var(--w-body-ink, #222); background:var(--w-bg, #fffdf9); -webkit-font-smoothing:antialiased; overflow-x:clip; }
+.public-site img, .public-site svg { display:block; max-width:100%; }
+.public-site a { color:inherit; text-decoration:none; }
+
+/* The approved navigation's five desktop links need more than a tablet-width
+   row. Reuse its existing compact-menu treatment before that row would wrap. */
+@media (min-width:761px) and (max-width:920px) {
+  .public-site .nav__links, .public-site .nav__cta span { display:none; }
+  .public-site .nav__burger { display:flex; }
+  .public-site .nav__links {
+    position:fixed; top:66px; left:0; right:0; background:var(--w-bg);
+    flex-direction:column; gap:0; padding:12px 24px;
+    box-shadow:0 20px 30px rgba(0,0,0,.08); transform:translateY(-120%);
+    transition:transform .25s; margin:0;
+  }
+  .public-site .nav__links.open { transform:translateY(0); display:flex; }
+  .public-site .nav__links li { padding:12px 0; border-bottom:1px solid rgba(0,0,0,.05); }
+}

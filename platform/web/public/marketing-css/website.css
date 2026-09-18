@@ -1,0 +1,429 @@
+/* ============================================================
+   VEYE — Marketing website
+   Matched to Figma "Veye Website" › Desktop Home (1:3).
+   Fonts: Kumbh Sans (headings/features), Teachers (body/marquee),
+   Outfit (announcement bar). Reference width 1440.
+   ============================================================ */
+
+:root {
+  --f-head: "Kumbh Sans", sans-serif;
+  --f-body: "Teachers", sans-serif;
+  --f-note: "Outfit", sans-serif;
+
+  --w-green: #1E5935;        /* primary dark green */
+  --w-green-deep: #0D2215;   /* footer */
+  --w-head: #384C0C;         /* section headings */
+  --w-head2: #374D0D;
+  --w-hero-btn: #B0E2A7;
+  --w-comm-btn: #A0CACB;
+  --w-bg: #FFFDF9;
+  --w-howto-bg: #F5F8EF;
+  --w-why-bg: #F7FBEE;
+  --w-feat-bg: #FAF5EB;
+  --w-comm-bg: #F5F5F5;
+  --w-assess-bg: #F1EBCA;
+  --w-assess-ink: #504820;
+  --w-assess-stroke: #62571C;
+  --w-body-ink: #222222;
+  --w-nav-ink: #939393;
+  --w-yellow: #FFC321;
+  --w-feat-num: #8a8a8a;
+  --w-feat-title: #5E6175;
+  --w-footer-ink: #A0A0A0;
+  --w-footer-logo: #B7CCB3;
+
+  --w-max: 1200px;
+}
+
+/* base */
+* { box-sizing: border-box; }
+body.site {
+  margin: 0;
+  font-family: var(--f-body);
+  color: var(--w-body-ink);
+  background: var(--w-bg);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+.site img, .site svg { display: block; max-width: 100%; }
+.site a { color: inherit; text-decoration: none; }
+.container { max-width: var(--w-max); margin: 0 auto; padding: 0 24px; }
+.btn-arrow { display: inline-block; width: 30px; height: 1px; background: currentColor; position: relative; vertical-align: middle; margin-left: 12px; }
+.btn-arrow::after { content: ""; position: absolute; right: 0; top: -3px; width: 7px; height: 7px; border-top: 1px solid currentColor; border-right: 1px solid currentColor; transform: rotate(45deg); }
+
+/* ---------------- Announcement bar ---------------- */
+.announce { background: var(--w-green); color: #fff; height: 27px; overflow: hidden; }
+.announce__track { display: flex; gap: 0; align-items: center; height: 27px; white-space: nowrap; width: max-content; animation: marquee 32s linear infinite; }
+.announce__item { font-family: var(--f-note); font-weight: 400; font-size: 11px; letter-spacing: 2.4px; text-transform: uppercase; display: inline-flex; align-items: center; }
+.announce__item::after { content: ""; width: 58px; height: 1px; background: currentColor; opacity: .5; margin: 0 30px; }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* ---------------- Header / nav ---------------- */
+.nav { position: sticky; top: 0; z-index: 50; background: #FFFFFF; border-bottom: 1px solid rgba(0,0,0,.04); }
+/* Full-width nav (like WordPress): 8.34% side inset === the hero headline's left inset,
+   so the logo lines up with "Change you can live with" at any viewport width. */
+.nav__inner { display: flex; align-items: center; height: 66px; gap: 24px; max-width: none; padding: 0 8.34%; }
+.nav__logo { width: 119px; }
+.nav__logo svg, .nav__logo img { width: 119px; height: auto; }
+.nav__links { display: flex; gap: 34px; margin: 0 auto; list-style: none; padding: 0; }
+.nav__links a { font-family: var(--f-head); font-weight: 600; font-size: 13px; letter-spacing: 2.6px; text-transform: uppercase; color: var(--w-nav-ink); transition: color .15s; }
+.nav__links a:hover { color: var(--w-green); }
+.nav__right { display: flex; align-items: center; gap: 18px; }
+.nav__user { width: 34px; height: 34px; color: var(--w-green); border: 1.5px solid var(--w-green); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.nav__user img { width: 19px; height: 19px; }
+.nav__cta { display: inline-flex; align-items: center; gap: 14px; border: 1px solid var(--w-green); color: var(--w-green); border-radius: 999px; padding: 7px 16px; font-size: 13px; letter-spacing: .26px; transition: background .15s, color .15s; }
+.nav__cta:hover { background: var(--w-green); color: #fff; }
+.nav__cta-box { position: relative; width: 26px; height: 10px; display: inline-block; }
+.nav__cta-box::before { content: ""; position: absolute; left: 0; top: 50%; width: 100%; height: 1px; background: currentColor; }
+.nav__cta-box::after { content: ""; position: absolute; right: 0; top: 50%; width: 6px; height: 6px; border-top: 1px solid currentColor; border-right: 1px solid currentColor; transform: translateY(-50%) rotate(45deg); }
+.nav__burger { display: none; flex-direction: column; gap: 5px; width: 30px; height: 22px; justify-content: center; }
+.nav__burger span { height: 2px; background: var(--w-green); border-radius: 2px; }
+
+/* ---------------- Hero ---------------- */
+/* Hero — exact WordPress image + interactive button hotspot */
+.hero { position: relative; width: 100%; background: #FDF3E5; line-height: 0; }
+.hero__img { display: block; width: 100%; height: auto; }
+
+/* Hero copy — live text over the cleaned plate, so it renders sharply instead
+   of being resampled with the bitmap. The plate is 1439x674 and is drawn at
+   100% width, so every box is a percentage of the hero and every type size is
+   a vw value on a 1440 basis: the block tracks the artwork at any width.
+   Positions are measured from the original plate:
+     headline ink   x120 y139, two lines on a 52px rhythm
+     paragraph      x121 y260, three lines on a 27px rhythm
+     button         x121 y361, 254x60, #B0E2A7
+     stat cards     y449, 135 wide, 114 tall, 9px gutters, first at x120 */
+.hero__copy { position: absolute; left: 8.34%; top: 20.6%; width: 30%; z-index: 2; }
+
+.hero__title { font-family: var(--f-head); font-weight: 600; font-size: 3.86vw; line-height: .971;
+  letter-spacing: -0.055vw; color: #1A482B; margin: 0; }
+.hero__title em { font-style: normal; color: #B8834D; }
+.hero__tm { font-family: var(--f-head); font-weight: 600; font-size: 1.32vw;
+  line-height: 1; color: #B8834D; vertical-align: super; margin-left: .15vw; }
+
+/* The reference headline is not a two-colour split. Its fill ramps continuously
+   left to right — green through olive to tan — as ONE field spanning both
+   lines, so "ge" of Change is already olive and "can" restarts green because it
+   sits back at the left edge, not because of any markup boundary.
+   Measured off build/assets/web/wp/hero-1c.jpg at 1440: glyph cores hold
+   #1A482B flat out to x=181, ramp linearly to #B8834D by x=368, then hold. Both
+   lines read the same colour at the same x, which is what proves it is one
+   horizontal gradient over the block rather than per-line. Against the 432px h1
+   box starting at x=120 that is 14.0% and 57.5%.
+   Those stops were chosen by sweeping candidates and re-measuring the rendered
+   ramp against the plate, not by algebra: fitting the ideal endpoints instead
+   predicts 10.2%/59.5%, which renders 21/255 too light around x=210 because JPEG
+   lightens the thin strokes the fit relies on. 14.0/57.5 holds mean 2.7/255,
+   max 12 across x=120..430.
+   The solid colours above are left in place as the fallback: an engine without
+   text clipping keeps the old two-tone headline instead of painting it
+   transparent and rendering nothing. */
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .hero__title { background-image: linear-gradient(90deg, #1A482B 14.0%, #B8834D 57.5%);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent; }
+  .hero__title em, .hero__tm { color: inherit; -webkit-text-fill-color: inherit; }
+}
+
+.hero__sub { font-family: var(--f-body); font-size: 1.245vw; line-height: 1.875vw;
+  letter-spacing: 0; color: #272420; margin: 1.19vw 0 0; max-width: 23.3vw; }
+
+.hero__cta { display: inline-flex; align-items: center; justify-content: space-between;
+  width: 17.65vw; height: 4.17vw; margin: 1.38vw 0 0; padding: 0 1.6vw;
+  background: #B0E2A7; border-radius: .28vw; text-decoration: none;
+  font-family: var(--f-head); font-weight: 600; font-size: 1.18vw; letter-spacing: .024vw;
+  color: #1E5935; transition: background .2s ease; }
+.hero__cta:hover { background: #9FD895; }
+.hero__cta-arrow { position: relative; width: 2.5vw; height: 1px; background: #1E5935; }
+.hero__cta-arrow::after { content: ""; position: absolute; right: 0; top: 50%;
+  width: .55vw; height: .55vw; border-top: 1px solid #1E5935; border-right: 1px solid #1E5935;
+  transform: translateY(-50%) rotate(45deg); }
+
+.hero__stats { display: flex; gap: .63vw; margin: 1.69vw 0 0; }
+.hero__tagline { position:absolute; right:8.2%; bottom:5.2%; color:#fff; font-family:var(--f-head); font-size:2.15vw; font-weight:300; letter-spacing:.02vw; text-shadow:0 2px 10px rgba(29,56,34,.35); z-index:2; }
+.hero-stat { width: 9.38vw; height: 7.92vw; box-sizing: border-box; border: 1px solid;
+  border-radius: .28vw; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; padding: .97vw .3vw 0; text-align: center; }
+.hero-stat b { font-family: var(--f-head); font-weight: 200; font-size: 2.78vw; line-height: 1.11;
+  letter-spacing: -.04vw; }
+.hero-stat span { font-family: var(--f-body); font-size: .83vw; line-height: 1.17vw;
+  letter-spacing: 0; color: #77766F; margin-top: .28vw; }
+.hero-stat--yrs  { border-color: #9BCFA9; } .hero-stat--yrs  b { color: #67B085; }
+.hero-stat--diet { border-color: #9DB7C4; } .hero-stat--diet b { color: #668DAC; }
+.hero-stat--res  { border-color: #CF975C; } .hero-stat--res  b { color: #CB8740; }
+.hero-stat .hero-stat__stars { color: #E9A93C; font-size: .83vw; letter-spacing: .1vw; margin-top: .1vw; }
+
+/* Buttons (shared) */
+.btn { display: inline-flex; align-items: center; font-family: var(--f-head); font-weight: 600; font-size: 17px; letter-spacing: .34px; border-radius: 4px; padding: 16px 26px; cursor: pointer; border: none; transition: filter .15s, background .15s, color .15s; }
+.btn:hover { filter: brightness(.96); }
+.btn--hero { background: var(--w-hero-btn); color: var(--w-green); min-width: 300px; justify-content: space-between; }
+/* button label colours sampled from WordPress (why.jpg / join-1.jpg) */
+.btn--comm { background: var(--w-comm-btn); color: #374D0D; min-width: 254px; justify-content: space-between; }
+.btn--discover { background: var(--w-hero-btn); color: #1E5935; min-width: 254px; justify-content: space-between; }
+/* both buttons are <a>, so `.site a { color: inherit }` (0,1,1) outranks the plain
+   class rules above — these restate the Figma label colours at higher specificity */
+.site a.btn--comm { color: #374D0D; }
+.site a.btn--discover { color: #1E5935; }
+.btn--outline { background: transparent; border: 1px solid currentColor; border-radius: 2px; font-weight: 400; padding: 9px 20px; }
+
+/* ---------------- Conditions marquee ---------------- */
+.conditions { background: var(--w-bg); padding: 24px 0; overflow: hidden; border-top: 1px solid rgba(0,0,0,.03); }
+/* Both marquees use the same -50% keyframe, so their perceived speed depends on
+   how wide their content is, not on the duration alone. Measured travel
+   (half the track width) at 1440: conditions 1612px, science 2158px. The
+   conditions strip is the reference at ~31 px/s, so each duration is set from
+   its own distance: 1612/52 = 31.0 px/s and 2158/70 = 30.8 px/s. */
+.conditions__track { display: flex; align-items: center; gap: 0; width: max-content; white-space: nowrap; animation: marquee var(--marquee-dur, 26s) linear infinite; }
+#condTrack { --marquee-dur: 52s; }
+#sciTrack  { --marquee-dur: 70s; }
+.conditions__track span { font-family: var(--f-body); font-weight: 400; font-size: 40px; letter-spacing: -1.2px; color: var(--w-head); }
+.conditions__dot { width: 16px; height: 18px; margin: 0 34px; flex: none; }
+
+/* ---------------- Video ---------------- */
+.video { padding: 40px 0 20px; }
+.video__frame { position: relative; max-width: 1198px; margin: 0 auto; aspect-ratio: 1198 / 524; border-radius: 12px; overflow: hidden; background: #2a2a2a; }
+.video__frame video, .video__poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.video__label { position: absolute; top: 34px; left: 44px; z-index: 3; color: #fff; font-family: var(--f-body); font-size: 16px; line-height: 1.3; letter-spacing: .32px; text-shadow: 0 1px 6px rgba(0,0,0,.4); }
+.video__label b { font-weight: 400; font-size: 18px; }
+.video__play { position: absolute; z-index: 3; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 90px; height: 90px; border: 2px solid #fff; border-radius: 50%; background: rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s, transform .2s; }
+.video__play:hover { background: rgba(255,255,255,.2); transform: translate(-50%,-50%) scale(1.05); }
+.video__play::after { content: ""; margin-left: 6px; border-style: solid; border-width: 14px 0 14px 24px; border-color: transparent transparent transparent #fff; }
+.video.is-playing .video__play, .video.is-playing .video__label, .video.is-playing .video__poster { opacity: 0; pointer-events: none; }
+
+/* ---------------- As seen in ---------------- */
+.press { background: var(--w-bg); padding: 24px 0; overflow: hidden; }
+.press__img { display: block; width: 100%; max-width: 1440px; margin: 0 auto; }
+
+/* ---------------- How it works ---------------- */
+.howto { background: var(--w-howto-bg); padding: 116px 0 96px; position: relative; overflow: hidden; }
+.howto__deco { position: absolute; width: 300px; height: 300px; border-radius: 50%; background: var(--w-yellow); left: 50%; transform: translateX(-50%); top: 150px; opacity: .22; z-index: 0; filter: blur(46px); }
+.section-title { font-family: var(--f-head); font-weight: 600; font-size: 50px; letter-spacing: -1.5px; color: var(--w-head); text-align: center; margin: 0 0 56px; position: relative; z-index: 1; }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; position: relative; z-index: 1; max-width: 1198px; margin: 0 auto; }
+.step { position: relative; padding-top: 27px; }
+/* -14px overlap (was -27): circles sit mostly ABOVE the cards like WordPress, so the
+   connector at circle-centre falls in the clear zone above the card tops (not clipped). */
+.step__badge { width: 55px; height: 55px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-family: var(--f-head); font-weight: 200; font-size: 30px; margin: 0 auto -14px; position: relative; z-index: 2; }
+/* nth-child is +1 because .steps__line is the first child of .steps */
+.step:nth-child(2) .step__badge { background: #9DD8B4; }
+.step:nth-child(3) .step__badge { background: #8EC4A3; }
+.step:nth-child(4) .step__badge { background: #4D9A6B; }
+.step:nth-child(5) .step__badge { background: #15783B; }
+.step__card { background: #fff; border-radius: 6px; padding: 40px 22px 26px; height: 100%; box-shadow: 0 10px 30px rgba(0,0,0,.04); }
+.step__title { font-family: var(--f-body); font-weight: 400; font-size: 22px; color: var(--w-head); text-align: center; margin: 4px 0 16px; }
+.step__img { width: 100%; height: 99px; object-fit: cover; border-radius: 4px; }
+.step__text { font-family: var(--f-body); font-size: 16px; line-height: 1.4; color: var(--w-body-ink); text-align: center; margin: 18px 0 0; }
+/* Connector (matches WordPress hiw.jpg): a fine faint line filling each gap between
+   circles, ending in a small arrowhead right before the next circle. One <span> per gap,
+   anchored to the circle centres (12.5 / 37.5 / 62.5 / 87.5% of .steps), padded past the
+   circle radius (~27.5px) on each side. */
+.steps__line { position: absolute; top: 54px; left: 0; right: 0; height: 0; z-index: 1; }
+.steps__seg { position: absolute; top: 0; height: 1px;
+  background: repeating-linear-gradient(to right, #AEB5B9 0 2px, transparent 2px 5px) left center / 100% 1px no-repeat; }
+.steps__seg:nth-child(1) { left: calc(12.5% + 32px); right: calc(62.5% + 32px); }
+.steps__seg:nth-child(2) { left: calc(37.5% + 32px); right: calc(37.5% + 32px); }
+.steps__seg:nth-child(3) { left: calc(62.5% + 32px); right: calc(12.5% + 32px); }
+.steps__seg::after { content: ""; position: absolute; right: -3px; top: 50%; width: 9px; height: 9px; transform: translateY(-50%);
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 9 9'%3E%3Cpath d='M1 1.5 L6.5 4.5 L1 7.5' fill='none' stroke='%239AA2A7' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+
+/* ---------------- Assess & Register / CTA bands ---------------- */
+/* background behind the Assess and Register band — #FFFDF9, sampled from Figma Desktop Home */
+.assess-section { background: #FFFDF9; padding: 40px 0; }
+.assess-section .band { margin: 0 auto; }
+.band { max-width: 1105px; margin: 20px auto; border-radius: 5px; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+.band--assess { background: var(--w-assess-bg); }
+.band--cta { background: var(--w-hero-btn); }
+.band__media { position: relative; min-height: 238px; }
+.band__media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.band__body { padding: 44px 48px; align-self: center; }
+.band__title { font-family: var(--f-head); font-weight: 600; font-size: 32px; margin: 0 0 12px; }
+.band--assess .band__title { color: var(--w-assess-ink); }
+.band--cta .band__title { color: var(--w-green); }
+.band__text { font-family: var(--f-body); font-size: 16px; line-height: 1.25; margin: 0 0 20px; }
+.band--assess .band__text { color: var(--w-body-ink); }
+.band--cta .band__text { color: var(--w-green); }
+.band--assess .btn--outline { color: var(--w-assess-stroke); }
+.band--cta .btn--outline { color: var(--w-green); }
+
+/* ---------------- Why Veye / Join Community split ---------------- */
+.split { display: grid; grid-template-columns: 1fr 1fr; min-height: 650px; align-items: stretch; }
+.split__media { position: relative; min-height: 380px; }
+.split__media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.split__body { padding: 90px 90px; align-self: center; max-width: 620px; }
+.split--why { background: var(--w-why-bg); }
+.split--why .split__body { padding-left: 150px; max-width: 690px; }
+/* max-width:none so the panel background fills the whole right cell — no white gap on the right */
+.split--comm .split__body { background: var(--w-comm-bg); max-width: none; }
+.split--comm .split__title { white-space: nowrap; }
+.split__title { font-family: var(--f-head); font-weight: 600; font-size: 50px; letter-spacing: -1.5px; margin: 0 0 24px; }
+.split--why .split__title { color: var(--w-head); }
+.split--comm .split__title { color: var(--w-head2); }
+.split__text { font-family: var(--f-body); font-size: 18px; line-height: 1.35; color: var(--w-body-ink); margin: 0 0 20px; }
+.split__list { list-style: none; padding: 0; margin: 0 0 22px; }
+.split__list li { font-family: var(--f-body); font-size: 18px; line-height: 1.6; padding-left: 22px; position: relative; }
+.split__list li::before { content: ""; position: absolute; left: 0; top: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--w-green); }
+
+/* ---------------- Key Features ---------------- */
+.features { background: var(--w-feat-bg); padding: 80px 0 90px; position: relative; overflow: hidden; }
+.features__sub { font-family: var(--f-head); font-weight: 300; font-size: 20px; letter-spacing: .2px; color: var(--w-body-ink); text-align: center; margin: -40px 0 56px; }
+.features .container { max-width: none; }
+/* Absolute layout mapped 1:1 to Figma "Key Features" (id 106:557). Stage = 1440-wide, centred.
+   All coords are Figma group-coords minus the feature's content-x (175/585/973) and minus 227
+   (the y where the circles/feature block begins in the Figma frame). */
+.features__grid { position: relative; width: 1440px; max-width: 100%; height: 404px; margin: 30px auto 0; z-index: 1; }
+.feature { position: absolute; top: 0; width: 360px; }
+.feature:nth-child(1) { left: 175px; }
+.feature:nth-child(2) { left: 585px; }
+.feature:nth-child(3) { left: 973px; }
+/* Circles — Figma layout (310px, middle dropped 89px); softened to the fainter WordPress look */
+.feature__deco { position: absolute; width: 310px; height: 310px; border-radius: 50%; background: rgba(255,255,255,.4); z-index: 0; }
+.feature:nth-child(1) .feature__deco { left: -81px; top: 0; }
+.feature:nth-child(2) .feature__deco { left: -119px; top: 89px; }
+.feature:nth-child(3) .feature__deco { left: -115px; top: 6px; }
+/* Numerals — Figma layout/position, but a hairline font (Jost 100) + gray for the thinner WordPress weight */
+.feature__num { position: absolute; top: 103px; left: -130px; width: 124px; height: 152px; text-align: right; z-index: 1;
+  font-family: 'Jost', sans-serif; font-weight: 100; font-size: 196px; line-height: 152px; color: #929292; }
+/* Icons at content-x, per-feature Figma sizes */
+.feature__icon { position: absolute; left: 0; max-width: none; object-fit: contain; object-position: left top; z-index: 3; }
+.feature:nth-child(1) .feature__icon { top: 50px; width: 65px; height: 75px; }
+.feature:nth-child(2) .feature__icon { top: 56px; width: 68px; height: 66px; }
+.feature:nth-child(3) .feature__icon { top: 60px; width: 77px; height: 47px; }
+.feature__weekdays { position: absolute; top: 74px; left: 99px; height: 26px; width: auto; max-width: none; z-index: 3; }
+/* Titles — Kumbh 200, 38/42, #5E6175 */
+.feature__title { position: absolute; top: 126px; left: 0; width: 360px; margin: 0; z-index: 2;
+  font-family: var(--f-head); font-weight: 200; font-size: 38px; line-height: 42px; color: #5E6175; }
+/* Body — Kumbh 300, 18/25, #222 */
+.feature__text { position: absolute; top: 241px; left: 0; width: 280px; margin: 0; z-index: 2;
+  font-family: var(--f-head); font-weight: 300; font-size: 18px; line-height: 25px; color: #222222; }
+
+/* ---------------- Footer (1:1 with Figma) ---------------- */
+.footer { background: var(--w-green-deep); color: var(--w-footer-ink); padding: 80px 0 40px; }
+/* full-width 8.34% inset like the nav/hero, so content spans the same edges as the rest of the site */
+.footer .container { max-width: none; padding: 0 8.34%; }
+/* Figma column proportions: logo | 3 grouped link cols | wide connect (measured left-edge to left-edge) */
+.footer__top { display: grid; grid-template-columns: 2.35fr 1.65fr 1.4fr 2.05fr 4.55fr; gap: 0; }
+.footer__logo { width: 119px; margin-bottom: 8px; }
+.footer__col h4 { display: none; }
+.footer__col ul { list-style: none; padding: 0; margin: 0; }
+.footer__col li { margin-bottom: 8px; }
+.footer__col a { font-family: var(--f-body); font-size: 17px; line-height: 1.9; color: var(--w-footer-ink); transition: color .15s; }
+.footer__col a:hover { color: #fff; }
+/* Footer items with no approved destination (17 Sep 2026): plain text, no
+   pointer, with a small "Coming soon" tag — never an anchor that goes nowhere. */
+.footer__soon { font-family: var(--f-body); font-size: 17px; line-height: 1.9; color: rgba(255,250,224,.55); cursor: default;
+  display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+/* On the five-column desktop grid the 2nd/3rd columns are 140-165px wide, so an
+   inline tag ran into the next column; stack it under the label there. */
+@media (min-width: 1025px) {
+  .footer__soon { flex-direction: column; align-items: flex-start; gap: 0; line-height: 1.5; margin: 3px 0 6px; }
+}
+.footer__soon small { font-family: var(--f-body); font-size: 9.5px; line-height: 1.5; letter-spacing: .6px; text-transform: uppercase;
+  color: rgba(255,250,224,.7); border: 1px solid rgba(255,250,224,.28); border-radius: 999px; padding: 1px 7px; }
+.footer__connect p { font-family: var(--f-body); font-size: 16px; line-height: 1.25; margin: 0 0 20px; }
+/* Sign up: full-width dotted rule above, label + arrow right-aligned (Figma) */
+.footer__signup { display: flex; justify-content: flex-end; align-items: center; gap: 14px; width: 100%; color: #F0FFCE; font-size: 15px; border: none; border-bottom: 1px dotted rgba(240,255,206,.45); border-radius: 0; padding: 0 0 14px; margin: 0 0 18px; }
+.footer__fine { font-size: 11px; line-height: 1.4; margin: 0 0 24px; max-width: none; }
+.footer__stores { display: flex; justify-content: flex-end; gap: 14px; margin-top: 0; }
+.footer__stores img { height: 40px; width: auto; }
+/* store badges are approved artwork but there are no listings yet: inert */
+.footer__store { display: inline-block; opacity: .55; cursor: default; }
+.footer__store img { display: block; }
+.footer__stores-note { font-family: var(--f-body); font-size: 11px; line-height: 1.4; text-align: right; margin: 8px 0 0; color: rgba(255,250,224,.65); }
+.footer__divider { border: none; border-top: 1px dotted rgba(255,250,224,.35); margin: 36px 0 20px; }
+.footer__copy { text-align: center; font-family: var(--f-body); font-size: 14px; line-height: 1.6; letter-spacing: .56px; color: var(--w-footer-ink); }
+.footer__copy a { text-decoration: none; color: inherit; }
+
+/* ---------------- Responsive ---------------- */
+@media (max-width: 1024px) {
+  /* Below desktop the cream panel inside the artwork is too small to hold the
+     copy at a readable size, so the hero content leaves the overlay and flows
+     underneath the plate on the same cream ground. The artwork, the wording and
+     the desktop composition are untouched. Every value here is px so nothing is
+     left mixing fixed sizes with vw line-heights. */
+  .hero__copy { position: static; width: auto; max-width: 640px; margin: 0 auto;
+    padding: 26px 24px 38px; text-align: center; line-height: normal; }
+  .hero__title { font-size: 38px; line-height: 1.06; letter-spacing: -.5px; }
+  .hero__tm { font-size: 14px; margin-left: 2px; }
+  /* The headline gradient is painted on the h1's own box. Once the copy is
+     centred that box is much wider than the text, so the ramp would begin
+     inside the first word and the dark green end would never be shown at all.
+     Shrinking the box to the text and re-mapping the stops onto it keeps the
+     same sweep as desktop, where the ramp covers 19%-77% of the headline ink
+     (ink x120..443, ramp x181..368). */
+  .hero__title { width: -moz-fit-content; width: fit-content;
+    margin-left: auto; margin-right: auto; }
+  @supports ((background-clip: text) or (-webkit-background-clip: text)) {
+    .hero__title { background-image: linear-gradient(90deg, #1A482B 19%, #B8834D 77%); }
+  }
+  .hero__sub { font-size: 17px; line-height: 25px; max-width: 520px; margin: 14px auto 0; }
+  .hero__cta { width: 254px; height: 56px; margin: 22px auto 0; padding: 0 20px;
+    border-radius: 4px; font-size: 16px; letter-spacing: .3px; }
+  .hero__cta-arrow { width: 34px; }
+  .hero__cta-arrow::after { width: 8px; height: 8px; }
+  .hero__stats { justify-content: center; gap: 10px; margin: 24px 0 0; }
+  .hero__tagline { right:7%; bottom:4%; font-size:22px; }
+  .hero-stat { width: 150px; height: 126px; border-radius: 4px; padding: 14px 8px 0; }
+  .hero-stat b { font-size: 38px; }
+  .hero-stat span { font-size: 13px; line-height: 17px; margin-top: 5px; }
+  .hero-stat .hero-stat__stars { font-size: 13px; letter-spacing: 1.5px; margin-top: 3px; }
+
+  .section-title, .split__title { font-size: 38px; }
+  .split { grid-template-columns: 1fr; }
+  .split__media { min-height: 320px; order: -1; }
+  .split__body { padding: 48px 32px; }
+  .split--why .split__body { padding: 48px 32px; max-width: none; }
+  /* Key Features → stacked flow on tablet/mobile (the 1440 absolute stage is desktop-only) */
+  .features__grid { position: static; width: auto; height: auto; margin: 0; display: flex; flex-direction: column; gap: 64px; padding: 0 30px; }
+  .feature { position: relative; left: auto !important; padding: 70px 0 0 84px; }
+  .feature .feature__deco { position: absolute; left: 0 !important; top: -10px !important; width: 210px; height: 210px; }
+  .feature__num { position: absolute; top: 0; left: 0; width: auto; height: auto; text-align: left; font-size: 120px; line-height: 1; }
+  .feature__icon { position: absolute; top: 8px; left: 84px; }
+  .feature__weekdays { position: absolute; top: 24px; left: 190px; }
+  .feature__title { position: relative; top: auto; left: 84px; width: auto; margin: 0 0 12px; }
+  .feature__text { position: relative; top: auto; left: 84px; width: auto; max-width: 320px; }
+  .steps { grid-template-columns: repeat(2, 1fr); gap: 32px 16px; }
+  .steps__line { display: none; }
+  .footer__top { grid-template-columns: 1fr 1fr; }
+}
+/* Key Features: the tablet rule indents each block by 84px twice over, which
+   does not fit a phone and was cutting the titles and body text off. */
+@media (max-width: 620px) {
+  .features__grid { padding: 0 20px; gap: 48px; }
+  /* the base rule pins .feature to 360px, which is wider than a 390 viewport */
+  .feature { width: auto; padding: 60px 0 0 0; }
+  .feature .feature__deco { width: 150px; height: 150px; top: -6px !important; }
+  .feature__num { font-size: 84px; }
+  .feature__icon { top: 4px; left: 60px; }
+  .feature__weekdays { top: 14px; left: 136px; }
+  .feature__title { left: 0; font-size: 26px; }
+  .feature__text { left: 0; max-width: none; }
+}
+
+@media (max-width: 760px) {
+  .nav__links, .nav__cta span { display: none; }
+  .nav__burger { display: flex; }
+  .nav__links { position: fixed; top: 66px; left: 0; right: 0; background: var(--w-bg); flex-direction: column; gap: 0; padding: 12px 24px; box-shadow: 0 20px 30px rgba(0,0,0,.08); transform: translateY(-120%); transition: transform .25s; margin: 0; }
+  .nav__links.open { transform: translateY(0); display: flex; }
+  .nav__links li { padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,.05); }
+  /* phone: the three stats stay side by side and legible rather than wrapping
+     into an uneven 2+1 row */
+  .hero__copy { padding: 22px 20px 32px; }
+  .hero__title { font-size: 30px; letter-spacing: -.4px; }
+  .hero__tm { font-size: 12px; }
+  .hero__sub { font-size: 16px; line-height: 23px; margin-top: 12px; }
+  .hero__cta { width: 100%; max-width: 300px; height: 52px; margin-top: 20px; font-size: 15px; }
+  .hero__stats { gap: 8px; margin-top: 20px; }
+  .hero__tagline { display:none; }
+  .hero-stat { width: calc((100% - 16px) / 3); min-width: 0; height: 116px; padding: 12px 4px 0; }
+  .hero-stat b { font-size: 28px; }
+  .hero-stat span { font-size: 11px; line-height: 14px; margin-top: 4px; }
+  .hero-stat .hero-stat__stars { font-size: 11px; letter-spacing: 1px; }
+  .section-title, .split__title { font-size: 28px; }
+  .split--comm .split__title { white-space: normal; }
+  .band, .split { grid-template-columns: 1fr; }
+  .band__media { min-height: 200px; order: -1; }
+  .band__body { padding: 32px 24px; }
+  .steps { grid-template-columns: 1fr; }
+  .conditions__track span { font-size: 28px; }
+  .features__sub { font-size: 17px; margin-top: -20px; }
+  .footer__top { grid-template-columns: 1fr; }
+}

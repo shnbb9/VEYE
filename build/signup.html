@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="assets/web/wp/veye-ico.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veye — Get Started</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css?v=2">
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/auth.css?v=4">
+</head>
+<body>
+<main class="auth">
+  <!-- Left: photo + logo + vertical tagline -->
+  <section class="auth__media">
+    <img class="auth__photo" src="signup-bowl.jpg" alt="">
+    <img class="auth__logo" src="assets/img/veye-logo-white.svg" alt="Veye">
+    <span class="auth__tagline">Nutrition Reimagined</span>
+  </section>
+
+  <!-- Right: signup form -->
+  <section class="auth__panel">
+    <!-- Signup is optional after the quiz: the result is shown first and the user
+         may skip this. If they arrived from the result gate, js/auth.js pre-fills
+         the email from sessionStorage. Submitting here goes to the dashboard. -->
+    <form class="auth__form" data-auth="signup" action="dashboard.html" method="get" novalidate>
+      <h1 class="auth__title">Get Started</h1>
+      <p class="auth__subtitle">Welcome to a healthier you!</p>
+
+      <div class="auth__fields auth__fields--tight">
+        <div class="field">
+          <input class="field__input" type="text" name="firstName" placeholder="Enter your first name" autocomplete="given-name">
+        </div>
+        <div class="field">
+          <input class="field__input" type="text" name="lastName" placeholder="Enter your last name" autocomplete="family-name">
+        </div>
+        <div class="field">
+          <input class="field__input" type="email" name="email" placeholder="Enter your email" autocomplete="email">
+        </div>
+        <!-- Optional demographics (client request, 21 Aug 2026). No `name` on
+             purpose: the no-JS GET fallback must never put personal data in
+             the URL, so auth.js reads these by id. -->
+        <div class="field">
+          <input class="field__input" type="tel" id="signupPhone" placeholder="Phone number (optional)" autocomplete="tel" aria-label="Phone number (optional)">
+        </div>
+        <div class="field">
+          <input class="field__input" type="text" id="signupZip" inputmode="numeric" placeholder="ZIP code (optional)" autocomplete="postal-code" aria-label="ZIP code (optional)">
+        </div>
+        <!-- No `name` on either password field, on purpose. The form keeps
+             method="get" as a no-JS fallback, and a control without a name is
+             never serialized, so neither password can reach the URL even if
+             js/auth.js fails to load. auth.js does not read these fields. -->
+        <div class="field">
+          <input class="field__input" type="password" placeholder="Enter your password" autocomplete="new-password">
+          <button type="button" class="field__eye" aria-label="Show password">
+            <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c7 0 10.5 7 10.5 7a18.3 18.3 0 0 1-3.4 4.1M6.5 8.3A18.2 18.2 0 0 0 1.5 12S5 19 12 19c1.4 0 2.7-.3 4-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+            <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="field">
+          <input class="field__input" type="password" placeholder="Confirm your password" autocomplete="new-password">
+          <button type="button" class="field__eye" aria-label="Show password">
+            <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c7 0 10.5 7 10.5 7a18.3 18.3 0 0 1-3.4 4.1M6.5 8.3A18.2 18.2 0 0 0 1.5 12S5 19 12 19c1.4 0 2.7-.3 4-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+            <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="auth__row">
+        <label class="check">
+          <input type="checkbox" name="remember" checked>
+          <span class="check__box"></span>
+          Remember me
+        </label>
+      </div>
+
+      <p class="legal legal--terms">By signing in to Veye, you&rsquo;re agreeing to our <a href="terms.html">Terms and Conditions</a>, and <a href="privacy.html">Privacy Policy</a>.</p>
+
+      <button type="submit" class="btn btn--primary btn--mt">Sign Up</button>
+
+      <p class="legal legal--privacy">We take your privacy very seriously. Your data is completely confidential and encrypted with bank-level security. We do not share your data with third parties and we do not send spam.</p>
+    </form>
+  </section>
+</main>
+<!-- Carries the onboarding state across this hop: on file:// (Firefox) each page
+     has its own localStorage partition, so the Health Number travels in the URL
+     fragment and this script imports it and re-attaches it to the form action. -->
+<script src="js/veye-calculations.js?v=5"></script>
+<script src="js/auth.js?v=5" defer></script>
+</body>
+</html>

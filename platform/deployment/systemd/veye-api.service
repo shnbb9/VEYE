@@ -1,0 +1,22 @@
+[Unit]
+Description=VEYE FastAPI service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=veye
+Group=veye
+WorkingDirectory=/opt/veye/platform/api
+EnvironmentFile=/etc/veye/api.env
+ExecStart=/opt/veye/platform/api/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

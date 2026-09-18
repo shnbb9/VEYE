@@ -1,0 +1,260 @@
+/* ============================================================
+   VEYE — Onboarding quiz (Desk Onboard B–J + gate + result)
+   UI matched to Figma; scoring wired from HealthNumbers.xlsx.
+   ============================================================ */
+.quiz {
+  min-height: 100vh; display: flex; flex-direction: column;
+  background: var(--cream); font-family: var(--font);
+  position: relative; overflow: hidden;
+}
+.quiz__topbar { height: 22px; background: #81B03C; flex: none; position: relative; z-index: 3; }
+/* Figma draws the hexagon watermark in WHITE over the cream page, not in green.
+   The SVG is loaded via <img>, so its currentColor can't inherit — the filter
+   recolours it instead. Size/position fitted to the Figma frame: the outer left
+   stroke lands at x983-1048, y177-679. */
+.quiz__watermark { position: absolute; left: 978px; top: -72px; width: 819px; opacity: .545; filter: brightness(0) invert(1); pointer-events: none; z-index: 0; }
+/* Figma (Desk Onboard B-J): ellipse x460 y224 500x497.7, #FEDCB9 @40%, layer blur r180 */
+.quiz__peach { position: absolute; left: 31.94%; top: 224px; width: 500px; height: 497.7px;
+  border-radius: 50%; background: #FEDCB9; opacity: .4; filter: blur(90px); z-index: 0; }
+
+/* Header — Figma places the logo and the progress group at fixed frame coords,
+   so both are taken out of flow and .quiz__main is padded to compensate. */
+.quiz__header { position: absolute; left: 0; top: 22px; width: 100%; height: 0; z-index: 2; }
+.quiz__logo { position: absolute; left: 123px; top: 31.5px; width: 141px; display: block; }
+.quiz__logo img { width: 100%; display: block; }
+/* Figma: progress group x479 y65 455x14; track x506 y67 427x10 */
+.quiz__progress { position: absolute; left: 479px; top: 43px; width: 455px; height: 14px; }
+.quiz__back { position: absolute; left: -2px; top: -1px; width: 18px; height: 15px; padding: 0; border: none; background: none; cursor: pointer; color: #446414; }
+.quiz__back svg { width: 18px; height: 15px; display: block; }
+.quiz__track { position: absolute; left: 27px; top: 2px; width: 384px; height: 10px; background: #fff; border-radius: 999px; }
+/* one pill per completed step, all starting at the left edge; the shortest
+   (lightest) sits on top so each step shows as its own rounded band */
+.pseg { position: absolute; left: 0; top: 0; height: 10px; border-radius: 999px; }
+.pnum, .quiz__count {
+  font-family: var(--font); font-weight: 500; font-size: 11px; line-height: 11px;
+  letter-spacing: 1.1px; white-space: nowrap;
+}
+.pnum { position: absolute; top: 50%; transform: translate(-50%, -50%); z-index: 30; }
+/* the bar now fills at the last step, so the count sits beside the track */
+.quiz__count { position: absolute; right: 0; top: calc(50% - 1px); transform: translateY(-50%); color: var(--green-900); }
+
+/* Main step area */
+/* Figma top-anchors every step: title box at y135, first option row at y224,
+   buttons at y754. Cara's review asks for a clear question-to-answer gap. */
+.quiz__main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 113px 20px 206px; position: relative; z-index: 2; }
+.quiz__title + .quiz__options--yn { margin-top: 0; }
+/* a step that is nothing but a Yes/No row is centred instead (Desk Onboard G) */
+.quiz__main--yn { justify-content: center; padding: 29px 20px 27px; }
+.quiz__title { width: 100%; max-width: 820px; font-weight: 600; font-size: 30px; line-height: 1.18; color: #3b5712; text-align: center; margin: 0 0 65px; }
+.quiz__main--yn .quiz__title { margin-bottom: 35px; }
+.quiz__sub { font-weight: 400; font-size: 15px; color: var(--green-900); text-align: center; margin: -24px 0 30px; }
+
+/* Options column */
+.quiz__options { display: flex; flex-direction: column; gap: 10px; width: 400px; max-width: 100%; }
+.quiz__options--split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* small Yes/No pills side-by-side, no radio dot (WordPress) */
+.quiz__options--yn { flex-direction: row; justify-content: center; gap: 14px; width: auto; }
+.quiz__options--yn .opt { min-width: 120px; width: 120px; min-height: 70px; padding: 0; }
+.quiz__options--yn .opt__check { display: none; }
+/* narrow stacked column (Man / Woman) */
+.quiz__options--stack { width: 250px; margin: 0 auto; }
+.quiz__options--stack .opt__check { display: none; }
+.opt {
+  position: relative; min-height: 70px; background: #fff; border-radius: 15px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 12px 34px; cursor: pointer; user-select: none;
+  font-size: 19px; font-weight: 500; color: #3b5712;
+  box-shadow: 0 6px 18px rgba(0,0,0,.04); transition: background .15s;
+}
+.opt:hover { background: #FBFBEF; }
+.opt.selected { background: var(--green-500); }
+.opt.selected:hover { background: var(--green-500); }
+/* Figma: 20x20 r3 #F0F0F0 with an 11x11 r2 inner square (#FBFBFB, #446514 when checked) */
+.opt__check { position: absolute; right: 21px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border-radius: 3px; background: #F0F0F0; display: flex; align-items: center; justify-content: center; }
+.opt__check::after { content: ""; width: 11px; height: 11px; border-radius: 2px; background: #FBFBFB; }
+.opt.selected .opt__check { background: #fff; }
+.opt.selected .opt__check::after { background: var(--green-900); }
+.opt--radio .opt__check { border-radius: 50%; }
+.opt--radio.selected .opt__check::after { border-radius: 50%; }
+
+/* "Other" row — tan chip + separate white input (WordPress) */
+.opt--other { justify-content: flex-start; padding: 0; gap: 10px; background: transparent; box-shadow: none; min-height: 62px; }
+.opt--other:hover { background: transparent; }
+.opt--other.selected { background: transparent; }
+.opt--other > span:first-child { flex: none; background: #F3E7CF; border-radius: 15px; height: 62px; display: flex; align-items: center; padding: 0 20px; }
+.opt--other.selected > span:first-child { background: var(--green-500); }
+.opt--other input { flex: 1; border: none; background: #fff; border-radius: 15px; height: 62px; padding: 0 18px; font: inherit; font-size: 16px; color: var(--green-900); text-align: left; outline: none; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+.opt--other input::placeholder { color: #A1A1A1; }
+.opt--other .opt__check { display: none; }
+
+/* BMI (Desk Onboard E) — Figma positions the four blocks around the figure:
+   Weight x304 y355, Abdomen x304 y525, Height x885 y355, Wrist x885 y575.
+   Coordinates below are relative to .bmi-wrap, whose origin is frame x304 y355. */
+.bmi-wrap { position: relative; width: 851px; height: 349px; max-width: 100%; margin: 0; }
+/* Figure geometry taken from the Figma frame rather than eyeballed. In Desk
+   Onboard E the illustration's outline occupies x609.5-849 y300-880; the asset's
+   own outline sits at x8-634 y28-1544 inside a 656x1574 canvas, so the render
+   scale is 239.5/626 = 580/1516 = 0.3826 -> 602px tall. Converting the canvas
+   origin into .bmi-wrap coordinates (wrap origin = frame x304.5 y353.3) gives
+   left 302 / top -64. That lands the body's centre on wrap-x 425, i.e. the
+   midpoint of the gap between the two input columns (274 and 579) — balanced
+   against the controls rather than against the viewport. */
+.bmi-figure { position: absolute; left: 302px; top: -64px; height: 602px; width: auto; }
+.bmi-field { position: absolute; width: 269px; }
+.bmi-field--weight  { left: 0;     top: 0; }
+.bmi-field--abdomen { left: 0;     top: 170px; }
+.bmi-field--height  { left: 579px; top: 0; }
+.bmi-field--wrist   { left: 579px; top: 220px; }
+.bmi-field label { display: block; position: relative; font-family: var(--font); font-weight: 600;
+  font-size: 22px; line-height: 17.6px; color: #446514; margin: 0 0 8px; }
+/* the tan tick sits beside the label — outboard on the left blocks, inboard on the right */
+.bmi-field label::before { content: ""; position: absolute; top: 4px; width: 42px; height: 10px; background: #C19C70; }
+.bmi-field--weight  label { padding-left: 172px; }
+.bmi-field--abdomen label { padding-left: 172px; }
+.bmi-field--weight  label::before,
+.bmi-field--abdomen label::before { left: 120px; }
+.bmi-field--height  label::before { left: 76px; }
+.bmi-field--wrist   label::before { left: 62px; }
+.bmi-field p { font-size: 14px; line-height: 16.8px; letter-spacing: 0; color: #446514; margin: 0 0 12px; opacity: 1; }
+.bmi-field input { width: 200px; height: 40px; border-radius: 10px; border: none; background: #fff;
+  padding: 0 15px; font: inherit; font-size: 14px; color: #446514; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+.bmi-field input::placeholder { color: #A1A1A1; }
+.bmi-field--weight  input,
+.bmi-field--abdomen input { margin-left: 74px; }
+/* the left-hand pair reads toward the figure, so its copy is right-aligned */
+.bmi-field--weight, .bmi-field--abdomen { text-align: right; }
+.bmi-field--height, .bmi-field--wrist { text-align: left; }
+/* This step is laid out top-down from Figma coords, not vertically centred:
+   title box y135, Yes/No y194, measurement blocks y355, buttons y486. */
+.quiz__main--bmi { justify-content: flex-start; padding-top: 113px; }
+.quiz__main--bmi .quiz__title { margin: 0 0 35px; }
+.quiz__main--bmi .bmi-wrap { margin-top: 91px; left: 9.5px; }
+.quiz__main--bmi > .quiz__nav { position: absolute; left: 0; right: 0; top: 732px; bottom: auto; margin: 0; }
+.quiz__main--bmi .quiz__btn { border-radius: 20px; }
+/* Yes/No pills on the BMI intro are 120x70 r15 */
+.quiz__options--bmi { flex-direction: row; justify-content: center; gap: 20px; width: auto; }
+.quiz__options--bmi .opt { min-width: 120px; width: 120px; min-height: 70px; padding: 0; border-radius: 15px; }
+.quiz__options--bmi .opt__check { display: none; }
+
+/* Sleep composite */
+.sleep-q { width: 420px; max-width: 100%; margin: 0 auto 44px; }
+.sleep-q h3 { font-weight: 600; font-size: 22px; color: var(--green-900); text-align: center; margin: 0 0 14px; }
+
+/* Number input */
+.num-input { width: 190px; height: 46px; border-radius: 12px; border: none; background: #fff; text-align: center; font: inherit; font-size: 15px; color: var(--green-900); box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+
+/* Nav buttons — pinned near the bottom of the step (WordPress) */
+.quiz__nav { display: flex; gap: 20px; justify-content: center; margin-top: 44px; }
+.quiz__main > .quiz__nav { position: absolute; left: 0; right: 0; bottom: 96px; margin-top: 0; }
+/* Figma sets a text-case override on the labels, so both render upper-case */
+.quiz__btn { min-width: 190px; height: 50px; padding: 0 22px; border: none; border-radius: 15px; font-family: var(--font); font-weight: 400; font-size: 18px; letter-spacing: .9px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: filter .15s; }
+.quiz__btn:hover { filter: brightness(.96); }
+.quiz__btn--prev { background: var(--green-500); color: var(--green-900); }
+.quiz__btn--next { background: var(--green-900); color: #fff; }
+/* NEXT stays greyed until the step is answered, so the gate is visible */
+.quiz__btn[disabled] { background: #B9BFA8; color: #F3F3EE; cursor: not-allowed; }
+
+/* Retired: the "Our mission is helping people get healthier" mandatory sign-up
+   gate. It is no longer in the completion path — the quiz now ends with the
+   email result-gate modal below. Styles kept only so the class names remain
+   resolvable; no markup renders them. */
+.gate { text-align: center; }
+.gate__title { font-weight: 700; font-size: 34px; color: var(--green-900); margin: 0 0 30px; }
+.gate__pill { display: inline-block; background: #FFFCF4; border-radius: 12px; padding: 20px 40px; font-size: 18px; color: var(--green-900); box-shadow: 0 8px 24px rgba(0,0,0,.05); }
+
+/* ---------- Result-ready email gate ---------- */
+/* Prototype only: the address is used to unlock the result on this screen and
+   to pre-fill the optional sign-up form. Nothing is sent and no account is made. */
+.hn-modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: rgba(30, 42, 12, .45); }
+.hn-modal__card { position: relative; width: 100%; max-width: 470px; background: var(--cream);
+  border-radius: 20px; padding: 42px 40px 36px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.18); }
+.hn-modal__close { position: absolute; right: 14px; top: 12px; width: 34px; height: 34px; border: none;
+  background: none; cursor: pointer; color: #446514; font-size: 24px; line-height: 1; border-radius: 50%; }
+.hn-modal__close:hover { background: rgba(68,101,20,.08); }
+.hn-modal__title { font-weight: 600; font-size: 28px; line-height: 32px; color: #446514; margin: 0 0 12px; }
+.hn-modal__copy { font-size: 16px; line-height: 22px; color: var(--green-900); margin: 0 0 24px; }
+.hn-modal__label { display: block; text-align: left; font-size: 14px; font-weight: 500; color: #446514; margin: 0 0 7px; }
+.hn-modal__input { width: 100%; height: 50px; border-radius: 12px; border: 1px solid transparent; background: #fff;
+  padding: 0 16px; font: inherit; font-size: 16px; color: var(--green-900); outline: none; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+.hn-modal__input:focus { border-color: var(--green-500); }
+.hn-modal__input.is-invalid { border-color: #C0563F; }
+.hn-modal__err { min-height: 19px; margin: 7px 0 0; font-size: 13px; line-height: 19px; color: #C0563F; text-align: left; }
+.hn-modal__cta { width: 100%; margin-top: 12px; }
+@media (max-width: 480px) {
+  .hn-modal { padding: 16px; }
+  .hn-modal__card { padding: 36px 22px 28px; }
+  .hn-modal__title { font-size: 24px; line-height: 28px; }
+}
+
+.result { text-align: center; max-width: 620px; }
+.result__title { font-weight: 600; font-size: 26px; line-height: 30px; color: #446514; margin: 0 0 22px; }
+.result__actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+.result__note { margin: 20px auto 0; max-width: 460px; font-size: 15px; line-height: 22px; color: var(--green-900); }
+.result__note a { color: #446514; }
+.result__ring { width: 200px; height: 200px; border-radius: 50%; margin: 0 auto 26px; display: flex; align-items: center; justify-content: center; background: conic-gradient(var(--green-500) var(--pct,45%), #EFEAD9 0); }
+.result__ring b { width: 156px; height: 156px; border-radius: 50%; background: var(--cream); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 62px; color: var(--green-900); }
+.result__scale { font-size: 16px; color: var(--green-900); margin: 0 0 14px; }
+.result__blurb { font-size: 18px; line-height: 1.5; color: var(--green-900); margin: 0 0 30px; }
+
+/* Below desktop the 1440 header is absolutely positioned, which left the
+   progress bar off-screen (right edge 869 in a 390 viewport) and let the
+   question title run under the logo. The header becomes a normal row here.
+   quiz.js writes the segment widths in px, so the bar is scaled as a unit
+   rather than re-laid-out — the segment proportions stay exact. */
+@media (max-width: 1024px) {
+  .quiz__header { position: static; height: auto; padding: 18px 22px 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+  .quiz__logo { position: static; width: 118px; flex: none; }
+  .quiz__progress { position: relative; left: auto; top: auto; flex: none; }
+  .quiz__main { padding-top: 46px; }
+}
+@media (max-width: 620px) {
+  .quiz__header { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px 16px 0; }
+  .quiz__progress { transform: scale(.78); transform-origin: left center; margin: 0 0 -3px; }
+  .quiz__main { padding-top: 20px; }
+}
+
+/* The BMI step is laid out from absolute Figma coordinates for a 1440 stage,
+   so below desktop it has to drop that geometry entirely: the figure sits on
+   top and the four measurement blocks stack in reading order (Weight, Abdomen,
+   Height, Wrist) so every input stays reachable and nothing is clipped. */
+@media (max-width: 1024px) {
+  .quiz__main--bmi .bmi-wrap { margin-top: 30px; left: auto; }
+  .bmi-wrap { position: static; width: 100%; max-width: 460px; height: auto; margin: 0 auto;
+    display: flex; flex-direction: column; align-items: stretch; gap: 26px; }
+  .bmi-figure { position: static; height: 300px; margin: 0 auto; }
+  .bmi-field { position: static; left: auto; top: auto; width: 100%; }
+  .bmi-field--weight, .bmi-field--abdomen { text-align: left; }
+  .bmi-field--weight label, .bmi-field--abdomen label,
+  .bmi-field--height label, .bmi-field--wrist label { padding-left: 54px; }
+  .bmi-field--weight label::before, .bmi-field--abdomen label::before,
+  .bmi-field--height label::before, .bmi-field--wrist label::before { left: 0; }
+  .bmi-field--weight input, .bmi-field--abdomen input { margin-left: 0; }
+  .bmi-field input { width: 100%; max-width: 260px; }
+  .quiz__main--bmi > .quiz__nav { position: static; margin-top: 38px; }
+}
+
+/* The BMI step pins PREVIOUS/NEXT at the Figma y-coordinate (page y754-804),
+   which falls below the fold on a 768px-tall screen. .quiz is min-height:100vh
+   with overflow:hidden, so the buttons were unreachable there — no scroll could
+   bring them in. On short desktop screens the step gets enough height to hold
+   them and the page is allowed to scroll vertically; horizontal bleed from the
+   watermark stays clipped. */
+@media (min-width: 1025px) and (max-height: 840px) {
+  .quiz { overflow-x: clip; overflow-y: visible; }
+  .quiz__main--bmi { min-height: 830px; }
+}
+
+@media (max-width: 700px) {
+  .quiz__header { padding: 18px 16px 0; gap: 14px; flex-wrap: wrap; }
+  .quiz__progress { max-width: 100%; min-width: 0; }
+  .quiz__title { font-size: 24px; }
+  .quiz__options, .sleep-q { width: 100%; }
+  .quiz__main { padding: 24px 16px 48px; }
+  .opt { padding: 12px 40px; font-size: 16px; }
+  .bmi-grid { grid-template-columns: 1fr; width: 100%; }
+  .quiz__watermark { display: none; }
+  .quiz__nav { width: 100%; gap: 12px; }
+  .quiz__btn { flex: 1 1 0; min-width: 0; padding: 0 10px; }
+}

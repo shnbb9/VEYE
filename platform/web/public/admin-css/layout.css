@@ -1,0 +1,258 @@
+/* ============================================================================
+   Veye Admin — application shell
+   Rail + top utility bar + page canvas + drawer, measured off the approved
+   Operations Atelier render (sidebar rule at 242px on a 1440 canvas).
+   ============================================================================ */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  min-height: 100vh;
+  transition: grid-template-columns var(--t-base) var(--ease);
+}
+.app.is-rail-collapsed { grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr); }
+
+/* ---------------------------------------------------------------- left rail */
+.rail {
+  grid-column: 1;
+  background: var(--surface-rail);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: var(--z-rail);
+  overflow: hidden;
+}
+.rail__brand {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-6) var(--s-5) var(--s-5);
+  flex: 0 0 auto;
+}
+.rail__brand img { width: 108px; height: auto; }
+.app.is-rail-collapsed .rail__brand { padding-inline: 0; justify-content: center; }
+.app.is-rail-collapsed .rail__brand img { width: 34px; object-fit: none; object-position: left center; }
+
+.rail__org {
+  padding: 0 var(--s-5) var(--s-4);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.rail__org b { font-size: var(--fs-support); color: var(--text-strong); font-weight: 600; }
+.rail__env {
+  align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--green-deep);
+  background: var(--tint-lime); border-radius: var(--r-pill); padding: 2px 8px;
+}
+.app.is-rail-collapsed .rail__org { display: none; }
+
+.rail__nav {
+  flex: 1 1 auto; overflow-y: auto; overflow-x: hidden;
+  padding: var(--s-2) var(--s-3) var(--s-5);
+}
+.rail__group { margin-bottom: var(--s-5); }
+.rail__group-label {
+  font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: 1.2px;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 0 var(--s-3) var(--s-2);
+}
+.app.is-rail-collapsed .rail__group-label {
+  text-align: center; padding-inline: 0; font-size: 10px; letter-spacing: .4px;
+}
+
+.nav-link {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 9px var(--s-3);
+  border-radius: var(--r-btn);
+  color: var(--text-body);
+  font-size: var(--fs-body);
+  text-decoration: none;
+  position: relative;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.nav-link:hover { background: var(--surface-softer); color: var(--ink-heading); }
+.nav-link .icon { flex: 0 0 auto; color: var(--green-medium); }
+.nav-link span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Active state carries three signals, not colour alone: a filled band, a left
+   marker bar, and aria-current for assistive technology. */
+.nav-link.is-active {
+  background: var(--tint-lime);
+  color: var(--ink-heading);
+  font-weight: 600;
+}
+.nav-link.is-active .icon { color: var(--green-primary); }
+.nav-link.is-active::before {
+  content: ""; position: absolute; left: -var(--s-3); left: 0;
+  top: 50%; transform: translateY(-50%);
+  width: 3px; height: 22px; border-radius: 0 3px 3px 0;
+  background: var(--green-primary);
+  margin-left: calc(var(--s-3) * -1);
+}
+.nav-link__badge {
+  flex: 0 0 auto; min-width: 22px; height: 20px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--tint-attention); color: #8A4B12;
+  border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.nav-link.is-active .nav-link__badge { background: var(--surface-card); }
+
+.app.is-rail-collapsed .nav-link { justify-content: center; padding-inline: 0; }
+.app.is-rail-collapsed .nav-link span,
+.app.is-rail-collapsed .nav-link__badge { display: none; }
+
+.rail__foot {
+  flex: 0 0 auto; border-top: 1px solid var(--line);
+  padding: var(--s-3);
+}
+.rail__collapse {
+  width: 100%; display: flex; align-items: center; gap: var(--s-3);
+  padding: 9px var(--s-3); border: none; background: transparent;
+  border-radius: var(--r-btn); color: var(--text-muted); font-size: var(--fs-support);
+}
+.rail__collapse:hover { background: var(--surface-softer); color: var(--ink-heading); }
+.app.is-rail-collapsed .rail__collapse { justify-content: center; }
+.app.is-rail-collapsed .rail__collapse span { display: none; }
+.app.is-rail-collapsed .rail__collapse .icon { transform: rotate(180deg); }
+
+/* ------------------------------------------------------------- main column */
+.main {
+  grid-column: 2;
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 100vh;
+}
+
+/* ---- top utility bar ---- */
+.topbar {
+  position: sticky; top: 0; z-index: var(--z-topbar);
+  height: var(--topbar-h); flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-4);
+  padding: 0 var(--page-pad);
+  /* Written out rather than color-mix()-ed. This is the one place a mixed colour
+     sits behind body text, and a plain rgba() keeps the bar readable on browsers
+     that do not support color-mix() instead of falling back to transparent. */
+  background: rgba(254, 251, 245, .88);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid transparent;
+}
+.topbar.is-stuck { border-bottom-color: var(--line); }
+
+.search {
+  position: relative; flex: 1 1 520px; max-width: 560px;
+}
+.search__input {
+  width: 100%; height: 44px;
+  padding: 0 var(--s-4) 0 44px;
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-body); color: var(--text-body);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.search__input::placeholder { color: var(--text-muted); }
+.search__input:focus-visible {
+  border-color: var(--green-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lime) 40%, transparent);
+  outline: none;
+}
+.search__icon {
+  position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); pointer-events: none;
+}
+.search__kbd {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px;
+  background: var(--surface-softer); pointer-events: none;
+}
+
+/* The compact navigation toggle only exists once the rail goes off-canvas. */
+#railToggleSm { display: none; }
+
+.topbar__spacer { flex: 1 1 auto; }
+
+/* Profile control mirrors the reference: avatar, name and role, then a chevron. */
+.who { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
+.who__text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; text-align: left; }
+.who__name { font-size: var(--fs-support); font-weight: 600; color: var(--text-strong); white-space: nowrap; }
+.who__role { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.topbar__tools { display: flex; align-items: center; gap: var(--s-3); flex: 0 0 auto; }
+
+.icon-btn {
+  position: relative;
+  width: 40px; height: 40px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--r-btn); color: var(--text-body);
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.icon-btn:hover { background: var(--surface-card); border-color: var(--line); color: var(--ink-heading); }
+.icon-btn__dot {
+  position: absolute; top: 4px; right: 4px;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--status-significant); color: #fff;
+  border: 2px solid var(--surface-page);
+  border-radius: var(--r-pill); font-size: 11px; font-weight: 700;
+}
+
+/* ---- page canvas ---- */
+.page {
+  flex: 1 1 auto; min-width: 0;
+  padding: var(--s-5) var(--page-pad) var(--s-12);
+  max-width: var(--content-max);
+  width: 100%;
+}
+.page--flush { padding-inline: 0; }
+
+.page__head { margin-bottom: var(--s-6); }
+.breadcrumb {
+  display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap;
+  margin-bottom: var(--s-3); font-size: var(--fs-support);
+}
+.breadcrumb a { color: var(--text-muted); text-decoration: none; }
+.breadcrumb a:hover { color: var(--green-primary); text-decoration: underline; }
+.breadcrumb__sep { color: var(--line-strong); }
+.breadcrumb [aria-current="page"] { color: var(--text-strong); font-weight: 600; }
+
+.page__title-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--s-6); flex-wrap: wrap;
+}
+.page__titles { min-width: 0; flex: 1 1 420px; }
+.page__desc {
+  margin-top: var(--s-2); color: var(--text-muted);
+  font-size: var(--fs-body-lg); max-width: 70ch;
+}
+/* flex: 0 1 auto with min-width:0, not 0 0 auto. A wrapping flex container that
+   may not shrink resolves to its max-content width, so a header carrying several
+   actions pushed the whole page wider than the viewport instead of wrapping. */
+.page__actions {
+  display: flex; align-items: center; gap: var(--s-3);
+  flex: 0 1 auto; min-width: 0; max-width: 100%; flex-wrap: wrap;
+}
+/* Belt and braces for any screen that puts wide content in the canvas. */
+.page { min-width: 0; }
+.card { min-width: 0; }
+.table-wrap { max-width: 100%; }
+
+.page__meta {
+  display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap;
+  margin-top: var(--s-3); font-size: var(--fs-support); color: var(--text-muted);
+}
+
+/* ---- generic content grids ---- */
+.grid { display: grid; gap: var(--grid-gutter); }
+.grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid--main-side { grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr); }
+.grid--side-main { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+
+/* ---- split view: list + detail ---- */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) var(--drawer-w); gap: var(--grid-gutter); align-items: start; }
+.split--wide { grid-template-columns: minmax(0, 1fr) 380px; }
+
+/* ---- skip link target ---- */
+#main-content { outline: none; }

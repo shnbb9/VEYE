@@ -1,0 +1,184 @@
+/* ============================================================================
+   Veye Admin — responsive behaviour
+   Desktop-first working canvas (1440x1024 reference), degrading responsibly:
+   collapse the rail, keep primary actions reachable, prioritise columns rather
+   than clipping tables, and convert split views into list + full-height drawer.
+   ============================================================================ */
+
+/* ---------------------------------------------------- 1280: tighter canvas */
+@media (max-width: 1400px) {
+  :root { --page-pad: 26px; --rail-w: 226px; }
+  .cc-head h1 { font-size: 38px; }
+}
+
+@media (max-width: 1280px) {
+  .grid--main-side { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+  .editor { grid-template-columns: minmax(0, 1fr) 330px; }
+  .hns { grid-template-columns: minmax(0, 1fr); }
+  .hns .editor__inspector { position: static; }
+  .metric-row--6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .metric-row--6 > *:nth-child(4) { border-left: none; }
+}
+
+/* ------------------------------------------- 1120: stack the main/side grid */
+@media (max-width: 1120px) {
+  .grid--main-side,
+  .grid--side-main { grid-template-columns: minmax(0, 1fr); }
+  .split, .split--wide { grid-template-columns: minmax(0, 1fr); }
+  .editor { grid-template-columns: minmax(0, 1fr); }
+  .editor__inspector { position: static; }
+  .grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cc-lower { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* --------------------------------------------- 1024: rail collapses to icons
+   The rail stays visible as an icon rail so navigation is never lost; labels
+   return in the slide-over at phone width. */
+@media (max-width: 1024px) {
+  .app { grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr); }
+  .rail__brand { padding-inline: 0; justify-content: center; }
+  .rail__brand img { width: 34px; object-fit: none; object-position: left center; }
+  .rail__org { display: none; }
+  .nav-link { justify-content: center; padding-inline: 0; }
+  .nav-link span, .nav-link__badge { display: none; }
+  .rail__group-label { text-align: center; font-size: 10px; letter-spacing: .4px; padding-inline: 0; }
+  .rail__collapse { justify-content: center; }
+  .rail__collapse span { display: none; }
+
+  .metric-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+  .metric-row > * + * { border-left: none; }
+  .metric-row > *:nth-child(n+3) { border-top: 1px solid var(--line); padding-top: var(--s-4); }
+
+  .cc-head h1 { font-size: 32px; }
+  .cc-fresh { margin-left: 0; width: 100%; }
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .diff { grid-template-columns: minmax(0, 1fr); }
+  .diff__col + .diff__col { border-left: none; border-top: 1px solid var(--line); }
+}
+
+/* --------------------------------------------------- 900: single-column body */
+@media (max-width: 900px) {
+  .grid--3, .grid--2, .cc-lower { grid-template-columns: minmax(0, 1fr); }
+  .cc-stats { grid-template-columns: repeat(2, 1fr); }
+  .m360-head { grid-template-columns: minmax(0, 1fr); }
+  .login { grid-template-columns: minmax(0, 1fr); }
+  .login__aside { display: none; }
+}
+
+/* ------------------------------------------------ 768: tablet portrait rules
+   Tables keep their columns by priority: the least load-bearing cells fold away
+   rather than the table scrolling content out of reach. */
+@media (max-width: 768px) {
+  :root { --page-pad: 20px; --drawer-w: 100vw; }
+
+  .topbar { gap: var(--s-2); }
+  .search__kbd { display: none; }
+  .helpgrid { grid-template-columns: minmax(0, 1fr); }
+
+  [data-col-priority="low"] { display: none; }
+
+  /* Turning the title row into a column turns flex-basis from a WIDTH into a
+     HEIGHT. `.page__titles` carries `flex: 1 1 420px` for the desktop row, so
+     left alone it reserves 420px of height for a 39px heading — the tall blank
+     gap reported on Member 360, which in fact affected every page header at
+     this width. The basis has to be released when the axis changes. */
+  .page__title-row { flex-direction: column; align-items: stretch; }
+  .page__titles { flex: 0 0 auto; }
+  .page__actions { width: 100%; flex: 0 0 auto; }
+  .page__actions .btn { flex: 1 1 auto; }
+
+  .drawer { width: 100vw; }
+  .modal { max-height: calc(100vh - var(--s-8)); }
+  .toast-region { right: var(--s-4); left: var(--s-4); bottom: var(--s-4); width: auto; }
+}
+
+/* ------------------------------------------------- 640: phone working rules
+   Phone supports urgent review, member lookup, queue actions and messages.
+   Complex editors remain viewable and carry an explicit "best on desktop"
+   notice rather than pretending to be comfortable. */
+@media (max-width: 640px) {
+  :root { --page-pad: 16px; --topbar-h: 60px; }
+
+  /* Rail becomes an off-canvas slide-over with full labels restored. */
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .rail {
+    position: fixed; inset: 0 auto 0 0; width: 264px;
+    transform: translateX(-100%); transition: transform var(--t-base) var(--ease);
+    box-shadow: var(--shadow-overlay); z-index: 100;
+  }
+  .app.is-rail-open .rail { transform: none; }
+  .app.is-rail-open::after {
+    content: ""; position: fixed; inset: 0; background: rgba(46,61,20,.3); z-index: 99;
+  }
+  .rail__brand { padding: var(--s-5); justify-content: flex-start; }
+  .rail__brand img { width: 108px; object-fit: fill; }
+  .rail__org { display: flex; }
+  .nav-link { justify-content: flex-start; padding: 11px var(--s-3); }
+  .nav-link span, .nav-link__badge { display: inline; }
+  .rail__group-label { text-align: left; font-size: var(--fs-eyebrow); letter-spacing: 1.2px; padding: 0 var(--s-3) var(--s-2); }
+  .rail__collapse { display: none; }
+  #railToggleSm { display: inline-flex; }
+  .who__text { display: none; }
+
+  /* The utility bar has to fit 390px. The search carries flex-basis:520px at
+     desktop and will not shrink below it on its own, so it is released here.
+     Help stays visible — WCAG 2.2 asks for help to be reachable the same way on
+     every screen — but it drops to its icon and keeps its accessible name. */
+  .topbar { gap: 4px; padding-inline: var(--s-3); }
+  .search { flex: 1 1 0; min-width: 0; max-width: none; }
+  .topbar__tools { min-width: 0; gap: 2px; }
+  .icon-btn { width: 36px; height: 36px; }
+  #helpBtn { padding: 0 8px; }
+  #helpBtn span { display: none; }
+  #profileBtn { padding: 2px 4px 2px 2px !important; }
+  .who__name { display: none; }
+
+  /* A 120px-wide search field communicates nothing. On a phone the field is
+     replaced by one clear icon that opens a full-width search sheet. */
+  .search { display: none; }
+  .topbar__searchbtn { display: inline-flex; }
+  .topbar__spacer { flex: 1 1 auto; }
+
+  .kpi { padding: var(--s-5); }
+  .kpi__value { font-size: 32px; }
+  .lead { padding: var(--s-5); }
+  .lead h2 { font-size: 21px; }
+
+  .cc-head h1 { font-size: 27px; }
+  .cc-datebar { font-size: var(--fs-body); }
+  .metric-row { grid-template-columns: minmax(0, 1fr); }
+  .metric-row > *:nth-child(n+2) { border-top: 1px solid var(--line); padding-top: var(--s-3); }
+  .cc-stats { grid-template-columns: minmax(0, 1fr); }
+
+  /* Queue and directory tables drop to the load-bearing columns only. */
+  [data-col-priority="medium"] { display: none; }
+  .table thead th:first-child, .table tbody td:first-child { padding-left: var(--s-4); }
+  .table thead th:last-child, .table tbody td:last-child { padding-right: var(--s-4); }
+  .card__head, .card__body, .card__foot, .filterbar, .list-toolbar, .pager { padding-inline: var(--s-4); }
+
+  .btn-group { width: 100%; }
+  .modal-scrim { padding: 0; align-items: flex-end; }
+  .modal { width: 100%; max-height: 92vh; border-radius: var(--r-card) var(--r-card) 0 0; }
+  .approvalbar { flex-direction: column; align-items: stretch; }
+  .approvalbar .btn-group { display: flex; }
+  .approvalbar .btn { flex: 1 1 auto; }
+}
+
+/* "Best on desktop" advisory for the high-complexity editors. */
+.desktop-note { display: none; }
+@media (max-width: 900px) {
+  .desktop-note {
+    display: flex; align-items: flex-start; gap: var(--s-3);
+    padding: var(--s-3) var(--s-4); margin-bottom: var(--s-5);
+    background: var(--tint-info); border: 1px solid #CBE3EE; color: #1F5E7A;
+    border-radius: var(--r-field); font-size: var(--fs-support);
+  }
+}
+
+/* Print: give reports and audit evidence a usable paper form. */
+@media print {
+  .rail, .topbar, .page__actions, .approvalbar, .toast-region { display: none !important; }
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .card { break-inside: avoid; box-shadow: none; }
+  body { background: #fff; }
+}

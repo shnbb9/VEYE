@@ -1,0 +1,22 @@
+[Unit]
+Description=VEYE Next.js service
+After=network-online.target veye-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=veye
+Group=veye
+WorkingDirectory=/opt/veye/platform/web
+EnvironmentFile=/etc/veye/web.env
+ExecStart=/usr/bin/npm start -- --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

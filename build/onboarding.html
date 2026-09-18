@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="assets/web/wp/veye-ico.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veye — Your Health Assessment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css?v=2">
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/quiz.css?v=66">
+</head>
+<body>
+<div class="quiz">
+  <div class="quiz__topbar"></div>
+  <img class="quiz__watermark" src="assets/web/svg/quiz-hex.svg" alt="">
+  <div class="quiz__peach"></div>
+
+  <div class="quiz__header">
+    <a class="quiz__logo" href="index.html" aria-label="Veye home"><img src="assets/web/wp/veye-id.svg" alt="Veye"></a>
+    <!-- Figma progress: a 427x10 white pill with one numbered segment per completed
+         step, each drawn from the left edge and stacked lightest-on-top. -->
+    <div class="quiz__progress" id="quizProgress">
+      <button class="quiz__back" id="quizBack" aria-label="Back">
+        <svg viewBox="0 0 15 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7H1.6M6.6 1.8L1.4 7l5.2 5.2"/></svg>
+      </button>
+      <!-- 12 = the canonical Health Number questions (HealthNumbers.xlsx), not
+           the number of screens. quiz.js overwrites both at runtime; these are
+           the pre-script values and must agree with it. -->
+      <div class="quiz__track" id="quizTrack" role="progressbar" aria-valuemin="1" aria-valuemax="12" aria-valuenow="1"></div>
+      <span class="quiz__count" id="quizCount">1/12</span>
+    </div>
+  </div>
+
+  <main class="quiz__main" id="quizMain"></main>
+</div>
+<!-- Shared calculation engine (same file the dashboard uses). Not deferred, so
+     it is defined before quiz.js runs. -->
+<script src="js/veye-calculations.js?v=5"></script>
+<script src="js/quiz.js?v=19" defer></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+name: veye-local
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.0-pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${VEYE_DB_HOST_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build:
+      context: ./api
+      dockerfile: ../docker/api.Dockerfile
+    image: veye-local-api:dev
+    labels:
+      io.veye.local: "true"
+    environment:
+      VEYE_ENVIRONMENT: local-docker
+      VEYE_DATABASE_URL: ${VEYE_DATABASE_URL}
+      VEYE_CORS_ORIGINS: ${VEYE_CORS_ORIGINS}
+      VEYE_WEB_BASE_URL: ${VEYE_WEB_BASE_URL}
+      # Development email: plain SMTP to the optional Mailpit service. When the
+      # `mail` profile is not running, deliveries are recorded as failed —
+      # never faked.
+      VEYE_EMAIL_PROVIDER: local-smtp
+      VEYE_SMTP_HOST: mail
+      VEYE_SMTP_PORT: "1025"
+      # Companion providers. Defaults are the offline mock and deterministic
+      # local embeddings; a Groq development key is only ever read from the
+      # ignored env file, never from this compose file.
+      VEYE_LLM_PROVIDER: ${VEYE_LLM_PROVIDER:-mock}
+      VEYE_GROQ_API_KEY: ${VEYE_GROQ_API_KEY:-}
+      VEYE_GROQ_MODEL: ${VEYE_GROQ_MODEL:-llama-3.3-70b-versatile}
+      VEYE_KNOWLEDGE_OBJECT_ROOT: /app/var/knowledge-objects
+      # Development observability (optional; masked before export).
+      VEYE_LANGFUSE_ENABLED: ${VEYE_LANGFUSE_ENABLED:-false}
+      VEYE_LANGFUSE_PUBLIC_KEY: ${VEYE_LANGFUSE_PUBLIC_KEY:-}
+      VEYE_LANGFUSE_SECRET_KEY: ${VEYE_LANGFUSE_SECRET_KEY:-}
+      VEYE_LANGFUSE_BASE_URL: ${VEYE_LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      VEYE_AI_TELEMETRY_CAPTURE_CONTENT: ${VEYE_AI_TELEMETRY_CAPTURE_CONTENT:-false}
+      VEYE_TELEMETRY_PSEUDONYM_KEY: ${VEYE_TELEMETRY_PSEUDONYM_KEY:-local-development-pseudonym-key}
+    ports:
+      - "${VEYE_API_HOST_PORT}:8000"
+    volumes:
+      - knowledge_objects:/app/var/knowledge-objects
+    depends_on:
+      db:
+        condition: service_healthy
+    # Local development convenience only: migrate, seed the synthetic demo
+    # accounts/knowledge (idempotent), then serve.
+    command: ["sh", "-c", "alembic upgrade head && python -m app.seed && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  web:
+    build:
+      context: ./web
+      dockerfile: ../docker/web.Dockerfile
+    image: veye-local-web:dev
+    labels:
+      io.veye.local: "true"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    ports:
+      - "${VEYE_WEB_HOST_PORT}:3000"
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # Optional development mailbox: `docker compose --profile mail up -d`.
+  # Catches every message the API sends (verification, reset, welcome,
+  # escalation) and shows it at http://localhost:${VEYE_MAIL_WEB_HOST_PORT}.
+  mail:
+    image: axllent/mailpit:v1.31.1
+    profiles: ["mail"]
+    labels:
+      io.veye.local: "true"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "${VEYE_MAIL_WEB_HOST_PORT}:8025"
+      - "${VEYE_MAIL_SMTP_HOST_PORT}:1025"
+
+volumes:
+  pgdata:
+    name: veye-local-pgdata
+  web_node_modules:
+    name: veye-local-web-node-modules
+  knowledge_objects:
+    name: veye-local-knowledge-objects
