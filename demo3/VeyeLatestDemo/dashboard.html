@@ -107,6 +107,26 @@
     padding: 8px 12px;
     margin-bottom: 18px; column-span: all; max-width: 520px;
   }
+  /* Sprout guided experiences (Cara's decision trees, 19 Sep 2026): the bar
+     above the conversation names the flow and its section; the dark chips are
+     the flow's own options; the offer chips are the first-arrival choice. */
+  .guided-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    margin: 0 18px 6px; padding: 8px 14px; background: #F7FAEE; border: 1px solid rgba(68,101,20,.14); border-radius: 12px;
+    font-family: 'Teachers', sans-serif; font-size: 13px; letter-spacing: .3px; color: #446514; }
+  .guided-bar[hidden] { display: none; }
+  .guided-bar__label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+  .guided-bar__dot { width: 8px; height: 8px; border-radius: 50%; background: #8DC412; flex: none; }
+  .guided-bar__actions { display: inline-flex; gap: 6px; }
+  .guided-bar__btn { border: 1px solid rgba(68,101,20,.35); background: #fff; color: #446514; border-radius: 999px; padding: 4px 12px;
+    font: 600 12px 'Teachers', sans-serif; letter-spacing: .4px; text-transform: uppercase; cursor: pointer; }
+  .guided-bar__btn:hover { background: #FFF7E9; }
+  .guided-bar__btn--quiet { border-color: transparent; color: var(--body-text-light); }
+  .quick-replies .qr-btn--guided { background: #446514; color: #fff; border-color: #446514; }
+  .quick-replies .qr-btn--guided:hover { background: #384C0C; color: #fff; }
+  .guided-choices[hidden], .guided-offer[hidden] { display: none; }
+  .progress-hero__guide { display: inline-block; margin-top: 10px; font-family: 'Teachers', sans-serif; font-size: 12.5px; letter-spacing: .6px;
+    text-transform: uppercase; color: #446514; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .progress-hero__guide:hover { color: #384C0C; }
   /* Fitness — Cara's supplied recommendations (17 Sep 2026): one program card
      and two video cards on the same 1027px shell as the library preview. */
   .fit-recs { width: 1027px; max-width: 100%; display: flex; flex-direction: column; gap: 22px; }
@@ -6503,7 +6523,23 @@
               </button>
             </header>
 
+            <div class="guided-bar" id="guidedBar" role="status" aria-live="polite" hidden>
+              <span class="guided-bar__label"><span class="guided-bar__dot" aria-hidden="true"></span><span id="guidedBarText"></span></span>
+              <span class="guided-bar__actions" id="guidedBarActions"></span>
+            </div>
+
             <div class="chat-thread" id="chatThread"></div>
+
+            <!-- Guided-flow options: Cara's Yes/No (and other) choices as buttons;
+                 typed replies are interpreted deterministically, no AI. -->
+            <div class="quick-replies guided-choices" id="guidedChoices" hidden>
+              <span class="qr-label">Choose:</span>
+            </div>
+            <!-- First arrival (Cara): Guide me / Explore on my own; afterwards the
+                 two guided experiences remain one tap away. -->
+            <div class="quick-replies guided-offer" id="guidedOffer" hidden>
+              <span class="qr-label">Sprout can guide you:</span>
+            </div>
 
             <div class="quick-replies" id="quickReplies">
               <span class="qr-label">Try asking:</span>
@@ -6525,6 +6561,8 @@
                 <button type="button" role="menuitem" data-chat-shortcut="food-diary">Add a food diary entry</button>
                 <button type="button" role="menuitem" data-chat-shortcut="mood">Log today's mood</button>
                 <button type="button" role="menuitem" data-chat-shortcut="progress">View My Progress</button>
+                <button type="button" role="menuitem" data-guided-flow="progress_tracker_guide">Progress Tracker Guide</button>
+                <button type="button" role="menuitem" data-guided-flow="first_time_user">Introduction to Veye</button>
               </div>
               <input id="chatInput" type="text" autocomplete="off" placeholder="Ask Sprout anything&hellip;" maxlength="500"/>
               <button type="submit" class="chat-send" aria-label="Send message">
@@ -6550,6 +6588,7 @@
             <span class="mood-eyebrow">Your Journey</span>
             <h1>My Progress</h1>
             <p>Track your health across five modules. Re-take any time to see how far you've come.</p>
+            <button class="progress-hero__guide" type="button" id="progressGuideBtn">Let Sprout guide you through the trackers</button>
           </div>
         </header>
 
@@ -7852,6 +7891,8 @@
 <!-- Shared calculation engine: one implementation of every scored instrument,
      also used by the onboarding quiz. Must load before the dashboard script. -->
 <script src="js/veye-calculations.js?v=5"></script>
+<script src="js/veye-guided-flows-data.js?v=1"></script>
+<script src="js/veye-guided-flows.js?v=1"></script>
 <script>
   // The dashboard scrolls inside .main. Browsers can restore that nested scroll
   // position when a file:// prototype is reopened, clipping the welcome title.
@@ -7930,6 +7971,8 @@
     }
     if (viewKey === 'bot') {
       initBot();
+      // returning to Sprout: refresh the guided offer (resume / continue chips)
+      if (chatInitialized && typeof renderGuidedOffer === 'function') renderGuidedOffer();
     }
     if (viewKey === 'progress') {
       renderProgress();
@@ -8336,6 +8379,7 @@
       } else {
         addBotMessage("Welcome back &mdash; I'm Sprout, your Veye companion. What would you like to work on today?");
       }
+      renderGuidedOffer();
     }, 250);
   }
 
@@ -8469,6 +8513,8 @@
     if (open) chatAddMenu.querySelector('[role="menuitem"]')?.focus();
   });
   chatAddMenu?.addEventListener('click', e => {
+    const flowItem = e.target.closest('[data-guided-flow]');
+    if (flowItem) { closeChatAddMenu(false); guidedOpen(flowItem.dataset.guidedFlow, 'start'); return; }
     const item = e.target.closest('[data-chat-shortcut]');
     if (!item) return;
     closeChatAddMenu(false); goTo(item.dataset.chatShortcut);
@@ -8502,6 +8548,10 @@
     const qr = document.getElementById('quickReplies');
     if (qr && !qr.classList.contains('hidden')) qr.classList.add('hidden');
 
+    // A guided step is waiting: a question ("…?") is answered and the step is
+    // kept; anything else is the member's reply to the step.
+    if (guidedHandlesText(trimmed)) return;
+
     addUserMessage(trimmed);
     setMascotState('thinking');
     addTypingIndicator();
@@ -8530,8 +8580,151 @@
     chatInitialized = false;
     document.getElementById('quickReplies').classList.remove('hidden');
     setMascotState(null);
+    guidedClose();
     initBot();
   });
+
+  // ====================== SPROUT GUIDED EXPERIENCES ======================
+  // Cara's Intro Decision Tree and Progress Trackers Decision Tree, run by the
+  // deterministic prototype engine (js/veye-guided-flows.js). The Companion
+  // shows each step's line(s), the step's options as chips, and performs the
+  // navigation Sprout announces ("the Bot takes them there"). No AI.
+  const GUIDED_ROUTES = {
+    OPEN_DASHBOARD: () => goTo('dashboard'),
+    OPEN_PROGRESS: () => goTo('progress'),
+    OPEN_FOOD_CHOICES: () => goTo('food-choices'),
+    OPEN_MEAL_PLANNING: () => goTo('your-days'),
+    OPEN_COMPANION: () => goTo('bot'),
+  };
+  const GUIDED_TRACKERS = {
+    blood_markers: () => openSubView('blood', 'progress'),
+    body_composition: () => openSubView('bmi', 'progress'),
+    health_assessment: () => openSubView('assessment', 'progress'),
+    simple_quiz: () => openSubView('quiz-simple', 'progress'),
+  };
+  let guidedStep = null;   // the step the Companion is currently showing
+  let guidedTimer = null;
+
+  function guidedActive() { return !!(guidedStep && guidedStep.node && guidedStep.status === 'in_progress'); }
+
+  function guidedOpen(key, mode) {
+    goTo('bot');
+    const step = mode === 'restart' ? VeyeGuidedFlows.restart(key) : VeyeGuidedFlows.start(key);
+    document.getElementById('guidedOffer').hidden = true;
+    const qr = document.getElementById('quickReplies');
+    if (qr && !qr.classList.contains('hidden')) qr.classList.add('hidden');
+    guidedApply(step, { resumed: mode !== 'restart' && step.steps_taken > 0 });
+  }
+
+  function guidedApply(step, opts) {
+    opts = opts || {};
+    clearTimeout(guidedTimer);
+    guidedStep = step;
+    const lines = [];
+    if (opts.resumed && step.status === 'in_progress') lines.push('Welcome back \u2014 we left off here.');
+    step.messages.forEach(m => lines.push(m));
+    if (step.clarification) lines.push(step.clarification);
+    if (step.node && step.node.text) lines.push(step.node.text);
+    if (step.status === 'completed' && !step.node) lines.push('That is the end of this guide.');
+    lines.forEach((line, i) => setTimeout(() => addBotMessage(escapeHtml(line)), i * 350));
+    renderGuidedBar(step);
+    setTimeout(() => renderGuidedChoices(step), lines.length * 350);
+    // UI actions: the page performs the navigation Sprout announced.
+    const startFlow = step.actions.find(a => a.type === 'START_FLOW');
+    const nav = step.actions.find(a => a.type !== 'START_FLOW');
+    if (startFlow && startFlow.target) {
+      guidedTimer = setTimeout(() => guidedOpen(startFlow.target, 'start'), 900 + lines.length * 350);
+    } else if (nav) {
+      guidedTimer = setTimeout(() => {
+        if (nav.type === 'OPEN_TRACKER') (GUIDED_TRACKERS[nav.target] || (() => goTo('progress')))();
+        else if (GUIDED_ROUTES[nav.type]) GUIDED_ROUTES[nav.type]();
+      }, 1400 + lines.length * 350);
+    }
+  }
+
+  function renderGuidedBar(step) {
+    const bar = document.getElementById('guidedBar');
+    const text = document.getElementById('guidedBarText');
+    const actions = document.getElementById('guidedBarActions');
+    if (!step) { bar.hidden = true; return; }
+    bar.hidden = false;
+    const statusWord = step.status === 'paused' ? 'Paused' : step.status === 'completed' ? 'Complete' : step.status === 'skipped' ? 'Exploring on your own' : null;
+    text.textContent = step.flow_title + (step.section_title ? ' \u00b7 ' + step.section_title : '') + (statusWord ? ' \u00b7 ' + statusWord : '');
+    actions.innerHTML = '';
+    const btn = (label, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'guided-bar__btn' + (cls ? ' ' + cls : ''); b.textContent = label; b.addEventListener('click', fn); actions.appendChild(b); };
+    if (step.status === 'in_progress') btn('Pause', '', () => guidedApply(VeyeGuidedFlows.pause(step.flow_key)));
+    if (step.status === 'paused') btn('Resume', '', () => guidedOpen(step.flow_key, 'start'));
+    if (step.status === 'completed') btn('Start again', '', () => guidedOpen(step.flow_key, 'restart'));
+    btn('Close', 'guided-bar__btn--quiet', guidedClose);
+  }
+
+  function renderGuidedChoices(step) {
+    const wrap = document.getElementById('guidedChoices');
+    wrap.querySelectorAll('button').forEach(b => b.remove());
+    if (!step || !step.node || step.status === 'paused' || step.status === 'skipped') { wrap.hidden = true; return; }
+    const node = step.node;
+    const chip = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'qr-btn qr-btn--guided'; b.textContent = label; b.addEventListener('click', fn); wrap.appendChild(b); };
+    if (node.type === 'QUESTION') chip(node.answer_label || 'Continue', () => guidedChoose('', node.answer_label || 'Continue'));
+    else if (node.type === 'CHOICE' || node.type === 'AI_TASK') (node.choices || []).forEach(c => chip(c.label, () => guidedChoose(c.key, c.label)));
+    else if (node.type === 'COMPLETE') chip('Start again', () => guidedOpen(step.flow_key, 'restart'));
+    wrap.hidden = !wrap.querySelector('button');
+    document.getElementById('chatThread').scrollTop = document.getElementById('chatThread').scrollHeight;
+  }
+
+  function guidedChoose(key, label) {
+    if (!guidedStep) return;
+    addUserMessage(label);
+    const step = VeyeGuidedFlows.answer(guidedStep.flow_key, key ? { choice: key } : { text: label });
+    guidedApply(step);
+  }
+
+  /** Typed input while a step waits. Returns true when the guide consumed it. */
+  function guidedHandlesText(text) {
+    if (!guidedActive()) return false;
+    addUserMessage(text);
+    if (/\?\s*$/.test(text)) {
+      // an explanatory question mid-step: answered from the prototype's own
+      // Companion copy, then back to the same step
+      setMascotState('thinking'); addTypingIndicator();
+      const reply = botReplyFor(text);
+      const node = guidedStep.node;
+      setTimeout(() => { addBotMessage(reply); setTimeout(() => addBotMessage('Back to where we were: ' + escapeHtml(node && node.text || '')), 500); }, 700);
+      return true;
+    }
+    guidedApply(VeyeGuidedFlows.answer(guidedStep.flow_key, { text }));
+    return true;
+  }
+
+  function guidedClose() {
+    clearTimeout(guidedTimer);
+    guidedStep = null;
+    document.getElementById('guidedBar').hidden = true;
+    const wrap = document.getElementById('guidedChoices');
+    wrap.querySelectorAll('button').forEach(b => b.remove()); wrap.hidden = true;
+    renderGuidedOffer();
+  }
+
+  /** First arrival: Guide me / Explore on my own. Afterwards: the two guides. */
+  function renderGuidedOffer() {
+    const wrap = document.getElementById('guidedOffer');
+    if (!wrap || guidedActive()) return;
+    wrap.querySelectorAll('button').forEach(b => b.remove());
+    const ov = VeyeGuidedFlows.overview();
+    const chip = (label, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'qr-btn' + (cls ? ' ' + cls : ''); b.textContent = label; b.addEventListener('click', fn); wrap.appendChild(b); };
+    if (ov.first_arrival_offer) {
+      chip('Guide me', 'qr-btn--guided', () => guidedOpen('first_time_user', 'start'));
+      chip('Explore on my own', '', () => { const step = VeyeGuidedFlows.skip('first_time_user'); addBotMessage(escapeHtml(step.messages[0] || '')); renderGuidedOffer(); });
+    } else {
+      ov.flows.forEach(f => {
+        const label = f.key === 'first_time_user' ? 'Introduction to the Veye program' : f.title;
+        const s = f.session;
+        if (s && (s.status === 'in_progress' || s.status === 'paused')) chip((s.status === 'paused' ? 'Resume' : 'Continue') + ': ' + label, 'qr-btn--guided', () => guidedOpen(f.key, 'start'));
+        else if (s && s.status === 'completed') chip(label + ' again', 'qr-btn--guided', () => guidedOpen(f.key, 'restart'));
+        else chip(label, 'qr-btn--guided', () => guidedOpen(f.key, 'start'));
+      });
+    }
+    wrap.hidden = !wrap.querySelector('button');
+  }
 
   // ====================== HEALTH QUIZZES (Simple + 12-Q) ======================
 
@@ -9406,20 +9599,17 @@
 
   // Veye Companion card — Guided setup opens the Companion with a relevant
   // starter prompt. Cara has not supplied final Companion behaviour yet.
+  // Guided setup runs Cara's Intro Decision Tree in the Companion (19 Sep 2026).
   document.getElementById('botSuggestDinnerBtn')?.addEventListener('click', () => {
-    goTo('bot');
-    setTimeout(() => {
-      const input = document.getElementById('chatInput');
-      if (input) {
-        input.value = 'Please guide me through the best next steps for my Veye plan.';
-        input.focus();
-      }
-    }, 400);
+    guidedOpen('first_time_user', 'start');
   });
-  // Explore on my own keeps the requested dashboard composition intact.
+  // Explore on my own settles the first-arrival offer with Cara's own line and
+  // keeps the requested dashboard composition intact.
   document.getElementById('botNotNowBtn')?.addEventListener('click', () => {
-    flashToast('Explore the dashboard at your own pace.');
+    const step = VeyeGuidedFlows.skip('first_time_user');
+    flashToast(step.messages[0] || 'Explore the dashboard at your own pace.');
   });
+  document.getElementById('progressGuideBtn')?.addEventListener('click', () => guidedOpen('progress_tracker_guide', 'start'));
 
   // Help mini-card → Veye Companion
   // Help & FAQs mini-card → the FAQ page (help.html). Contact Us is a plain

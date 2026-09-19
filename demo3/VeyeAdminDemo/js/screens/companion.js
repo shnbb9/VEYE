@@ -20,6 +20,7 @@ const esc = UI.esc;
 const MODES = [
   { key: 'conversations', label: 'Conversations', route: '/companion/conversations' },
   { key: 'settings',      label: 'Companion settings', route: '/companion/settings' },
+  { key: 'guided',        label: 'Guided Experiences', route: '/companion/guided' },
 ];
 
 let selected = null;
@@ -36,8 +37,8 @@ function render(outlet, route) {
         desc: `Companion has no section called <code>${esc(mode)}</code>.` })}
       ${H.subnav(MODES, null)}
       <div class="card"><div class="card__body">${H.emptyState({
-        icon: 'sprout', title: 'Two sections are available',
-        msg: 'Conversations, and Companion settings.',
+        icon: 'sprout', title: 'Three sections are available',
+        msg: 'Conversations, Companion settings, and Guided Experiences.',
         action: `<a class="btn btn--primary" href="${R.href('/companion/conversations')}">Open Conversations</a>`,
       })}</div></div></div>`;
     return;
@@ -62,7 +63,9 @@ function render(outlet, route) {
   </div>`;
 
   const body = outlet.querySelector('#cBody');
-  if (mode === 'settings') { settings(body, outlet); } else { conversations(body); }
+  if (mode === 'settings') { settings(body, outlet); }
+  else if (mode === 'guided') { window.Veye.screens.companionGuided.render(body); }
+  else { conversations(body); }
 }
 
 /* ----------------------------------------------------------------- settings -- */
@@ -150,6 +153,14 @@ function settings(host, outlet) {
         </div>
       </div>
     </div>
+
+    <section class="card" id="guidedExperiencesCard" style="margin-top:var(--s-5)" data-reveal>
+      <div class="card__head">
+        <div><h2 class="card__title">${icon('sprout', { size: 20 })} Guided Experiences</h2>
+          <p class="t-support">Cara’s decision trees run by Sprout — First-Time User and the Progress Tracker Guide — with versions, a readable preview and an on/off switch per guide.</p></div>
+        <a class="btn btn--primary btn--sm" href="${R.href('/companion/guided')}">Open Guided Experiences</a>
+      </div>
+    </section>
 
     <section class="card" id="knowledgeSources" style="margin-top:var(--s-5)" data-reveal>
       <div class="card__head">
