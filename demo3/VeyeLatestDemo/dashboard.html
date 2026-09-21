@@ -5964,16 +5964,24 @@
   .settings-card__head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:20px; }
   .settings-card h2 { margin:5px 0 0; color:#384C0C; font:400 23px/1.15 'Teachers',sans-serif; }
   .settings-card__mark { color:#B4C88E; font:500 12px/1 'Kumbh Sans',sans-serif; letter-spacing:1px; }
-  .settings-profile { display:grid; grid-template-columns:160px minmax(0,1fr); gap:30px; align-items:start; }
-  .settings-photo-wrap { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:10px; min-width:0;
-    padding:18px 16px; border-radius:16px; background:#F8FAF2; border:1px solid #E7EDD9; }
-  .settings-photo { width:112px; height:112px; flex:none; border:6px solid #fff; border-radius:50%;
+  /* Profile row: a compact photo column (image, then Change photo directly
+     beneath it) beside a two-column field grid. The photo sits on the first
+     field row; the row is one cohesive unit, nothing is absolutely positioned. */
+  .settings-profile { display:grid; grid-template-columns:148px minmax(0,1fr); column-gap:28px; align-items:start; }
+  .settings-photo-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; }
+  .settings-photo { width:112px; height:112px; flex:none; border:4px solid #fff; border-radius:50%;
     background:url('assets/web/img/avatar.png') center/cover no-repeat; background-color:#fff;
-    box-shadow:0 9px 22px rgba(56,76,12,.16); }
-  .settings-photo-btn { display:inline-flex; align-items:center; justify-content:center; min-height:38px; padding:0 14px;
-    border:1px solid #DDE6C8; border-radius:999px; background:#fff; color:#446514; font:600 14px 'Teachers',sans-serif; cursor:pointer; }
+    box-shadow:0 0 0 1px #E3EAD3, 0 9px 22px rgba(56,76,12,.14); }
+  .settings-photo-btn { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:0 16px;
+    border:1px solid #DDE6C8; border-radius:999px; background:#fff; color:#446514; font:600 14px 'Teachers',sans-serif; cursor:pointer; white-space:nowrap; }
+  .settings-photo-btn:hover { background:#F6F9EE; }
   .settings-photo-hint { margin:0; text-align:center; color:#7A8A66; font:13px/1.35 'Teachers',sans-serif; }
-  .settings-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; flex:1; }
+  /* No uploaded photo and not the sample persona: the circle carries the
+     member's initial, and the topbar avatar shows the same initial. */
+  .settings-photo--initial, .avatar--initial { display:flex; align-items:center; justify-content:center; background-image:none;
+    background-color:var(--olive-medium); color:#fff; font:600 44px 'Teachers',sans-serif; }
+  .avatar--initial { font-size:30px; }
+  .settings-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 18px; min-width:0; }
   .settings-fields label, .settings-select { display:flex; flex-direction:column; gap:7px; color:#5C7041; font:600 14px 'Teachers',sans-serif; }
   .settings-fields input, .settings-fields select, .settings-select select { box-sizing:border-box; min-height:48px; width:100%; padding:10px 14px; border:1px solid #DDE6C8; border-radius:10px; background:#FFFEFB; color:#384C0C; font:16px 'Teachers',sans-serif; }
   .settings-fields input:focus, .settings-fields select:focus, .settings-select select:focus { outline:2px solid rgba(141,196,18,.42); outline-offset:2px; }
@@ -6029,12 +6037,15 @@
   .assess-card-latest strong { font:700 25px/1 'Teachers',sans-serif; color:#384C0C; }
   .assess-card-latest span { margin-top:6px; font:500 11px/1.3 'Teachers',sans-serif; color:#71805E; }
   .assess-card-caption { grid-column:1/-1; margin:0; font:500 11.5px/1.4 'Teachers',sans-serif; color:#71805E; }
-  @media (max-width: 760px) {
+  /* Tablet: the settings cards stack and the profile photo sits centred
+     above its fields (still two columns); phones take one column below. */
+  @media (max-width: 880px) {
     .settings-grid, .settings-card--profile { grid-template-columns:1fr; grid-column:auto; }
-    .settings-profile { align-items:stretch; flex-direction:column; }
+    .settings-profile { grid-template-columns:minmax(0,1fr); row-gap:22px; }
+    .settings-photo-wrap { justify-self:center; }
+  }
+  @media (max-width: 760px) {
     .settings-fields { grid-template-columns:1fr; }
-    .settings-profile { grid-template-columns:1fr; }
-    .settings-photo-wrap { align-items:center; }
     .res-layout { grid-template-columns:minmax(0,1fr); }
     .res-grid { grid-template-columns:minmax(0,1fr); }
     .res-card { width:auto; min-height:0; }
@@ -6045,6 +6056,11 @@
     .assess-rows { padding-left:20px; padding-right:20px; }
     .assess-row { grid-template-columns:1fr; gap:9px; }
     .assess-row .info-i { justify-self:start; }
+  }
+  /* Phones: tighter card and field padding so a full email address fits. */
+  @media (max-width: 500px) {
+    .settings-card { padding:22px 18px; }
+    .settings-fields input, .settings-fields select, .settings-select select { padding:10px 12px; }
   }
 </style>
 </head>
@@ -9396,22 +9412,59 @@
     }
   }
 
+  // One profile identity for the whole page. The demo persona is Cara (sample
+  // photo); a remembered sign-in / sign-up (veye_user) replaces EVERY field
+  // together, so name, email, username, photo and the welcome heading always
+  // describe the same person — never a name from one record with another's
+  // email or picture. Local to this prototype: nothing is sent anywhere.
+  const DEMO_PERSONA = { name: 'Cara Hogue', email: 'cara@veye.co', username: 'cara.hogue' };
+  function profileIdentity() {
+    let user = {};
+    try { user = JSON.parse(localStorage.getItem('veye_user') || '{}') || {}; } catch (e) {}
+    let photo = '';
+    try { photo = localStorage.getItem('veye_profile_photo') || ''; } catch (e) {}
+    const email = String(user.email || '').trim();
+    const persona = !email || email.toLowerCase() === DEMO_PERSONA.email;
+    const name = String(user.name || (persona ? DEMO_PERSONA.name : '')).trim();
+    const username = String(user.username || (persona ? DEMO_PERSONA.username : (email.split('@')[0] || ''))).trim();
+    const firstName = String(user.firstName || name.split(' ')[0] || '').trim() || (persona ? 'Cara' : 'there');
+    return { persona, name, email: email || (persona ? DEMO_PERSONA.email : ''), username, firstName, photo,
+             initial: (firstName[0] || '?').toUpperCase() };
+  }
+  // The topbar avatar (account/menu control) and the Settings photo (the
+  // editable profile picture) show the same current picture: an uploaded
+  // photo, else the persona's sample photo, else the member's initial.
+  function applyProfileIdentity() {
+    const id = profileIdentity();
+    [['settingsPhotoPreview', 'settings-photo--initial'], ['topbarAvatarBtn', 'avatar--initial']].forEach(([elId, cls]) => {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      if (id.photo) { el.classList.remove(cls); el.style.backgroundImage = 'url("' + id.photo.replace(/"/g, '') + '")'; el.textContent = ''; }
+      else if (id.persona) { el.classList.remove(cls); el.style.backgroundImage = ''; el.textContent = ''; }
+      else { el.classList.add(cls); el.style.backgroundImage = 'none'; el.textContent = id.initial; }
+    });
+    const top = document.getElementById('topbarAvatarBtn');
+    if (top) top.title = id.firstName;
+    const preview = document.getElementById('settingsPhotoPreview');
+    if (preview) preview.setAttribute('aria-label', 'Current profile photo: ' + id.name);
+    const welcome = document.querySelector('.welcome h1');
+    if (welcome) welcome.textContent = 'Welcome back ' + id.firstName;
+  }
+  window.profileIdentity = profileIdentity;
+  window.applyProfileIdentity = applyProfileIdentity;
+
   // Settings are intentionally local to this HTML prototype: the profile and
   // preference controls behave like the eventual product, without pretending
   // to call an account service that is not present in the demo build.
   window.initSettings = function () {
-    let user = {};
-    try { user = JSON.parse(localStorage.getItem('veye_user') || '{}') || {}; } catch (e) {}
-    const photo = localStorage.getItem('veye_profile_photo') || '';
+    const id = profileIdentity();
     const name = document.getElementById('settingsName');
     const email = document.getElementById('settingsEmail');
     const username = document.getElementById('settingsUsername');
-    if (name && !name.value) name.value = user.name || 'Cara Hogue';
-    if (email && (!email.value || !String(user.email || '').includes('@'))) email.value = 'cara@veye.co';
-    if (username && !username.value) username.value = user.username || 'cara.hogue';
-    [document.getElementById('settingsPhotoPreview'), document.getElementById('topbarAvatarBtn')].forEach(el => {
-      if (el && photo) el.style.backgroundImage = 'url("' + photo.replace(/"/g, '') + '")';
-    });
+    if (name && !name.value) name.value = id.name;
+    if (email && !email.value) email.value = id.email;
+    if (username && !username.value) username.value = id.username;
+    applyProfileIdentity();
     let prefs = {};
     try { prefs = JSON.parse(localStorage.getItem('veye_settings') || '{}') || {}; } catch (e) {}
     ['EmailUpdates','TrackerReminders','CompanionCheckins'].forEach(k => {
@@ -9596,6 +9649,7 @@
   document.getElementById('topbarNotifBtn')?.addEventListener('click', () => flashToast('No new notifications'));
   document.getElementById('topbarSettingsBtn')?.addEventListener('click', () => goTo('settings'));
   document.getElementById('topbarAvatarBtn')?.addEventListener('click', () => goTo('settings'));
+  applyProfileIdentity();
 
   // Veye Companion card — Guided setup opens the Companion with a relevant
   // starter prompt. Cara has not supplied final Companion behaviour yet.
@@ -11610,7 +11664,7 @@
     reader.onload = () => {
       const data = String(reader.result || '');
       localStorage.setItem('veye_profile_photo', data);
-      document.querySelectorAll('#settingsPhotoPreview,#topbarAvatarBtn').forEach(el => { el.style.backgroundImage = 'url("' + data.replace(/"/g, '') + '")'; });
+      applyProfileIdentity();
       flashToast('Profile photo updated');
     };
     reader.readAsDataURL(file);
@@ -11618,11 +11672,15 @@
   document.getElementById('settingsProfileSave')?.addEventListener('click', () => {
     let user = {};
     try { user = JSON.parse(localStorage.getItem('veye_user') || '{}') || {}; } catch (err) {}
-    user.name = document.getElementById('settingsName')?.value.trim() || 'Cara Hogue';
-    user.email = document.getElementById('settingsEmail')?.value.trim() || 'cara@veye.co';
-    user.username = document.getElementById('settingsUsername')?.value.trim() || 'cara.hogue';
+    const current = profileIdentity();
+    user.name = document.getElementById('settingsName')?.value.trim() || current.name;
+    user.email = document.getElementById('settingsEmail')?.value.trim() || current.email;
+    user.username = document.getElementById('settingsUsername')?.value.trim() || current.username;
+    const parts = user.name.split(/\s+/);
+    user.firstName = parts[0] || '';
+    user.lastName = parts.slice(1).join(' ');
     localStorage.setItem('veye_user', JSON.stringify(user));
-    document.querySelector('.welcome h1')?.replaceChildren(document.createTextNode('Welcome back ' + (user.name.split(' ')[0] || 'Cara')));
+    applyProfileIdentity();
     saveSettingsPrefs(false);
     flashToast('Profile and account preferences saved');
   });
