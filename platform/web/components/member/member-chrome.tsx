@@ -112,7 +112,7 @@ function MemberFrame({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="sidebar-bottom">
-            <Link href="/app/settings" className={`nav-link${active === "settings" ? " active" : ""}`} aria-label="Settings">
+            <Link href="/app/settings" className={`nav-link${active === "settings" ? " active" : ""}`} aria-label="Settings" aria-current={active === "settings" ? "page" : undefined}>
               <NavIcon name="settings" />
               <span>Settings</span>
             </Link>

@@ -11,7 +11,9 @@ import { API_URL, MAILPIT_URL } from "./accounts";
  *  (the dev server compiles on first visit, which can take seconds). */
 export async function open(page: Page, path: string) {
   const hydrated = page.waitForResponse((response) => response.url().includes("/api/v1/auth/me"), { timeout: 45_000 });
-  await page.goto(path);
+  // DOM-ready is enough: hydration is what we wait for, and the `load` event
+  // would also wait on third-party font stylesheets that are not under test.
+  await page.goto(path, { waitUntil: "domcontentloaded" });
   await hydrated;
 }
 

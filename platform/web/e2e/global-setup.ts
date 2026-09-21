@@ -1,10 +1,11 @@
 import type { FullConfig } from "@playwright/test";
 import { API_URL, MAILPIT_URL } from "./fixtures/accounts";
 
-/* Before any test: confirm the local stack is up (web, API, Mailpit) and warm
-   every route the suite visits so the development server has compiled them.
-   The Docker web service is `next dev`; its first compile of a route can take
-   many seconds and spikes memory, which is not what the tests should measure. */
+/* Before any test: confirm the stack is up (web, API, Mailpit) and warm every
+   route the suite visits. Against the default production build on 3013 this
+   is a quick smoke pass; with E2E_BASE_URL pointed at the Docker `next dev`
+   service it makes the first compile of each route happen here, not inside a
+   timed test (that compile can take many seconds and spikes memory). */
 
 const ROUTES = [
   "/", "/login", "/signup", "/onboarding", "/verify-email", "/reset-password",
@@ -28,7 +29,7 @@ async function fetchOk(url: string, label: string, timeoutMs = 60_000): Promise<
 }
 
 export default async function globalSetup(config: FullConfig): Promise<void> {
-  const baseURL = (config.projects[0]?.use.baseURL as string | undefined) ?? "http://localhost:3002";
+  const baseURL = (config.projects[0]?.use.baseURL as string | undefined) ?? "http://localhost:3013";
   const checks: [string, string][] = [[`${API_URL}/health`, "API"], [`${MAILPIT_URL}/api/v1/info`, "Mailpit"], [`${baseURL}/login`, "web"]];
   for (const [url, label] of checks) {
     try {

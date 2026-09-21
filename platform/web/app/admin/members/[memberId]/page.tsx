@@ -250,7 +250,7 @@ function Member360View() {
                 <div className="table-wrap"><table className="table table--compact">
                   <thead><tr><th scope="col">Started</th><th scope="col">Last message</th><th scope="col">Messages</th><th scope="col">Review</th><th scope="col"><span className="sr-only">Open</span></th></tr></thead>
                   <tbody>{member.conversations.map((c) => (
-                    <tr key={c.id}><td>{fmtDate(c.started_at)}</td><td>{fmtDate(c.last_message_at)}</td><td>{c.message_count}</td><td>{c.flagged ? <Chip label={c.reviewed_at ? "reviewed" : "needs review"} tone={c.reviewed_at ? "live" : "attention"} /> : <span className="t-muted">—</span>}</td><td style={{ textAlign: "right" }}><Link className="btn btn--secondary btn--sm" href={`/admin/companion/conversations?open=${c.id}`}>Open</Link></td></tr>
+                    <tr key={c.id}><td>{fmtDate(c.started_at)}</td><td>{fmtDate(c.last_message_at)}</td><td>{c.message_count}</td><td>{c.flagged ? <Chip label={c.reviewed_at ? "reviewed" : "needs review"} tone={c.reviewed_at ? "live" : "attention"} /> : <span className="t-muted">—</span>}</td><td style={{ textAlign: "right" }}><Link className="btn btn--secondary btn--sm" href={`/admin/companion/conversations?conversation=${c.id}`}>Open</Link></td></tr>
                   ))}</tbody>
                 </table></div>
               ) : <p className="t-support" style={{ padding: 20 }}>No conversation yet.</p>}

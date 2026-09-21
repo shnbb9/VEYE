@@ -1,5 +1,10 @@
 name: veye-local
 
+# Every host port is published on 127.0.0.1 only. Publishing on all interfaces
+# makes Docker Desktop (WSL2) add an IPv6 loopback relay (wslrelay.exe on
+# [::1]) that stalls intermittently on Windows; browsers try ::1 first for
+# "localhost", so requests hang. With the IPv4-only binding ::1 is refused at
+# once and every client falls back to 127.0.0.1, which Docker serves directly.
 services:
   db:
     image: pgvector/pgvector:0.8.0-pg16
@@ -8,7 +13,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "${VEYE_DB_HOST_PORT}:5432"
+      - "127.0.0.1:${VEYE_DB_HOST_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -55,7 +60,7 @@ services:
       VEYE_AI_TELEMETRY_CAPTURE_CONTENT: ${VEYE_AI_TELEMETRY_CAPTURE_CONTENT:-false}
       VEYE_TELEMETRY_PSEUDONYM_KEY: ${VEYE_TELEMETRY_PSEUDONYM_KEY:-local-development-pseudonym-key}
     ports:
-      - "${VEYE_API_HOST_PORT}:8000"
+      - "127.0.0.1:${VEYE_API_HOST_PORT}:8000"
     volumes:
       - knowledge_objects:/app/var/knowledge-objects
       - media_objects:/app/var/media-objects
@@ -82,7 +87,7 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     ports:
-      - "${VEYE_WEB_HOST_PORT}:3000"
+      - "127.0.0.1:${VEYE_WEB_HOST_PORT}:3000"
     volumes:
       - ./web:/app
       - web_node_modules:/app/node_modules
@@ -109,8 +114,8 @@ services:
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
     ports:
-      - "${VEYE_MAIL_WEB_HOST_PORT}:8025"
-      - "${VEYE_MAIL_SMTP_HOST_PORT}:1025"
+      - "127.0.0.1:${VEYE_MAIL_WEB_HOST_PORT}:8025"
+      - "127.0.0.1:${VEYE_MAIL_SMTP_HOST_PORT}:1025"
 
 volumes:
   pgdata:

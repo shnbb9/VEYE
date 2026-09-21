@@ -1,19 +1,23 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /* VEYE end-to-end acceptance against the LOCAL Docker stack
-   (platform/scripts/local-up.ps1 -Mail):
+   (platform/scripts/local-up.ps1):
      api      http://localhost:8001
      mailpit  http://localhost:8026
-     web      a PRODUCTION build of this project served on http://localhost:3012
-              (Playwright builds and starts it; CORS for 3012 is in the local
-              env file). Set E2E_BASE_URL=http://localhost:3002 to run against
-              the Docker development server instead.
+     web      a PRODUCTION build of this project served on http://localhost:3013
+              for the length of the run. Playwright builds, starts and STOPS
+              it; the person's own VEYE runtime (the Docker web service on
+              http://localhost:3012) is never touched, so it is still there
+              when the suite exits. CORS for 3013 is in the local env file.
+              Set E2E_BASE_URL=http://localhost:3012 to run the suite against
+              that Docker development server instead (no build, no server).
    The stack seeds the synthetic QA accounts (app/seed/users.py). Tests that
    need a fresh member sign one up with a unique address. Override the API and
    mailbox with E2E_API_URL / E2E_MAILPIT_URL. */
 
 const externalWeb = process.env.E2E_BASE_URL;
-const baseURL = externalWeb ?? "http://localhost:3012";
+const E2E_PORT = 3013;
+const baseURL = externalWeb ?? `http://localhost:${E2E_PORT}`;
 const apiURL = process.env.E2E_API_URL ?? "http://localhost:8001";
 
 export default defineConfig({
@@ -29,7 +33,7 @@ export default defineConfig({
   outputDir: "test-output/playwright-results",
   webServer: externalWeb ? undefined : {
     // `npm run e2e` builds first (pree2e → e2e/build.mjs); this only serves it.
-    command: "npx next start -p 3012",
+    command: `npx next start -p ${E2E_PORT}`,
     url: `${baseURL}/login`,
     reuseExistingServer: true,
     timeout: 120_000,

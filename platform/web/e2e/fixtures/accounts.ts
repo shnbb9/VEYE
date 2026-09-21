@@ -13,7 +13,7 @@ export const API_URL = process.env.E2E_API_URL ?? "http://localhost:8001";
 export const MAILPIT_URL = process.env.E2E_MAILPIT_URL ?? "http://localhost:8026";
 
 /** Prefixes the suite signs members up with; the global teardown removes exactly these. */
-export const E2E_PREFIXES = ["e2e", "signup", "guided", "journey", "iso", "photo", "probe", "reset", "trackers"];
+export const E2E_PREFIXES = ["e2e", "signup", "guided", "journey", "iso", "photo", "probe", "reset", "trackers", "gone"];
 
 /** A unique member address per run, so sign-up tests never collide. */
 export function freshMember(prefix = "e2e") {
