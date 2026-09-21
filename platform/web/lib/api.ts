@@ -159,3 +159,95 @@ export async function calculateBloodMarkers(input: BloodMarkersInput): Promise<B
     body: JSON.stringify({ input }),
   });
 }
+
+/* ---- Health Assessment (11 questions, 11–33, lower is better) ------------ */
+
+export type HealthAssessmentQuestion = { key: string; label: string; options: { value: 1 | 2 | 3; label: string }[]; info: string };
+
+export type HealthAssessmentDefinition = {
+  questions: HealthAssessmentQuestion[];
+  scale_min: number;
+  scale_max: number;
+  polyphenol_lines: { amount: string; note: string }[];
+  neurological_row: { epa_dha_dose: string; condition: string; note: string };
+  calculation_version: string;
+};
+
+export type HealthAssessmentHistoryItem = {
+  attempt_id: string;
+  answers: Record<string, 1 | 2 | 3>;
+  total: number;
+  bucket: string;
+  status: string;
+  interpretation: string;
+  tone: "good" | "moderate" | "elevated" | "significant";
+  epa_dha_dose: string;
+  polyphenol_lines: { amount: string; note: string }[];
+  calculation_version: string;
+  completed_at: string;
+};
+
+export type HealthAssessmentResult = HealthAssessmentHistoryItem & { member_id: string };
+
+export type HealthAssessmentHistory = {
+  member_id: string;
+  latest: HealthAssessmentHistoryItem | null;
+  history: HealthAssessmentHistoryItem[];
+};
+
+export const getHealthAssessmentDefinition = () => apiJson<HealthAssessmentDefinition>("/api/v1/health-assessment/definition");
+export const getHealthAssessmentHistory = () => apiJson<HealthAssessmentHistory>(`/api/v1/members/${ME}/health-assessment`);
+export const calculateHealthAssessment = (answers: Record<string, 1 | 2 | 3>) =>
+  postJson<HealthAssessmentResult>("/api/v1/health-assessment/calculate", { input: { answers } });
+
+/* ---- Simple Quiz (8 yes/no; a count, never a Health Number input) --------- */
+
+export type SimpleQuizDefinition = {
+  questions: { key: string; label: string }[];
+  total_questions: number;
+  progress_note: string;
+  calculation_version: string;
+};
+
+export type SimpleQuizHistoryItem = {
+  attempt_id: string;
+  answers: Record<string, "yes" | "no">;
+  yes_count: number;
+  no_count: number;
+  summary: string;
+  progress_note: string;
+  calculation_version: string;
+  completed_at: string;
+};
+
+export type SimpleQuizResult = SimpleQuizHistoryItem & { member_id: string };
+
+export type SimpleQuizHistory = {
+  member_id: string;
+  latest: SimpleQuizHistoryItem | null;
+  history: SimpleQuizHistoryItem[];
+};
+
+export const getSimpleQuizDefinition = () => apiJson<SimpleQuizDefinition>("/api/v1/simple-quiz/definition");
+export const getSimpleQuizHistory = () => apiJson<SimpleQuizHistory>(`/api/v1/members/${ME}/simple-quiz`);
+export const calculateSimpleQuiz = (answers: Record<string, "yes" | "no">) =>
+  postJson<SimpleQuizResult>("/api/v1/simple-quiz/calculate", { input: { answers } });
+
+/* ---- Care Studio content published for members --------------------------- */
+
+export type MemberCareItem = {
+  id: string;
+  kind: "fitness" | "supplement" | "resource";
+  title: string;
+  description: string;
+  category: string | null;
+  content_type: "video" | "program" | "article" | "link" | "copy";
+  youtube_embed_url: string | null;
+  external_url: string | null;
+  body: string;
+  cautions: string | null;
+  references: string | null;
+  display_order: number;
+};
+
+export const getPublishedCare = (kind: MemberCareItem["kind"]) => apiJson<MemberCareItem[]>(`/api/v1/care/${kind}`);

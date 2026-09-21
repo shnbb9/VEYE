@@ -21,13 +21,15 @@ def get_auth_service(
 
 
 def set_session_cookie(response: Response, issued: IssuedSession, runtime: Runtime) -> None:
+    """Writes the cookie of the portal the session was issued for; the other
+    portal's cookie is left exactly as it was."""
     response.set_cookie(
-        key=runtime.settings.session_cookie_name, value=issued.cookie_value,
+        key=runtime.auth_provider.cookie_name(issued.portal), value=issued.cookie_value,
         max_age=issued.max_age_seconds if issued.session.remember else None,
         httponly=True, samesite="lax", secure=runtime.settings.session_cookie_secure, path="/",
     )
 
 
-def clear_session_cookie(response: Response, runtime: Runtime) -> None:
-    response.delete_cookie(key=runtime.settings.session_cookie_name, path="/",
+def clear_session_cookie(response: Response, runtime: Runtime, portal: str) -> None:
+    response.delete_cookie(key=runtime.auth_provider.cookie_name(portal), path="/",
                            httponly=True, samesite="lax", secure=runtime.settings.session_cookie_secure)

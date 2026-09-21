@@ -43,6 +43,10 @@ services:
       VEYE_GROQ_API_KEY: ${VEYE_GROQ_API_KEY:-}
       VEYE_GROQ_MODEL: ${VEYE_GROQ_MODEL:-llama-3.3-70b-versatile}
       VEYE_KNOWLEDGE_OBJECT_ROOT: /app/var/knowledge-objects
+      # Member media (profile photos) through the ObjectStorage boundary: the
+      # local file store on a named volume; a cloud bucket is a client decision.
+      VEYE_MEDIA_OBJECT_STORE: local
+      VEYE_MEDIA_OBJECT_ROOT: /app/var/media-objects
       # Development observability (optional; masked before export).
       VEYE_LANGFUSE_ENABLED: ${VEYE_LANGFUSE_ENABLED:-false}
       VEYE_LANGFUSE_PUBLIC_KEY: ${VEYE_LANGFUSE_PUBLIC_KEY:-}
@@ -54,6 +58,7 @@ services:
       - "${VEYE_API_HOST_PORT}:8000"
     volumes:
       - knowledge_objects:/app/var/knowledge-objects
+      - media_objects:/app/var/media-objects
     depends_on:
       db:
         condition: service_healthy
@@ -114,3 +119,5 @@ volumes:
     name: veye-local-web-node-modules
   knowledge_objects:
     name: veye-local-knowledge-objects
+  media_objects:
+    name: veye-local-media-objects

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { sendPublicRequest } from "@/lib/member-api";
 
 export function PublicInteractions() {
   const pathname = usePathname();
@@ -102,15 +103,38 @@ export function PublicInteractions() {
       ask?.setAttribute("aria-expanded", String(opening));
       if (opening) field?.focus();
     });
-    const explainFutureSubmission = () => {
-      if (!field?.value.trim()) { field?.focus(); return; }
-      if (notice) {
-        notice.textContent = "Question sending will be available when this page is connected to Veye support.";
-        notice.hidden = false;
+    const emailField = document.getElementById("helpAskEmail") as HTMLInputElement | null;
+    let sending = false;
+    // A Help question lands in the console's Requests & Inbox (Help question).
+    const sendQuestion = async () => {
+      if (!field?.value.trim() || sending) { field?.focus(); return; }
+      const email = emailField?.value.trim() ?? "";
+      if (email && !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email)) {
+        if (notice) { notice.textContent = "Please enter a valid email address, or leave it blank."; notice.hidden = false; }
+        emailField?.focus();
+        return;
+      }
+      sending = true;
+      if (submit) (submit as HTMLButtonElement).disabled = true;
+      try {
+        await sendPublicRequest({ kind: "help_question", message: field.value.trim(), email: email || null, page: "/help" });
+        if (notice) {
+          notice.textContent = email
+            ? "Thanks — your question has been received. We will reply to the email you left."
+            : "Thanks — your question has been received. Leave an email next time if you would like a reply.";
+          notice.hidden = false;
+        }
+        field.value = "";
+        if (emailField) emailField.value = "";
+      } catch (reason) {
+        if (notice) { notice.textContent = reason instanceof Error ? reason.message : "Your question could not be sent just now."; notice.hidden = false; }
+      } finally {
+        sending = false;
+        if (submit) (submit as HTMLButtonElement).disabled = false;
       }
     };
-    on(submit, "click", explainFutureSubmission);
-    on(field, "keydown", (event) => { if ((event as KeyboardEvent).key === "Enter") { event.preventDefault(); explainFutureSubmission(); } });
+    on(submit, "click", () => { void sendQuestion(); });
+    on(field, "keydown", (event) => { if ((event as KeyboardEvent).key === "Enter") { event.preventDefault(); void sendQuestion(); } });
 
     return () => cleanup.forEach((dispose) => dispose());
   // Public pages share the same client shell during Next navigation. Rebind to

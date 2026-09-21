@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  getBloodMarkersHistory, getBodyCompositionHistory, getHealthNumberHistory,
-  type BloodMarkersHistory, type BodyCompositionHistory, type HealthNumberHistoryItem,
+  getBloodMarkersHistory, getBodyCompositionHistory, getHealthAssessmentHistory, getHealthNumberHistory, getSimpleQuizHistory,
+  type BloodMarkersHistory, type BodyCompositionHistory, type HealthAssessmentHistory, type HealthNumberHistoryItem, type SimpleQuizHistory,
 } from "@/lib/api";
 import { FIRST_TIME_FLOW, PROGRESS_GUIDE_FLOW, getGuidedOverview, skipFlow, type GuidedOverview } from "@/lib/guided-flows-api";
+import { getMood, getPublishedContent, getSupportDetails, myRequests, sendMemberRequest, type MemberRequest, type MoodOverview, type SupportDetails } from "@/lib/member-api";
 import { displayHealthNumber, prefersReducedMotion } from "@/lib/member-format";
 import { useToast } from "@/components/member/member-chrome";
+import { ContactUsDialog } from "@/components/member/contact-us-dialog";
 import { TrackerGraph } from "@/components/member/tracker-graph";
 import { useSession } from "@/components/session";
 
@@ -32,13 +34,21 @@ export default function MemberDashboard() {
   const [modulesDone, setModulesDone] = useState<number | null>(null);
   const [body, setBody] = useState<BodyCompositionHistory | null>(null);
   const [blood, setBlood] = useState<BloodMarkersHistory | null>(null);
+  const [assessment, setAssessment] = useState<HealthAssessmentHistory | null>(null);
+  const [quiz, setQuiz] = useState<SimpleQuizHistory | null>(null);
   const [guided, setGuided] = useState<GuidedOverview | null>(null);
+  const [mood, setMood] = useState<MoodOverview | null>(null);
+  const [dailyTip, setDailyTip] = useState<string | null | undefined>(undefined); // undefined = loading, null = none published
+  const [support, setSupport] = useState<SupportDetails | null>(null);
+  const [requests, setRequests] = useState<MemberRequest[] | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [betaBusy, setBetaBusy] = useState(false);
   const toast = useToast();
-  const firstName = useSession().account?.first_name ?? "";
+  const firstName = useSession().member?.first_name ?? "";
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([getHealthNumberHistory(), getBodyCompositionHistory(), getBloodMarkersHistory()]).then(([hn, bc, bm]) => {
+    Promise.allSettled([getHealthNumberHistory(), getBodyCompositionHistory(), getBloodMarkersHistory(), getHealthAssessmentHistory(), getSimpleQuizHistory()]).then(([hn, bc, bm, ha, sq]) => {
       if (cancelled) return;
       if (hn.status === "fulfilled") {
         setHealth(hn.value.latest ? { kind: "taken", latest: hn.value.latest } : { kind: "untaken" });
@@ -47,18 +57,36 @@ export default function MemberDashboard() {
       }
       if (bc.status === "fulfilled") setBody(bc.value);
       if (bm.status === "fulfilled") setBlood(bm.value);
+      if (ha.status === "fulfilled") setAssessment(ha.value);
+      if (sq.status === "fulfilled") setQuiz(sq.value);
       // Overall Progress counts the five My Progress modules that hold a saved
-      // result. Health Number, Body Composition and Blood Test Markers are the
-      // modules connected to the application today; the others cannot have
-      // saved results yet.
-      const done = (hn.status === "fulfilled" && hn.value.latest ? 1 : 0)
-        + (bc.status === "fulfilled" && bc.value.latest ? 1 : 0)
-        + (bm.status === "fulfilled" && bm.value.latest ? 1 : 0);
+      // result — all five are connected to the application now.
+      const done = [hn, bc, bm, ha, sq].filter((r) => r.status === "fulfilled" && r.value.latest).length;
       setModulesDone(done);
     });
     getGuidedOverview().then((data) => { if (!cancelled) setGuided(data); }).catch(() => { /* Sprout offer simply stays generic */ });
+    // The rest of the member's state: today's mood, the published daily tip,
+    // the support address the console maintains, and the member's own requests.
+    getMood().then((data) => { if (!cancelled) setMood(data); }).catch(() => { /* the Mood card rests */ });
+    getPublishedContent("member_copy").then((entries) => {
+      if (!cancelled) setDailyTip(entries.find((entry) => entry.key === "daily_health_tip")?.body ?? null);
+    }).catch(() => { if (!cancelled) setDailyTip(null); });
+    getSupportDetails().then((data) => { if (!cancelled) setSupport(data); }).catch(() => { /* the card keeps its approved address */ });
+    myRequests().then((rows) => { if (!cancelled) setRequests(rows); }).catch(() => { if (!cancelled) setRequests([]); });
     return () => { cancelled = true; };
   }, []);
+
+  const betaRequest = requests?.find((r) => r.kind === "join_beta") ?? null;
+  async function joinBeta() {
+    setBetaBusy(true);
+    try {
+      const sent = await sendMemberRequest({ kind: "join_beta", page: "/app" });
+      setRequests(await myRequests());
+      toast.flash(sent.already_open ? "Your Beta request is already with us" : "Thank you — your Beta request has been sent");
+    } catch (reason) {
+      toast.flash(reason instanceof Error ? reason.message : "The request could not be sent");
+    } finally { setBetaBusy(false); }
+  }
 
   // Cara: a new member is offered the guide once ("Guide me" / "Explore on my own");
   // either answer settles it and Sprout stays available for both guided flows later.
@@ -116,10 +144,21 @@ export default function MemberDashboard() {
 
         {/* ============ COLUMN 2: BETA + COMPANION ============ */}
         <div className="col col--engagement">
-          <article className="card beta-card fade-in d2">
+          <article className="card beta-card fade-in d2" data-testid="beta-card">
             <h2 className="beta-card__title"><img className="beta-card__icon" src="/assets/web/img/ic-beta.svg" alt="" />Join the Beta Test</h2>
             <img className="beta-card__art" src="/assets/web/img/dash-rocket.png" alt="People launching the Veye beta" />
             <p>When you Join the Veye Beta Test, you can experience our innovative platform, and take proactive measures in managing your health through a tailored nutrition program that goes beyond mere weight loss.</p>
+            <div className="beta-card__actions">
+              {betaRequest ? (
+                <p className="beta-card__status" data-testid="beta-status">
+                  {betaRequest.status === "resolved" ? "Your Beta request has been handled." : `Beta request sent ${new Date(betaRequest.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })} · ${betaRequest.status_label}`}
+                </p>
+              ) : (
+                <button className="beta-card__btn" type="button" disabled={betaBusy} onClick={() => void joinBeta()} data-testid="beta-join">
+                  {betaBusy ? "Sending…" : "Join the Beta Test"}
+                </button>
+              )}
+            </div>
           </article>
 
           <article className="card dash-companion-card fade-in d3">
@@ -152,28 +191,29 @@ export default function MemberDashboard() {
 
         {/* ============ COLUMN 3: TIPS + HELP ============ */}
         <div className="col">
-          <div className="card tip-card fade-in d3">
+          <div className="card tip-card fade-in d3" data-testid="daily-tip">
             <div className="tip-icon-wrap"><img src="/assets/web/img/ic-daily.png" alt="" /></div>
             <h3>Daily Health tip</h3>
-            <TypedTip index={0}>Although you are in moderately good health, incorporating better food choices and implementing some lifestyle changes will help you optimize your health, prevent disease, and slow aging.</TypedTip>
-            <span className="tip-proto">Prototype preview</span>
+            {dailyTip === undefined && <p>&nbsp;</p>}
+            {dailyTip && <TypedTip index={0}>{dailyTip}</TypedTip>}
+            {dailyTip === null && <p className="tip-muted">Veye has not published a daily tip yet. Tips are written and published in the Veye console and appear here the moment one goes live.</p>}
           </div>
 
-          <div className="card tip-card fade-in d4">
+          <div className="card tip-card fade-in d4" data-testid="personal-tip">
             <div className="tip-icon-wrap"><img src="/assets/web/img/ic-personal.png" alt="" /></div>
             <h3>Personal tip</h3>
-            <TypedTip index={1}>Sample personal tip of the day. Click to learn more.</TypedTip>
-            <span className="tip-proto">Prototype preview</span>
+            <p className="tip-muted">Personal tips arrive with the Veye Companion release, once the client has defined how they are derived from your trackers. Nothing here is generated yet.</p>
+            <span className="tip-proto">Not connected yet</span>
           </div>
 
           <div className="help-pair fade-in d5">
-            <a className="mini-card" href="mailto:contact@veye.co">
+            <button className="mini-card mini-card--button" type="button" onClick={() => setContactOpen(true)} data-testid="contact-us">
               <div className="mini-card-icon">
                 <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="9.5" width="30" height="21" rx="3.4"/><path d="M6.6 11.8 20 22l13.4-10.2"/></svg>
               </div>
               <div className="mini-card-label">Contact Us</div>
-              <div className="mini-card-sub">contact@veye.co</div>
-            </a>
+              <div className="mini-card-sub" data-testid="support-email">{support?.support_email ?? "contact@veye.co"}</div>
+            </button>
             <Link className="mini-card mini-card--faq" href="/help">
               <div className="mini-card-icon">
                 <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="20" cy="20" r="16"/><circle cx="20" cy="20" r="6.4"/><path d="M8.7 8.7l6.8 6.8M31.3 8.7l-6.8 6.8M31.3 31.3l-6.8-6.8M8.7 31.3l6.8-6.8"/></svg>
@@ -210,10 +250,10 @@ export default function MemberDashboard() {
             </span>
           </Link>
           <span className="activity-split-divider" aria-hidden="true" />
-          <Link className="activity-half" href="/app/mood" aria-label="Open the Mood Tracker">
+          <Link className="activity-half" href="/app/mood" aria-label="Open the Mood Tracker" data-testid="mood-card">
             <div className="lbl">Mood</div>
-            <div className="val">—</div>
-            <div className="sub">not logged yet</div>
+            <div className="val">{mood?.latest ? `${MOOD_EMOJI[mood.latest.mood]} ${mood.latest.mood_label}` : "—"}</div>
+            <div className="sub">{mood?.latest ? `last logged ${mood.latest.entry_date.slice(5).replace("-", "/")}` : "not logged yet"}</div>
           </Link>
         </div>
       </div>
@@ -225,11 +265,16 @@ export default function MemberDashboard() {
           <h2 id="trackerGraphTitle" className="activity-title tracker-card__title">Progress Trackers</h2>
           <Link className="tracker-card__link" href={`/app/companion?flow=${PROGRESS_GUIDE_FLOW}`}>Let Sprout guide you</Link>
         </div>
-        <TrackerGraph blood={blood} body={body} />
+        <TrackerGraph blood={blood} body={body} assessment={assessment} quiz={quiz} />
       </section>
+
+      <ContactUsDialog open={contactOpen} supportEmail={support?.support_email ?? "contact@veye.co"} supportPhone={support?.support_phone ?? ""}
+                       onClose={() => setContactOpen(false)} onSent={() => { setContactOpen(false); void myRequests().then(setRequests).catch(() => undefined); toast.flash("Thank you — your message has been sent to Veye"); }} />
     </>
   );
 }
+
+const MOOD_EMOJI: Record<string, string> = { happy: "😊", excited: "🤩", calm: "😌", neutral: "😐", tired: "😴", stressed: "😫", sad: "😔", angry: "😡" };
 
 /** Counts the badge up to its value once, exactly as the prototype does; the
  *  final one-decimal value is always written, instantly under reduced motion. */

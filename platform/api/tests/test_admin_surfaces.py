@@ -65,10 +65,12 @@ def test_knowledge_source_lifecycle_via_admin_api(admin_client):
 
 
 def test_members_cannot_reach_admin_knowledge_or_advanced_routes(client):
+    # A member-portal session is no admin session: the console answers 401
+    # (not signed in to the admin portal), never 403 with a hint of who they are.
     sign_up(client)
-    assert client.get("/api/v1/admin/companion/knowledge-sources").status_code == 403
-    assert client.get("/api/v1/admin/companion/advanced/provider-status").status_code == 403
-    assert client.get("/api/v1/admin/companion/settings").status_code == 403
+    assert client.get("/api/v1/admin/companion/knowledge-sources").status_code == 401
+    assert client.get("/api/v1/admin/companion/advanced/provider-status").status_code == 401
+    assert client.get("/api/v1/admin/companion/settings").status_code == 401
     client.cookies.clear()
     assert client.get("/api/v1/admin/companion/knowledge-sources").status_code == 401
 

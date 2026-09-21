@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { AuthFrame, FormError, PasswordField } from "@/components/auth/auth-frame";
 import { useSession } from "@/components/session";
-import { forgotPassword, homeFor, signIn } from "@/lib/auth-api";
+import { forgotPassword, safeNext, signIn } from "@/lib/auth-api";
 
 export default function LoginPage() {
   return (
@@ -41,13 +41,15 @@ function Login() {
     if (!email.trim() || !password) { setError("Enter your email address and password."); return; }
     setBusy(true);
     try {
+      // MEMBER portal: whoever signs in here gets the member experience.
+      // Administrator access on the account changes nothing; the admin
+      // console has its own door at /admin/login.
       const { account } = await signIn(email.trim(), password, remember);
       try {
         if (remember) localStorage.setItem("veye_last_email", account.email); else localStorage.removeItem("veye_last_email");
       } catch { /* storage unavailable */ }
       await session.refresh();
-      const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : homeFor(account);
-      router.replace(account.role === "admin" && destination.startsWith("/app") ? "/admin" : destination);
+      router.replace(safeNext(next, "member"));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That email address and password do not match.");
     } finally { setBusy(false); }
@@ -58,6 +60,7 @@ function Login() {
       <form className="auth__form" onSubmit={submit} noValidate>
         <h1 className="auth__title">My Account</h1>
         <p className="auth__subtitle">Nice to see you!</p>
+        {flash === "signed-out" && <p className="auth__notice">You are signed out of your Veye account.</p>}
         {flash === "reset" && <p className="auth__notice">Your password has been changed. Sign in with your new password.</p>}
         {flash === "verified" && <p className="auth__notice">Your email address is verified. Sign in to continue.</p>}
 

@@ -17,6 +17,7 @@ from app.core.config import Settings, settings
 from app.knowledge.object_store import KnowledgeObjectStore, build_object_store
 from app.notifications.email import EmailProvider, build_email_provider
 from app.observability.telemetry import DatabaseTraceExporter, TelemetryExporter, TelemetryRecorder
+from app.storage.object_storage import ObjectStorage, build_media_storage
 
 log = logging.getLogger("veye.runtime")
 
@@ -29,6 +30,7 @@ class Runtime:
     llm: LLMProvider
     embeddings: EmbeddingProvider
     object_store: KnowledgeObjectStore
+    media_store: ObjectStorage
     telemetry: TelemetryRecorder
     langfuse_status: str
 
@@ -46,7 +48,8 @@ def build_runtime(config: Settings | None = None) -> Runtime:
             "the production identity provider is a client decision."
         )
     auth_provider = DevelopmentSessionAuthProvider(
-        cookie_name=config.session_cookie_name, session_hours=config.session_hours, remember_days=config.session_remember_days,
+        cookie_names={"member": config.member_session_cookie_name, "admin": config.admin_session_cookie_name},
+        session_hours=config.session_hours, remember_days=config.session_remember_days,
     )
     email = build_email_provider(config.email_provider, host=config.smtp_host, port=config.smtp_port, sender=config.email_from)
     llm = build_llm_provider(config.llm_provider, groq_api_key=config.groq_api_key, groq_model=config.groq_model,
@@ -54,6 +57,7 @@ def build_runtime(config: Settings | None = None) -> Runtime:
     embeddings = build_embedding_provider(config.embedding_provider, dimensions=config.embedding_dimensions)
     object_store = build_object_store(config.knowledge_object_store, local_root=config.knowledge_object_root,
                                       s3_bucket=config.s3_knowledge_bucket)
+    media_store = build_media_storage(config.media_object_store, local_root=config.media_object_root)
 
     exporters: list[TelemetryExporter] = [DatabaseTraceExporter(SessionLocal)]
     langfuse_status = "disabled"
@@ -70,7 +74,7 @@ def build_runtime(config: Settings | None = None) -> Runtime:
     telemetry = TelemetryRecorder(exporters, pseudonym_key=config.telemetry_pseudonym_key, environment=config.environment,
                                   capture_content=config.ai_telemetry_capture_content)
     return Runtime(settings=config, auth_provider=auth_provider, email=email, llm=llm, embeddings=embeddings,
-                   object_store=object_store, telemetry=telemetry, langfuse_status=langfuse_status)
+                   object_store=object_store, media_store=media_store, telemetry=telemetry, langfuse_status=langfuse_status)
 
 
 def get_runtime() -> Runtime:

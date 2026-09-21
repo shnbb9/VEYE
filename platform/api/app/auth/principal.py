@@ -2,7 +2,14 @@
 
 Domain code never reads cookies, sessions or user rows directly. It receives a
 principal and uses `principal.member_id` for member data — never a client-
-supplied member identifier."""
+supplied member identifier.
+
+VEYE has two portals — the member application and the admin console — and one
+account system underneath. A principal always says which portal session it
+came from (`portal`), and a route asks for the portal it belongs to
+(`require_member` / `require_admin`). Access is two independent facts on the
+account (a member profile, administrator access), never a single role that
+decides where a sign-in lands."""
 
 from __future__ import annotations
 
@@ -18,6 +25,10 @@ from app.db.session import get_db
 ROLE_MEMBER = "member"
 ROLE_ADMIN = "admin"
 
+PORTAL_MEMBER = "member"
+PORTAL_ADMIN = "admin"
+PORTALS = (PORTAL_MEMBER, PORTAL_ADMIN)
+
 
 @dataclass(frozen=True)
 class CurrentPrincipal:
@@ -30,14 +41,18 @@ class CurrentPrincipal:
     email_verified: bool
     session_id: UUID | None
     is_synthetic: bool = False
+    admin_access: bool = False
+    portal: str | None = None
 
     @property
     def is_admin(self) -> bool:
-        return self.role == ROLE_ADMIN
+        """The account may use the admin console (an access fact, not a portal)."""
+        return self.admin_access
 
     @property
     def is_member(self) -> bool:
-        return self.role == ROLE_MEMBER and self.member_id is not None
+        """The account owns a member profile (an access fact, not a portal)."""
+        return self.member_id is not None
 
     @property
     def display_name(self) -> str:
@@ -45,13 +60,13 @@ class CurrentPrincipal:
 
 
 class AuthProvider(Protocol):
-    """How an HTTP request becomes a CurrentPrincipal. The development provider
-    resolves an opaque session cookie; a future production provider (for
-    example a Cognito JWT) implements the same method."""
+    """How an HTTP request becomes a CurrentPrincipal for ONE portal. The
+    development provider resolves that portal's opaque session cookie; a
+    future production provider implements the same method."""
 
     name: str
 
-    def authenticate(self, request: Request, db: Session) -> CurrentPrincipal | None: ...
+    def authenticate(self, request: Request, db: Session, portal: str) -> CurrentPrincipal | None: ...
 
 
 def _provider() -> AuthProvider:
@@ -60,23 +75,38 @@ def _provider() -> AuthProvider:
     return get_runtime().auth_provider
 
 
-def get_optional_principal(request: Request, db: Session = Depends(get_db)) -> CurrentPrincipal | None:
-    return _provider().authenticate(request, db)
+def get_member_principal(request: Request, db: Session = Depends(get_db)) -> CurrentPrincipal | None:
+    """The member-portal session on this request, if any."""
+    return _provider().authenticate(request, db, PORTAL_MEMBER)
 
 
-def get_current_principal(principal: CurrentPrincipal | None = Depends(get_optional_principal)) -> CurrentPrincipal:
+def get_admin_principal(request: Request, db: Session = Depends(get_db)) -> CurrentPrincipal | None:
+    """The admin-portal session on this request, if any."""
+    return _provider().authenticate(request, db, PORTAL_ADMIN)
+
+
+# The member portal is the ordinary application; routes that are not
+# portal-specific (notification preferences, resend verification) belong to it.
+get_optional_principal = get_member_principal
+
+
+def get_current_principal(principal: CurrentPrincipal | None = Depends(get_member_principal)) -> CurrentPrincipal:
     if principal is None:
         raise HTTPException(status_code=401, detail="Please sign in to continue.")
     return principal
 
 
-def require_member(principal: CurrentPrincipal = Depends(get_current_principal)) -> CurrentPrincipal:
+def require_member(principal: CurrentPrincipal | None = Depends(get_member_principal)) -> CurrentPrincipal:
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Please sign in to continue.")
     if not principal.is_member:
         raise HTTPException(status_code=403, detail="This area is for Veye members.")
     return principal
 
 
-def require_admin(principal: CurrentPrincipal = Depends(get_current_principal)) -> CurrentPrincipal:
+def require_admin(principal: CurrentPrincipal | None = Depends(get_admin_principal)) -> CurrentPrincipal:
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Please sign in to the admin console to continue.")
     if not principal.is_admin:
         raise HTTPException(status_code=403, detail="This area is for Veye administrators.")
     return principal

@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     # and opaque server-side sessions in an HttpOnly cookie. The production
     # provider (Cognito or another) is a client decision and is not wired.
     auth_provider: str = "development"
-    session_cookie_name: str = "veye_session"
+    # One HttpOnly session cookie per portal, so the member application and
+    # the admin console can be open in the same browser at the same time.
+    member_session_cookie_name: str = "veye_member_session"
+    admin_session_cookie_name: str = "veye_admin_session"
     session_cookie_secure: bool = False
     session_hours: int = 12
     session_remember_days: int = 30
@@ -50,6 +53,14 @@ class Settings(BaseSettings):
     knowledge_object_root: str = "var/knowledge-objects"
     s3_knowledge_bucket: str | None = None
     retrieval_limit: int = 4
+
+    # ---- member media (profile photos) -------------------------------------------
+    # ObjectStorage: "local" keeps bytes under var/ (a Docker volume locally);
+    # "gcs" names the probable production target but stays unconnected until
+    # the client's cloud project exists. Only the object key lives in PostgreSQL.
+    media_object_store: str = "local"
+    media_object_root: str = "var/media-objects"
+    profile_photo_max_bytes: int = 2_000_000
 
     # ---- observability -------------------------------------------------------------
     # Every trace is masked before it reaches any exporter. The database exporter

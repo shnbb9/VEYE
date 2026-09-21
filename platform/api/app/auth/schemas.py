@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
@@ -26,13 +26,31 @@ EmailAddress = Annotated[str, AfterValidator(_email)]
 class AccountOut(BaseModel):
     id: UUID
     email: str
+    # Primary kind for display. Authorization uses the two access facts below.
     role: str
     first_name: str
     last_name: str
     member_id: UUID | None
+    member_access: bool
+    admin_access: bool
+    # Which portal session produced this answer (member | admin); absent on
+    # answers that are not tied to a session (verify-email).
+    portal: str | None = None
     email_verified: bool
     is_synthetic: bool
     created_at: datetime
+    phone: str | None = None
+    postal_code: str | None = None
+    # Changes whenever the photo is replaced or removed; None = no photo (the
+    # UI shows the member's initial). The bytes come from /members/me/photo.
+    photo_version: str | None = None
+
+
+class ProfileUpdate(BaseModel):
+    first_name: str = Field(min_length=1, max_length=120)
+    last_name: str = Field(default="", max_length=120)
+    phone: str | None = Field(default=None, max_length=40)
+    postal_code: str | None = Field(default=None, max_length=20)
 
 
 class DeliveryOut(BaseModel):
@@ -74,8 +92,13 @@ class SessionResponse(BaseModel):
     account: AccountOut
 
 
-class OptionalSessionResponse(BaseModel):
-    account: AccountOut | None
+class PortalSessionsResponse(BaseModel):
+    """Both portals at once: the member application session and the admin
+    console session on this browser, either of which may be absent. A
+    dual-access person signed into both sees two accounts with the same id."""
+
+    member: AccountOut | None
+    admin: AccountOut | None
 
 
 class TokenRequest(BaseModel):
@@ -86,6 +109,8 @@ class TokenRequest(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: EmailAddress
+    # Which sign-in screen to return the person to afterwards; grants nothing.
+    portal: Literal["member", "admin"] = "member"
 
 
 class ForgotPasswordResponse(BaseModel):

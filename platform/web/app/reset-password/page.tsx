@@ -18,6 +18,9 @@ function ResetPassword() {
   const params = useSearchParams();
   const router = useRouter();
   const token = params.get("token") ?? "";
+  // The reset itself is identical for every account; `portal` only says
+  // which sign-in screen the person came from and returns to.
+  const signIn = params.get("portal") === "admin" ? "/admin/login" : "/login";
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -31,7 +34,7 @@ function ResetPassword() {
     setBusy(true);
     try {
       await resetPassword(token, password);
-      router.replace("/login?flash=reset");
+      router.replace(`${signIn}?flash=reset`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "This link is not valid.");
     } finally { setBusy(false); }
@@ -49,7 +52,7 @@ function ResetPassword() {
         </div>
         <FormError message={error} />
         <button type="submit" className="btn btn--primary btn--mt" disabled={busy || !token}>{busy ? "Saving…" : "Save new password"}</button>
-        <p className="auth__links"><Link href="/login">Back to sign in</Link></p>
+        <p className="auth__links"><Link href={signIn}>Back to sign in</Link></p>
       </form>
     </AuthFrame>
   );

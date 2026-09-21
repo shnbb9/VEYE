@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { Fragment, createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { MemberAvatar } from "@/components/member/member-avatar";
 import { MEMBER_NAV, activeNavKey, type NavKey } from "@/components/member/member-nav";
 import { NavIcon } from "@/components/member/nav-icons";
-import { RequireRole, useSession } from "@/components/session";
+import { RequirePortal, useSession } from "@/components/session";
 
 /* Member application chrome, ported from the approved consumer prototype
    (build/dashboard.html): the 22px green strip, the 208px white sidebar with
@@ -16,7 +17,10 @@ import { RequireRole, useSession } from "@/components/session";
 const MEMBER_FONTS =
   "https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Nunito+Sans:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&family=Kumbh+Sans:wght@200;300;400;500;600;700&family=Teachers:wght@400;500;600&display=swap";
 
-export function useToast() {
+type ToastApi = { message: string; flash: (message: string) => void };
+const ToastContext = createContext<ToastApi | null>(null);
+
+function useToastState(): ToastApi {
   const [message, setMessage] = useState("");
   useEffect(() => {
     if (!message) return;
@@ -24,6 +28,14 @@ export function useToast() {
     return () => clearTimeout(timer);
   }, [message]);
   return { message, flash: setMessage };
+}
+
+/** The frame's toast. Pages flash messages into the one toast the member
+ *  chrome renders; outside the chrome the hook falls back to local state. */
+export function useToast(): ToastApi {
+  const shared = useContext(ToastContext);
+  const local = useToastState();
+  return shared ?? local;
 }
 
 function Toast({ message }: { message: string }) {
@@ -46,9 +58,9 @@ function Toast({ message }: { message: string }) {
 
 export function MemberChrome({ children }: { children: ReactNode }) {
   return (
-    <RequireRole role="member" fallback={<SigningIn />}>
+    <RequirePortal portal="member" fallback={<SigningIn />}>
       <MemberFrame>{children}</MemberFrame>
-    </RequireRole>
+    </RequirePortal>
   );
 }
 
@@ -64,21 +76,18 @@ function SigningIn() {
 
 function MemberFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const active: NavKey | null = activeNavKey(pathname);
-  const toast = useToast();
+  const toast = useToastState();
   const session = useSession();
-  const initial = (session.account?.first_name?.[0] ?? "").toUpperCase();
 
   async function logOut() {
-    // Leave the protected tree first so the guard does not bounce to sign-in,
-    // then end the server session.
-    router.replace("/");
-    await session.signOut();
+    // End the MEMBER session on the server, then a full navigation to the
+    // site: the next page asks the API afresh, so the guard never races.
+    await session.signOut("member", "/");
   }
 
   return (
-    <>
+    <ToastContext.Provider value={toast}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link href={MEMBER_FONTS} rel="stylesheet" />
@@ -117,7 +126,7 @@ function MemberFrame({ children }: { children: ReactNode }) {
         <main className="main">
           <header className="topbar">
             <div className="topbar-actions">
-              <button className="icon-btn" aria-label="Notifications" type="button" onClick={() => toast.flash("No new notifications")}>
+              <button className="icon-btn" aria-label="Notifications" type="button" onClick={() => toast.flash("Notifications are not connected yet — nothing is waiting for you")}>
                 <NavIcon name="bell" />
                 <span className="badge-dot" />
               </button>
@@ -127,7 +136,9 @@ function MemberFrame({ children }: { children: ReactNode }) {
               <Link className="icon-btn" href="/app/settings" aria-label="Settings">
                 <NavIcon name="settings" />
               </Link>
-              <Link className="avatar avatar-button avatar--initial" href="/app/settings" aria-label="Open profile settings">{initial}</Link>
+              <Link className="avatar avatar-button avatar-link" href="/app/settings" aria-label="Open profile settings">
+                {session.member && <MemberAvatar account={session.member} className="avatar-face" size="small" testId="topbar-avatar" />}
+              </Link>
             </div>
           </header>
 
@@ -137,7 +148,7 @@ function MemberFrame({ children }: { children: ReactNode }) {
         </main>
       </div>
       <Toast message={toast.message} />
-    </>
+    </ToastContext.Provider>
   );
 }
 

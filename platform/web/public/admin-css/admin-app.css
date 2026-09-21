@@ -21,3 +21,7 @@
 .metric-row--wrap > * + * { border-left: 0; }
 .filelabel { display: inline-flex; align-items: center; gap: var(--s-2); }
 .filelabel input { max-width: 260px; }
+
+/* Member 360: the member's own profile photo, when one is uploaded. */
+.avatar--photo { overflow: hidden; padding: 0; }
+.avatar--photo img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }

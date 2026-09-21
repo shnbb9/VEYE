@@ -4,7 +4,14 @@ from sqlalchemy.orm import Session
 from app.assessments.repository import record_health_number_attempt
 from app.auth.dependencies import clear_session_cookie, get_auth_service, get_notification_service, set_session_cookie
 from app.auth.models import UserAccount
-from app.auth.principal import CurrentPrincipal, get_current_principal, get_optional_principal
+from app.auth.principal import (
+    PORTAL_ADMIN,
+    PORTAL_MEMBER,
+    CurrentPrincipal,
+    get_admin_principal,
+    get_current_principal,
+    get_member_principal,
+)
 from app.auth.schemas import (
     AccountOut,
     DeliveryOut,
@@ -13,7 +20,7 @@ from app.auth.schemas import (
     NotificationPreferencesOut,
     NotificationPreferenceUpdate,
     OkResponse,
-    OptionalSessionResponse,
+    PortalSessionsResponse,
     ResetPasswordRequest,
     SessionResponse,
     SignInRequest,
@@ -22,6 +29,7 @@ from app.auth.schemas import (
     TokenRequest,
 )
 from app.auth.service import AuthError, AuthService, SignUpInput
+from app.members.service import photo_version
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.notifications.service import NotificationService
@@ -29,11 +37,12 @@ from app.notifications.service import NotificationService
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-def account_out(user: UserAccount) -> AccountOut:
+def account_out(user: UserAccount, portal: str | None = None) -> AccountOut:
     return AccountOut(
         id=user.id, email=user.email, role=user.role, first_name=user.first_name, last_name=user.last_name,
-        member_id=user.member_id, email_verified=user.email_verified_at is not None, is_synthetic=user.is_synthetic,
-        created_at=user.created_at,
+        member_id=user.member_id, member_access=user.member_access, admin_access=user.admin_access, portal=portal,
+        email_verified=user.email_verified_at is not None, is_synthetic=user.is_synthetic, created_at=user.created_at,
+        phone=user.phone, postal_code=user.postal_code, photo_version=photo_version(user),
     )
 
 
@@ -63,8 +72,19 @@ def sign_up(
     db.commit()
     db.refresh(user)
     set_session_cookie(response, issued, runtime)
-    return SignUpResponse(account=account_out(user), deliveries=[DeliveryOut(**d.__dict__) for d in deliveries],
+    return SignUpResponse(account=account_out(user, PORTAL_MEMBER), deliveries=[DeliveryOut(**d.__dict__) for d in deliveries],
                           health_number_attempt_id=attempt_id)
+
+
+def _portal_sign_in(portal: str, payload: SignInRequest, response: Response, db: Session, auth: AuthService,
+                    runtime: Runtime) -> SessionResponse:
+    try:
+        user, issued = auth.sign_in(payload.email, payload.password, portal=portal, remember=payload.remember)
+    except AuthError as exc:
+        _raise(exc)
+    db.commit()
+    set_session_cookie(response, issued, runtime)
+    return SessionResponse(account=account_out(user, portal))
 
 
 @router.post("/sign-in", response_model=SessionResponse)
@@ -72,38 +92,67 @@ def sign_in(
     payload: SignInRequest, response: Response, db: Session = Depends(get_db),
     auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
 ) -> SessionResponse:
-    try:
-        user, issued = auth.sign_in(payload.email, payload.password, remember=payload.remember)
-    except AuthError as exc:
-        _raise(exc)
-    db.commit()
-    set_session_cookie(response, issued, runtime)
-    return SessionResponse(account=account_out(user))
+    """MEMBER portal sign-in (/login). The account must own a member profile;
+    administrator access neither helps nor redirects here."""
+    return _portal_sign_in(PORTAL_MEMBER, payload, response, db, auth, runtime)
+
+
+@router.post("/admin/sign-in", response_model=SessionResponse)
+def admin_sign_in(
+    payload: SignInRequest, response: Response, db: Session = Depends(get_db),
+    auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
+) -> SessionResponse:
+    """ADMIN portal sign-in (/admin/login). Same password check, then
+    administrator access is required. Issues the admin cookie only."""
+    return _portal_sign_in(PORTAL_ADMIN, payload, response, db, auth, runtime)
 
 
 @router.post("/sign-out", status_code=status.HTTP_204_NO_CONTENT)
 def sign_out(
-    response: Response, principal: CurrentPrincipal = Depends(get_current_principal), db: Session = Depends(get_db),
+    response: Response, principal: CurrentPrincipal | None = Depends(get_member_principal), db: Session = Depends(get_db),
     auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
 ) -> Response:
-    auth.sign_out(principal.session_id)
-    db.commit()
-    clear_session_cookie(response, runtime)
+    """Ends the MEMBER portal session only; an admin session in the same
+    browser stays signed in. Signing out when already out is not an error."""
+    if principal is not None:
+        auth.sign_out(principal.session_id)
+        db.commit()
+    clear_session_cookie(response, runtime, PORTAL_MEMBER)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
 
 
-@router.get("/me", response_model=OptionalSessionResponse)
-def me(principal: CurrentPrincipal | None = Depends(get_optional_principal), db: Session = Depends(get_db)) -> OptionalSessionResponse:
-    """Who is signed in. Anonymous is a normal answer (account: null), not an
-    error, so the browser's session check never logs a failed request."""
-    if principal is None:
-        return OptionalSessionResponse(account=None)
-    user = db.get(UserAccount, principal.user_id)
-    if user is None:
-        return OptionalSessionResponse(account=None)
+@router.post("/admin/sign-out", status_code=status.HTTP_204_NO_CONTENT)
+def admin_sign_out(
+    response: Response, principal: CurrentPrincipal | None = Depends(get_admin_principal), db: Session = Depends(get_db),
+    auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
+) -> Response:
+    """Ends the ADMIN portal session only; a member session stays signed in."""
+    if principal is not None:
+        auth.sign_out(principal.session_id)
+        db.commit()
+    clear_session_cookie(response, runtime, PORTAL_ADMIN)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
+
+
+@router.get("/me", response_model=PortalSessionsResponse)
+def me(
+    member_principal: CurrentPrincipal | None = Depends(get_member_principal),
+    admin_principal: CurrentPrincipal | None = Depends(get_admin_principal),
+    db: Session = Depends(get_db),
+) -> PortalSessionsResponse:
+    """Who is signed in, per portal. Anonymous is a normal answer (null), not
+    an error, so the browser's session check never logs a failed request."""
+    member = admin = None
+    if member_principal is not None:
+        user = db.get(UserAccount, member_principal.user_id)
+        member = account_out(user, PORTAL_MEMBER) if user is not None else None
+    if admin_principal is not None:
+        user = db.get(UserAccount, admin_principal.user_id)
+        admin = account_out(user, PORTAL_ADMIN) if user is not None else None
     db.commit()  # persists last_seen_at
-    return OptionalSessionResponse(account=account_out(user))
+    return PortalSessionsResponse(member=member, admin=admin)
 
 
 @router.post("/verify-email", response_model=SessionResponse)
@@ -136,7 +185,7 @@ def forgot_password(
     payload: ForgotPasswordRequest, db: Session = Depends(get_db), auth: AuthService = Depends(get_auth_service),
     runtime: Runtime = Depends(get_runtime),
 ) -> ForgotPasswordResponse:
-    delivery = auth.request_password_reset(payload.email)
+    delivery = auth.request_password_reset(payload.email, portal=payload.portal)
     db.commit()
     message = "If an account exists for that address, a password-reset link has been sent."
     exposed = None

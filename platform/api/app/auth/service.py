@@ -1,6 +1,12 @@
 """AuthService: sign-up, sign-in, sign-out, email verification and password
 reset on top of the development session provider and the notification
-foundation. Business rules live here; the HTTP layer only maps them."""
+foundation. Business rules live here; the HTTP layer only maps them.
+
+One service, two portals: `sign_in(..., portal=)` verifies the same password
+the same way and then requires the access that portal needs — a member
+profile for the member application, administrator access for the console.
+The portal the person chose decides where they land; the account's flags
+never redirect them."""
 
 from __future__ import annotations
 
@@ -12,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.models import AuthToken, UserAccount
 from app.auth.password import hash_password, needs_rehash, verify_password
-from app.auth.principal import ROLE_ADMIN, ROLE_MEMBER
+from app.auth.principal import PORTAL_ADMIN, PORTAL_MEMBER, PORTALS, ROLE_ADMIN, ROLE_MEMBER
 from app.auth.provider import DevelopmentSessionAuthProvider, IssuedSession, hash_token, new_token
 from app.core.config import Settings
 from app.members.models import Member
@@ -64,7 +70,7 @@ class AuthService:
         return self.db.query(UserAccount).filter(UserAccount.email == normalise_email(email)).one_or_none()
 
     def create_member_account(self, data: SignUpInput, *, synthetic: bool = False,
-                              email_verified: bool = False) -> UserAccount:
+                              email_verified: bool = False, admin_access: bool = False) -> UserAccount:
         email = normalise_email(data.email)
         if self.find_by_email(email) is not None:
             raise AuthError(409, "An account with this email address already exists. Try signing in instead.")
@@ -76,7 +82,7 @@ class AuthService:
             email=email, password_hash=hash_password(data.password), role=ROLE_MEMBER,
             first_name=data.first_name.strip(), last_name=data.last_name.strip(),
             phone=(data.phone or "").strip() or None, postal_code=(data.postal_code or "").strip() or None,
-            member_id=member.id, is_synthetic=synthetic,
+            member_id=member.id, is_synthetic=synthetic, admin_access=admin_access,
             email_verified_at=datetime.now(timezone.utc) if email_verified else None,
         )
         self.db.add(user)
@@ -90,7 +96,7 @@ class AuthService:
             raise AuthError(409, "An account with this email address already exists.")
         self._check_password(password)
         user = UserAccount(
-            email=email, password_hash=hash_password(password), role=ROLE_ADMIN,
+            email=email, password_hash=hash_password(password), role=ROLE_ADMIN, admin_access=True,
             first_name=first_name, last_name=last_name, member_id=None, is_synthetic=synthetic,
             email_verified_at=datetime.now(timezone.utc),
         )
@@ -98,20 +104,36 @@ class AuthService:
         self.db.flush()
         return user
 
+    def grant_admin_access(self, user: UserAccount) -> UserAccount:
+        """Administrator access is provisioned by the system, never self-served.
+        The account keeps its member profile: the same person may use both."""
+        user.admin_access = True
+        self.db.flush()
+        return user
+
     def sign_up(self, data: SignUpInput, *, remember: bool) -> tuple[UserAccount, IssuedSession, list[DeliveryStatus]]:
+        """Member sign-up only. It creates the identity and the member profile
+        and opens a MEMBER portal session; there is no admin self-registration."""
         user = self.create_member_account(data)
         deliveries = [self.send_verification(user), self.send_welcome(user)]
-        issued = self.provider.issue(self.db, user, remember=remember)
+        issued = self.provider.issue(self.db, user, portal=PORTAL_MEMBER, remember=remember)
         return user, issued, deliveries
 
-    def sign_in(self, email: str, password: str, *, remember: bool) -> tuple[UserAccount, IssuedSession]:
+    def sign_in(self, email: str, password: str, *, portal: str, remember: bool) -> tuple[UserAccount, IssuedSession]:
+        if portal not in PORTALS:
+            raise AuthError(400, "Unknown sign-in portal.")
         user = self.find_by_email(email)
         # Same failure for an unknown address and a wrong password.
         if user is None or not user.is_active or not verify_password(user.password_hash, password):
             raise AuthError(401, "That email address and password do not match.")
         if needs_rehash(user.password_hash):
             user.password_hash = hash_password(password)
-        issued = self.provider.issue(self.db, user, remember=remember)
+        # The password is right; now the portal's own access requirement.
+        if portal == PORTAL_MEMBER and not user.member_access:
+            raise AuthError(403, "This account does not have a Veye member profile. Administrators sign in through the admin console.")
+        if portal == PORTAL_ADMIN and not user.admin_access:
+            raise AuthError(403, "This account does not have administrator access to the Veye console.")
+        issued = self.provider.issue(self.db, user, portal=portal, remember=remember)
         return user, issued
 
     def sign_out(self, session_id: UUID | None) -> None:
@@ -138,14 +160,20 @@ class AuthService:
         return user
 
     # ---- password reset ---------------------------------------------------------------
-    def request_password_reset(self, email: str) -> DeliveryStatus | None:
+    def request_password_reset(self, email: str, *, portal: str = PORTAL_MEMBER) -> DeliveryStatus | None:
         """Always safe to call: returns None for an unknown address so the API
-        can answer identically either way."""
+        can answer identically either way. `portal` only decides which sign-in
+        screen the person is returned to afterwards — the token grants nothing
+        portal-specific and the reset itself is identical."""
+        if portal not in PORTALS:
+            portal = PORTAL_MEMBER
         user = self.find_by_email(email)
         if user is None or not user.is_active:
             return None
         raw = self._issue_token(user, PURPOSE_RESET, timedelta(minutes=self.settings.password_reset_minutes))
         link = f"{self.settings.web_base_url}/reset-password?token={raw}"
+        if portal == PORTAL_ADMIN:
+            link += "&portal=admin"
         rendered = templates.password_reset(user.first_name, link, self.settings.password_reset_minutes)
         return self._notify(user, "password_reset", rendered)
 

@@ -50,7 +50,20 @@ def sign_up(client: TestClient, *, email="aditya.demo@demo.veye.test", first_nam
 
 
 def sign_in(client: TestClient, email: str, password: str = MEMBER_PASSWORD, remember: bool = True):
+    """MEMBER portal sign-in."""
     return client.post("/api/v1/auth/sign-in", json={"email": email, "password": password, "remember": remember})
+
+
+def admin_sign_in(client: TestClient, email: str, password: str, remember: bool = True):
+    """ADMIN portal sign-in."""
+    return client.post("/api/v1/auth/admin/sign-in", json={"email": email, "password": password, "remember": remember})
+
+
+def me(client: TestClient) -> dict:
+    """Both portal sessions on this client: {"member": …|None, "admin": …|None}."""
+    response = client.get("/api/v1/auth/me")
+    assert response.status_code == 200, response.text
+    return response.json()
 
 
 @pytest.fixture
@@ -67,7 +80,7 @@ def admin_client():
 
     ensure_admin()
     with TestClient(app) as admin:
-        response = sign_in(admin, "cara.hogue@demo.veye.test", "CaraAdmin!2026-local")
+        response = admin_sign_in(admin, "cara.hogue@demo.veye.test", "CaraAdmin!2026-local")
         assert response.status_code == 200, response.text
         admin.account = response.json()["account"]
         yield admin

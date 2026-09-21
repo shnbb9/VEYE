@@ -46,7 +46,7 @@ function CompanionView() {
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();
-  const initial = (useSession().account?.first_name?.[0] ?? "").toUpperCase();
+  const initial = (useSession().member?.first_name?.[0] ?? "").toUpperCase();
   const [session, setSession] = useState<CompanionSession | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [input, setInput] = useState("");

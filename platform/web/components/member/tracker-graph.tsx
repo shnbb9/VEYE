@@ -1,6 +1,6 @@
 "use client";
 
-import type { BloodMarkersHistory, BodyCompositionHistory } from "@/lib/api";
+import type { BloodMarkersHistory, BodyCompositionHistory, HealthAssessmentHistory, SimpleQuizHistory } from "@/lib/api";
 
 /* Progress Trackers line graph (Cara, Progress Trackers Decision Tree ¶012–016):
    "a line graph of the ones used. Unused ones are at rest, and if none are used
@@ -10,7 +10,8 @@ import type { BloodMarkersHistory, BodyCompositionHistory } from "@/lib/api";
 
    Cara's spreadsheet key for the y-axis is not in the workspace, so each line
    uses a provisional per-tracker value (Blood Markers: markers in range; BMI:
-   the BMI value) scaled within its own band — flagged as a client clarification. */
+   the BMI value; Health Assessment: the 11–33 total; Simple Quiz: the number
+   of No answers) scaled within its own band — flagged as a client clarification. */
 
 export type TrackerKey = "blood_markers" | "body_composition" | "health_assessment" | "simple_quiz";
 type Point = { at: number; value: number; display: string };
@@ -19,7 +20,8 @@ type Series = { key: TrackerKey; label: string; color: string; points: Point[]; 
 const COLORS: Record<TrackerKey, string> = { blood_markers: "#D64545", body_composition: "#4FA64F", health_assessment: "#3B7DD8", simple_quiz: "#E8891D" };
 const W = 640, H = 200, PAD_X = 22, PAD_TOP = 18, PAD_BOTTOM = 26;
 
-export function buildSeries(blood: BloodMarkersHistory | null, body: BodyCompositionHistory | null): Series[] {
+export function buildSeries(blood: BloodMarkersHistory | null, body: BodyCompositionHistory | null,
+                            assessment: HealthAssessmentHistory | null = null, quiz: SimpleQuizHistory | null = null): Series[] {
   const bloodPoints: Point[] = (blood?.history ?? [])
     .map((item) => {
       const flags = Object.values(item.in_range ?? {}).filter((v) => v !== null) as boolean[];
@@ -31,16 +33,26 @@ export function buildSeries(blood: BloodMarkersHistory | null, body: BodyComposi
     .filter((item) => item.bmi !== null && item.bmi !== undefined)
     .map((item) => ({ at: Date.parse(item.completed_at), value: Number(item.bmi), display: `BMI ${Number(item.bmi).toFixed(1)}` }))
     .filter((p) => Number.isFinite(p.at)).sort((a, b) => a.at - b.at);
+  const assessmentPoints: Point[] = (assessment?.history ?? [])
+    .map((item) => ({ at: Date.parse(item.completed_at), value: item.total, display: `${item.total} / 33 · ${item.status}` }))
+    .filter((p) => Number.isFinite(p.at)).sort((a, b) => a.at - b.at);
+  const quizPoints: Point[] = (quiz?.history ?? [])
+    .map((item) => ({ at: Date.parse(item.completed_at), value: item.no_count, display: `${item.no_count} No / ${item.yes_count} Yes` }))
+    .filter((p) => Number.isFinite(p.at)).sort((a, b) => a.at - b.at);
+  const rest = (points: Point[]) => (points.length ? null : "at rest — no results yet");
   return [
-    { key: "blood_markers", label: "Blood Markers", color: COLORS.blood_markers, points: bloodPoints, rest: bloodPoints.length ? null : "at rest — no results yet" },
-    { key: "body_composition", label: "BMI", color: COLORS.body_composition, points: bodyPoints, rest: bodyPoints.length ? null : "at rest — no results yet" },
-    { key: "health_assessment", label: "Health Questionnaire", color: COLORS.health_assessment, points: [], rest: "at rest — not connected yet" },
-    { key: "simple_quiz", label: "Simple Quiz", color: COLORS.simple_quiz, points: [], rest: "at rest — not connected yet" },
+    { key: "blood_markers", label: "Blood Markers", color: COLORS.blood_markers, points: bloodPoints, rest: rest(bloodPoints) },
+    { key: "body_composition", label: "BMI", color: COLORS.body_composition, points: bodyPoints, rest: rest(bodyPoints) },
+    { key: "health_assessment", label: "Health Questionnaire", color: COLORS.health_assessment, points: assessmentPoints, rest: rest(assessmentPoints) },
+    { key: "simple_quiz", label: "Simple Quiz", color: COLORS.simple_quiz, points: quizPoints, rest: rest(quizPoints) },
   ];
 }
 
-export function TrackerGraph({ blood, body, compact = false }: { blood: BloodMarkersHistory | null; body: BodyCompositionHistory | null; compact?: boolean }) {
-  const series = buildSeries(blood, body);
+export function TrackerGraph({ blood, body, assessment = null, quiz = null, compact = false }: {
+  blood: BloodMarkersHistory | null; body: BodyCompositionHistory | null;
+  assessment?: HealthAssessmentHistory | null; quiz?: SimpleQuizHistory | null; compact?: boolean;
+}) {
+  const series = buildSeries(blood, body, assessment, quiz);
   const all = series.flatMap((s) => s.points);
   const anyUsed = all.length > 0;
   const minAt = all.length ? Math.min(...all.map((p) => p.at)) : 0;

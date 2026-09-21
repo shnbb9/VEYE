@@ -107,6 +107,26 @@
     padding: 8px 12px;
     margin-bottom: 18px; column-span: all; max-width: 520px;
   }
+  /* Sprout guided experiences (Cara's decision trees, 19 Sep 2026): the bar
+     above the conversation names the flow and its section; the dark chips are
+     the flow's own options; the offer chips are the first-arrival choice. */
+  .guided-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    margin: 0 18px 6px; padding: 8px 14px; background: #F7FAEE; border: 1px solid rgba(68,101,20,.14); border-radius: 12px;
+    font-family: 'Teachers', sans-serif; font-size: 13px; letter-spacing: .3px; color: #446514; }
+  .guided-bar[hidden] { display: none; }
+  .guided-bar__label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+  .guided-bar__dot { width: 8px; height: 8px; border-radius: 50%; background: #8DC412; flex: none; }
+  .guided-bar__actions { display: inline-flex; gap: 6px; }
+  .guided-bar__btn { border: 1px solid rgba(68,101,20,.35); background: #fff; color: #446514; border-radius: 999px; padding: 4px 12px;
+    font: 600 12px 'Teachers', sans-serif; letter-spacing: .4px; text-transform: uppercase; cursor: pointer; }
+  .guided-bar__btn:hover { background: #FFF7E9; }
+  .guided-bar__btn--quiet { border-color: transparent; color: var(--body-text-light); }
+  .quick-replies .qr-btn--guided { background: #446514; color: #fff; border-color: #446514; }
+  .quick-replies .qr-btn--guided:hover { background: #384C0C; color: #fff; }
+  .guided-choices[hidden], .guided-offer[hidden] { display: none; }
+  .progress-hero__guide { display: inline-block; margin-top: 10px; font-family: 'Teachers', sans-serif; font-size: 12.5px; letter-spacing: .6px;
+    text-transform: uppercase; color: #446514; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .progress-hero__guide:hover { color: #384C0C; }
   /* Fitness — Cara's supplied recommendations (17 Sep 2026): one program card
      and two video cards on the same 1027px shell as the library preview. */
   .fit-recs { width: 1027px; max-width: 100%; display: flex; flex-direction: column; gap: 22px; }
@@ -5944,16 +5964,24 @@
   .settings-card__head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:20px; }
   .settings-card h2 { margin:5px 0 0; color:#384C0C; font:400 23px/1.15 'Teachers',sans-serif; }
   .settings-card__mark { color:#B4C88E; font:500 12px/1 'Kumbh Sans',sans-serif; letter-spacing:1px; }
-  .settings-profile { display:grid; grid-template-columns:160px minmax(0,1fr); gap:30px; align-items:start; }
-  .settings-photo-wrap { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:10px; min-width:0;
-    padding:18px 16px; border-radius:16px; background:#F8FAF2; border:1px solid #E7EDD9; }
-  .settings-photo { width:112px; height:112px; flex:none; border:6px solid #fff; border-radius:50%;
+  /* Profile row: a compact photo column (image, then Change photo directly
+     beneath it) beside a two-column field grid. The photo sits on the first
+     field row; the row is one cohesive unit, nothing is absolutely positioned. */
+  .settings-profile { display:grid; grid-template-columns:148px minmax(0,1fr); column-gap:28px; align-items:start; }
+  .settings-photo-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; }
+  .settings-photo { width:112px; height:112px; flex:none; border:4px solid #fff; border-radius:50%;
     background:url('assets/web/img/avatar.png') center/cover no-repeat; background-color:#fff;
-    box-shadow:0 9px 22px rgba(56,76,12,.16); }
-  .settings-photo-btn { display:inline-flex; align-items:center; justify-content:center; min-height:38px; padding:0 14px;
-    border:1px solid #DDE6C8; border-radius:999px; background:#fff; color:#446514; font:600 14px 'Teachers',sans-serif; cursor:pointer; }
+    box-shadow:0 0 0 1px #E3EAD3, 0 9px 22px rgba(56,76,12,.14); }
+  .settings-photo-btn { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:0 16px;
+    border:1px solid #DDE6C8; border-radius:999px; background:#fff; color:#446514; font:600 14px 'Teachers',sans-serif; cursor:pointer; white-space:nowrap; }
+  .settings-photo-btn:hover { background:#F6F9EE; }
   .settings-photo-hint { margin:0; text-align:center; color:#7A8A66; font:13px/1.35 'Teachers',sans-serif; }
-  .settings-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; flex:1; }
+  /* No uploaded photo and not the sample persona: the circle carries the
+     member's initial, and the topbar avatar shows the same initial. */
+  .settings-photo--initial, .avatar--initial { display:flex; align-items:center; justify-content:center; background-image:none;
+    background-color:var(--olive-medium); color:#fff; font:600 44px 'Teachers',sans-serif; }
+  .avatar--initial { font-size:30px; }
+  .settings-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 18px; min-width:0; }
   .settings-fields label, .settings-select { display:flex; flex-direction:column; gap:7px; color:#5C7041; font:600 14px 'Teachers',sans-serif; }
   .settings-fields input, .settings-fields select, .settings-select select { box-sizing:border-box; min-height:48px; width:100%; padding:10px 14px; border:1px solid #DDE6C8; border-radius:10px; background:#FFFEFB; color:#384C0C; font:16px 'Teachers',sans-serif; }
   .settings-fields input:focus, .settings-fields select:focus, .settings-select select:focus { outline:2px solid rgba(141,196,18,.42); outline-offset:2px; }
@@ -6009,12 +6037,15 @@
   .assess-card-latest strong { font:700 25px/1 'Teachers',sans-serif; color:#384C0C; }
   .assess-card-latest span { margin-top:6px; font:500 11px/1.3 'Teachers',sans-serif; color:#71805E; }
   .assess-card-caption { grid-column:1/-1; margin:0; font:500 11.5px/1.4 'Teachers',sans-serif; color:#71805E; }
-  @media (max-width: 760px) {
+  /* Tablet: the settings cards stack and the profile photo sits centred
+     above its fields (still two columns); phones take one column below. */
+  @media (max-width: 880px) {
     .settings-grid, .settings-card--profile { grid-template-columns:1fr; grid-column:auto; }
-    .settings-profile { align-items:stretch; flex-direction:column; }
+    .settings-profile { grid-template-columns:minmax(0,1fr); row-gap:22px; }
+    .settings-photo-wrap { justify-self:center; }
+  }
+  @media (max-width: 760px) {
     .settings-fields { grid-template-columns:1fr; }
-    .settings-profile { grid-template-columns:1fr; }
-    .settings-photo-wrap { align-items:center; }
     .res-layout { grid-template-columns:minmax(0,1fr); }
     .res-grid { grid-template-columns:minmax(0,1fr); }
     .res-card { width:auto; min-height:0; }
@@ -6025,6 +6056,11 @@
     .assess-rows { padding-left:20px; padding-right:20px; }
     .assess-row { grid-template-columns:1fr; gap:9px; }
     .assess-row .info-i { justify-self:start; }
+  }
+  /* Phones: tighter card and field padding so a full email address fits. */
+  @media (max-width: 500px) {
+    .settings-card { padding:22px 18px; }
+    .settings-fields input, .settings-fields select, .settings-select select { padding:10px 12px; }
   }
 </style>
 </head>
@@ -6503,7 +6539,23 @@
               </button>
             </header>
 
+            <div class="guided-bar" id="guidedBar" role="status" aria-live="polite" hidden>
+              <span class="guided-bar__label"><span class="guided-bar__dot" aria-hidden="true"></span><span id="guidedBarText"></span></span>
+              <span class="guided-bar__actions" id="guidedBarActions"></span>
+            </div>
+
             <div class="chat-thread" id="chatThread"></div>
+
+            <!-- Guided-flow options: Cara's Yes/No (and other) choices as buttons;
+                 typed replies are interpreted deterministically, no AI. -->
+            <div class="quick-replies guided-choices" id="guidedChoices" hidden>
+              <span class="qr-label">Choose:</span>
+            </div>
+            <!-- First arrival (Cara): Guide me / Explore on my own; afterwards the
+                 two guided experiences remain one tap away. -->
+            <div class="quick-replies guided-offer" id="guidedOffer" hidden>
+              <span class="qr-label">Sprout can guide you:</span>
+            </div>
 
             <div class="quick-replies" id="quickReplies">
               <span class="qr-label">Try asking:</span>
@@ -6525,6 +6577,8 @@
                 <button type="button" role="menuitem" data-chat-shortcut="food-diary">Add a food diary entry</button>
                 <button type="button" role="menuitem" data-chat-shortcut="mood">Log today's mood</button>
                 <button type="button" role="menuitem" data-chat-shortcut="progress">View My Progress</button>
+                <button type="button" role="menuitem" data-guided-flow="progress_tracker_guide">Progress Tracker Guide</button>
+                <button type="button" role="menuitem" data-guided-flow="first_time_user">Introduction to Veye</button>
               </div>
               <input id="chatInput" type="text" autocomplete="off" placeholder="Ask Sprout anything&hellip;" maxlength="500"/>
               <button type="submit" class="chat-send" aria-label="Send message">
@@ -6550,6 +6604,7 @@
             <span class="mood-eyebrow">Your Journey</span>
             <h1>My Progress</h1>
             <p>Track your health across five modules. Re-take any time to see how far you've come.</p>
+            <button class="progress-hero__guide" type="button" id="progressGuideBtn">Let Sprout guide you through the trackers</button>
           </div>
         </header>
 
@@ -7852,6 +7907,8 @@
 <!-- Shared calculation engine: one implementation of every scored instrument,
      also used by the onboarding quiz. Must load before the dashboard script. -->
 <script src="js/veye-calculations.js?v=5"></script>
+<script src="js/veye-guided-flows-data.js?v=1"></script>
+<script src="js/veye-guided-flows.js?v=1"></script>
 <script>
   // The dashboard scrolls inside .main. Browsers can restore that nested scroll
   // position when a file:// prototype is reopened, clipping the welcome title.
@@ -7930,6 +7987,8 @@
     }
     if (viewKey === 'bot') {
       initBot();
+      // returning to Sprout: refresh the guided offer (resume / continue chips)
+      if (chatInitialized && typeof renderGuidedOffer === 'function') renderGuidedOffer();
     }
     if (viewKey === 'progress') {
       renderProgress();
@@ -8336,6 +8395,7 @@
       } else {
         addBotMessage("Welcome back &mdash; I'm Sprout, your Veye companion. What would you like to work on today?");
       }
+      renderGuidedOffer();
     }, 250);
   }
 
@@ -8469,6 +8529,8 @@
     if (open) chatAddMenu.querySelector('[role="menuitem"]')?.focus();
   });
   chatAddMenu?.addEventListener('click', e => {
+    const flowItem = e.target.closest('[data-guided-flow]');
+    if (flowItem) { closeChatAddMenu(false); guidedOpen(flowItem.dataset.guidedFlow, 'start'); return; }
     const item = e.target.closest('[data-chat-shortcut]');
     if (!item) return;
     closeChatAddMenu(false); goTo(item.dataset.chatShortcut);
@@ -8502,6 +8564,10 @@
     const qr = document.getElementById('quickReplies');
     if (qr && !qr.classList.contains('hidden')) qr.classList.add('hidden');
 
+    // A guided step is waiting: a question ("…?") is answered and the step is
+    // kept; anything else is the member's reply to the step.
+    if (guidedHandlesText(trimmed)) return;
+
     addUserMessage(trimmed);
     setMascotState('thinking');
     addTypingIndicator();
@@ -8530,8 +8596,151 @@
     chatInitialized = false;
     document.getElementById('quickReplies').classList.remove('hidden');
     setMascotState(null);
+    guidedClose();
     initBot();
   });
+
+  // ====================== SPROUT GUIDED EXPERIENCES ======================
+  // Cara's Intro Decision Tree and Progress Trackers Decision Tree, run by the
+  // deterministic prototype engine (js/veye-guided-flows.js). The Companion
+  // shows each step's line(s), the step's options as chips, and performs the
+  // navigation Sprout announces ("the Bot takes them there"). No AI.
+  const GUIDED_ROUTES = {
+    OPEN_DASHBOARD: () => goTo('dashboard'),
+    OPEN_PROGRESS: () => goTo('progress'),
+    OPEN_FOOD_CHOICES: () => goTo('food-choices'),
+    OPEN_MEAL_PLANNING: () => goTo('your-days'),
+    OPEN_COMPANION: () => goTo('bot'),
+  };
+  const GUIDED_TRACKERS = {
+    blood_markers: () => openSubView('blood', 'progress'),
+    body_composition: () => openSubView('bmi', 'progress'),
+    health_assessment: () => openSubView('assessment', 'progress'),
+    simple_quiz: () => openSubView('quiz-simple', 'progress'),
+  };
+  let guidedStep = null;   // the step the Companion is currently showing
+  let guidedTimer = null;
+
+  function guidedActive() { return !!(guidedStep && guidedStep.node && guidedStep.status === 'in_progress'); }
+
+  function guidedOpen(key, mode) {
+    goTo('bot');
+    const step = mode === 'restart' ? VeyeGuidedFlows.restart(key) : VeyeGuidedFlows.start(key);
+    document.getElementById('guidedOffer').hidden = true;
+    const qr = document.getElementById('quickReplies');
+    if (qr && !qr.classList.contains('hidden')) qr.classList.add('hidden');
+    guidedApply(step, { resumed: mode !== 'restart' && step.steps_taken > 0 });
+  }
+
+  function guidedApply(step, opts) {
+    opts = opts || {};
+    clearTimeout(guidedTimer);
+    guidedStep = step;
+    const lines = [];
+    if (opts.resumed && step.status === 'in_progress') lines.push('Welcome back \u2014 we left off here.');
+    step.messages.forEach(m => lines.push(m));
+    if (step.clarification) lines.push(step.clarification);
+    if (step.node && step.node.text) lines.push(step.node.text);
+    if (step.status === 'completed' && !step.node) lines.push('That is the end of this guide.');
+    lines.forEach((line, i) => setTimeout(() => addBotMessage(escapeHtml(line)), i * 350));
+    renderGuidedBar(step);
+    setTimeout(() => renderGuidedChoices(step), lines.length * 350);
+    // UI actions: the page performs the navigation Sprout announced.
+    const startFlow = step.actions.find(a => a.type === 'START_FLOW');
+    const nav = step.actions.find(a => a.type !== 'START_FLOW');
+    if (startFlow && startFlow.target) {
+      guidedTimer = setTimeout(() => guidedOpen(startFlow.target, 'start'), 900 + lines.length * 350);
+    } else if (nav) {
+      guidedTimer = setTimeout(() => {
+        if (nav.type === 'OPEN_TRACKER') (GUIDED_TRACKERS[nav.target] || (() => goTo('progress')))();
+        else if (GUIDED_ROUTES[nav.type]) GUIDED_ROUTES[nav.type]();
+      }, 1400 + lines.length * 350);
+    }
+  }
+
+  function renderGuidedBar(step) {
+    const bar = document.getElementById('guidedBar');
+    const text = document.getElementById('guidedBarText');
+    const actions = document.getElementById('guidedBarActions');
+    if (!step) { bar.hidden = true; return; }
+    bar.hidden = false;
+    const statusWord = step.status === 'paused' ? 'Paused' : step.status === 'completed' ? 'Complete' : step.status === 'skipped' ? 'Exploring on your own' : null;
+    text.textContent = step.flow_title + (step.section_title ? ' \u00b7 ' + step.section_title : '') + (statusWord ? ' \u00b7 ' + statusWord : '');
+    actions.innerHTML = '';
+    const btn = (label, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'guided-bar__btn' + (cls ? ' ' + cls : ''); b.textContent = label; b.addEventListener('click', fn); actions.appendChild(b); };
+    if (step.status === 'in_progress') btn('Pause', '', () => guidedApply(VeyeGuidedFlows.pause(step.flow_key)));
+    if (step.status === 'paused') btn('Resume', '', () => guidedOpen(step.flow_key, 'start'));
+    if (step.status === 'completed') btn('Start again', '', () => guidedOpen(step.flow_key, 'restart'));
+    btn('Close', 'guided-bar__btn--quiet', guidedClose);
+  }
+
+  function renderGuidedChoices(step) {
+    const wrap = document.getElementById('guidedChoices');
+    wrap.querySelectorAll('button').forEach(b => b.remove());
+    if (!step || !step.node || step.status === 'paused' || step.status === 'skipped') { wrap.hidden = true; return; }
+    const node = step.node;
+    const chip = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'qr-btn qr-btn--guided'; b.textContent = label; b.addEventListener('click', fn); wrap.appendChild(b); };
+    if (node.type === 'QUESTION') chip(node.answer_label || 'Continue', () => guidedChoose('', node.answer_label || 'Continue'));
+    else if (node.type === 'CHOICE' || node.type === 'AI_TASK') (node.choices || []).forEach(c => chip(c.label, () => guidedChoose(c.key, c.label)));
+    else if (node.type === 'COMPLETE') chip('Start again', () => guidedOpen(step.flow_key, 'restart'));
+    wrap.hidden = !wrap.querySelector('button');
+    document.getElementById('chatThread').scrollTop = document.getElementById('chatThread').scrollHeight;
+  }
+
+  function guidedChoose(key, label) {
+    if (!guidedStep) return;
+    addUserMessage(label);
+    const step = VeyeGuidedFlows.answer(guidedStep.flow_key, key ? { choice: key } : { text: label });
+    guidedApply(step);
+  }
+
+  /** Typed input while a step waits. Returns true when the guide consumed it. */
+  function guidedHandlesText(text) {
+    if (!guidedActive()) return false;
+    addUserMessage(text);
+    if (/\?\s*$/.test(text)) {
+      // an explanatory question mid-step: answered from the prototype's own
+      // Companion copy, then back to the same step
+      setMascotState('thinking'); addTypingIndicator();
+      const reply = botReplyFor(text);
+      const node = guidedStep.node;
+      setTimeout(() => { addBotMessage(reply); setTimeout(() => addBotMessage('Back to where we were: ' + escapeHtml(node && node.text || '')), 500); }, 700);
+      return true;
+    }
+    guidedApply(VeyeGuidedFlows.answer(guidedStep.flow_key, { text }));
+    return true;
+  }
+
+  function guidedClose() {
+    clearTimeout(guidedTimer);
+    guidedStep = null;
+    document.getElementById('guidedBar').hidden = true;
+    const wrap = document.getElementById('guidedChoices');
+    wrap.querySelectorAll('button').forEach(b => b.remove()); wrap.hidden = true;
+    renderGuidedOffer();
+  }
+
+  /** First arrival: Guide me / Explore on my own. Afterwards: the two guides. */
+  function renderGuidedOffer() {
+    const wrap = document.getElementById('guidedOffer');
+    if (!wrap || guidedActive()) return;
+    wrap.querySelectorAll('button').forEach(b => b.remove());
+    const ov = VeyeGuidedFlows.overview();
+    const chip = (label, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'qr-btn' + (cls ? ' ' + cls : ''); b.textContent = label; b.addEventListener('click', fn); wrap.appendChild(b); };
+    if (ov.first_arrival_offer) {
+      chip('Guide me', 'qr-btn--guided', () => guidedOpen('first_time_user', 'start'));
+      chip('Explore on my own', '', () => { const step = VeyeGuidedFlows.skip('first_time_user'); addBotMessage(escapeHtml(step.messages[0] || '')); renderGuidedOffer(); });
+    } else {
+      ov.flows.forEach(f => {
+        const label = f.key === 'first_time_user' ? 'Introduction to the Veye program' : f.title;
+        const s = f.session;
+        if (s && (s.status === 'in_progress' || s.status === 'paused')) chip((s.status === 'paused' ? 'Resume' : 'Continue') + ': ' + label, 'qr-btn--guided', () => guidedOpen(f.key, 'start'));
+        else if (s && s.status === 'completed') chip(label + ' again', 'qr-btn--guided', () => guidedOpen(f.key, 'restart'));
+        else chip(label, 'qr-btn--guided', () => guidedOpen(f.key, 'start'));
+      });
+    }
+    wrap.hidden = !wrap.querySelector('button');
+  }
 
   // ====================== HEALTH QUIZZES (Simple + 12-Q) ======================
 
@@ -9203,22 +9412,59 @@
     }
   }
 
+  // One profile identity for the whole page. The demo persona is Cara (sample
+  // photo); a remembered sign-in / sign-up (veye_user) replaces EVERY field
+  // together, so name, email, username, photo and the welcome heading always
+  // describe the same person — never a name from one record with another's
+  // email or picture. Local to this prototype: nothing is sent anywhere.
+  const DEMO_PERSONA = { name: 'Cara Hogue', email: 'cara@veye.co', username: 'cara.hogue' };
+  function profileIdentity() {
+    let user = {};
+    try { user = JSON.parse(localStorage.getItem('veye_user') || '{}') || {}; } catch (e) {}
+    let photo = '';
+    try { photo = localStorage.getItem('veye_profile_photo') || ''; } catch (e) {}
+    const email = String(user.email || '').trim();
+    const persona = !email || email.toLowerCase() === DEMO_PERSONA.email;
+    const name = String(user.name || (persona ? DEMO_PERSONA.name : '')).trim();
+    const username = String(user.username || (persona ? DEMO_PERSONA.username : (email.split('@')[0] || ''))).trim();
+    const firstName = String(user.firstName || name.split(' ')[0] || '').trim() || (persona ? 'Cara' : 'there');
+    return { persona, name, email: email || (persona ? DEMO_PERSONA.email : ''), username, firstName, photo,
+             initial: (firstName[0] || '?').toUpperCase() };
+  }
+  // The topbar avatar (account/menu control) and the Settings photo (the
+  // editable profile picture) show the same current picture: an uploaded
+  // photo, else the persona's sample photo, else the member's initial.
+  function applyProfileIdentity() {
+    const id = profileIdentity();
+    [['settingsPhotoPreview', 'settings-photo--initial'], ['topbarAvatarBtn', 'avatar--initial']].forEach(([elId, cls]) => {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      if (id.photo) { el.classList.remove(cls); el.style.backgroundImage = 'url("' + id.photo.replace(/"/g, '') + '")'; el.textContent = ''; }
+      else if (id.persona) { el.classList.remove(cls); el.style.backgroundImage = ''; el.textContent = ''; }
+      else { el.classList.add(cls); el.style.backgroundImage = 'none'; el.textContent = id.initial; }
+    });
+    const top = document.getElementById('topbarAvatarBtn');
+    if (top) top.title = id.firstName;
+    const preview = document.getElementById('settingsPhotoPreview');
+    if (preview) preview.setAttribute('aria-label', 'Current profile photo: ' + id.name);
+    const welcome = document.querySelector('.welcome h1');
+    if (welcome) welcome.textContent = 'Welcome back ' + id.firstName;
+  }
+  window.profileIdentity = profileIdentity;
+  window.applyProfileIdentity = applyProfileIdentity;
+
   // Settings are intentionally local to this HTML prototype: the profile and
   // preference controls behave like the eventual product, without pretending
   // to call an account service that is not present in the demo build.
   window.initSettings = function () {
-    let user = {};
-    try { user = JSON.parse(localStorage.getItem('veye_user') || '{}') || {}; } catch (e) {}
-    const photo = localStorage.getItem('veye_profile_photo') || '';
+    const id = profileIdentity();
     const name = document.getElementById('settingsName');
     const email = document.getElementById('settingsEmail');
     const username = document.getElementById('settingsUsername');
-    if (name && !name.value) name.value = user.name || 'Cara Hogue';
-    if (email && (!email.value || !String(user.email || '').includes('@'))) email.value = 'cara@veye.co';
-    if (username && !username.value) username.value = user.username || 'cara.hogue';
-    [document.getElementById('settingsPhotoPreview'), document.getElementById('topbarAvatarBtn')].forEach(el => {
-      if (el && photo) el.style.backgroundImage = 'url("' + photo.replace(/"/g, '') + '")';
-    });
+    if (name && !name.value) name.value = id.name;
+    if (email && !email.value) email.value = id.email;
+    if (username && !username.value) username.value = id.username;
+    applyProfileIdentity();
     let prefs = {};
     try { prefs = JSON.parse(localStorage.getItem('veye_settings') || '{}') || {}; } catch (e) {}
     ['EmailUpdates','TrackerReminders','CompanionCheckins'].forEach(k => {
@@ -9403,23 +9649,21 @@
   document.getElementById('topbarNotifBtn')?.addEventListener('click', () => flashToast('No new notifications'));
   document.getElementById('topbarSettingsBtn')?.addEventListener('click', () => goTo('settings'));
   document.getElementById('topbarAvatarBtn')?.addEventListener('click', () => goTo('settings'));
+  applyProfileIdentity();
 
   // Veye Companion card — Guided setup opens the Companion with a relevant
   // starter prompt. Cara has not supplied final Companion behaviour yet.
+  // Guided setup runs Cara's Intro Decision Tree in the Companion (19 Sep 2026).
   document.getElementById('botSuggestDinnerBtn')?.addEventListener('click', () => {
-    goTo('bot');
-    setTimeout(() => {
-      const input = document.getElementById('chatInput');
-      if (input) {
-        input.value = 'Please guide me through the best next steps for my Veye plan.';
-        input.focus();
-      }
-    }, 400);
+    guidedOpen('first_time_user', 'start');
   });
-  // Explore on my own keeps the requested dashboard composition intact.
+  // Explore on my own settles the first-arrival offer with Cara's own line and
+  // keeps the requested dashboard composition intact.
   document.getElementById('botNotNowBtn')?.addEventListener('click', () => {
-    flashToast('Explore the dashboard at your own pace.');
+    const step = VeyeGuidedFlows.skip('first_time_user');
+    flashToast(step.messages[0] || 'Explore the dashboard at your own pace.');
   });
+  document.getElementById('progressGuideBtn')?.addEventListener('click', () => guidedOpen('progress_tracker_guide', 'start'));
 
   // Help mini-card → Veye Companion
   // Help & FAQs mini-card → the FAQ page (help.html). Contact Us is a plain
@@ -11420,7 +11664,7 @@
     reader.onload = () => {
       const data = String(reader.result || '');
       localStorage.setItem('veye_profile_photo', data);
-      document.querySelectorAll('#settingsPhotoPreview,#topbarAvatarBtn').forEach(el => { el.style.backgroundImage = 'url("' + data.replace(/"/g, '') + '")'; });
+      applyProfileIdentity();
       flashToast('Profile photo updated');
     };
     reader.readAsDataURL(file);
@@ -11428,11 +11672,15 @@
   document.getElementById('settingsProfileSave')?.addEventListener('click', () => {
     let user = {};
     try { user = JSON.parse(localStorage.getItem('veye_user') || '{}') || {}; } catch (err) {}
-    user.name = document.getElementById('settingsName')?.value.trim() || 'Cara Hogue';
-    user.email = document.getElementById('settingsEmail')?.value.trim() || 'cara@veye.co';
-    user.username = document.getElementById('settingsUsername')?.value.trim() || 'cara.hogue';
+    const current = profileIdentity();
+    user.name = document.getElementById('settingsName')?.value.trim() || current.name;
+    user.email = document.getElementById('settingsEmail')?.value.trim() || current.email;
+    user.username = document.getElementById('settingsUsername')?.value.trim() || current.username;
+    const parts = user.name.split(/\s+/);
+    user.firstName = parts[0] || '';
+    user.lastName = parts.slice(1).join(' ');
     localStorage.setItem('veye_user', JSON.stringify(user));
-    document.querySelector('.welcome h1')?.replaceChildren(document.createTextNode('Welcome back ' + (user.name.split(' ')[0] || 'Cara')));
+    applyProfileIdentity();
     saveSettingsPrefs(false);
     flashToast('Profile and account preferences saved');
   });

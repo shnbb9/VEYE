@@ -6,20 +6,22 @@ import { useEffect, useState } from "react";
 import {
   getBloodMarkersHistory,
   getBodyCompositionHistory,
+  getHealthAssessmentHistory,
   getHealthNumberHistory,
+  getSimpleQuizHistory,
   type BloodMarkersHistory,
   type BodyCompositionHistory,
+  type HealthAssessmentHistory,
   type HealthNumberHistory,
+  type SimpleQuizHistory,
 } from "@/lib/api";
 import { displayHealthNumber, formatUpd } from "@/lib/member-format";
 import { ArrowCircle } from "@/components/member/nav-icons";
 
 /* The approved My Progress overview (build/dashboard.html, #view-progress):
    four module cards — Blood Test Markers, BMI Analysis, Health Assessment,
-   Simple Quiz — plus the reduced Health Number card. Health Number, Body
-   Composition and Blood Test Markers read the persisted API results; Health
-   Assessment and Simple Quiz have no production slice yet and stay honestly
-   "Not started" until they do. */
+   Simple Quiz — plus the reduced Health Number card. Every module reads its
+   own persisted API history; a module with nothing saved reads "Not started". */
 
 type Loaded<T> = { data: T | null; error: string };
 
@@ -27,8 +29,12 @@ export default function ProgressPage() {
   const [health, setHealth] = useState<Loaded<HealthNumberHistory>>({ data: null, error: "" });
   const [body, setBody] = useState<Loaded<BodyCompositionHistory>>({ data: null, error: "" });
   const [blood, setBlood] = useState<Loaded<BloodMarkersHistory>>({ data: null, error: "" });
+  const [assessment, setAssessment] = useState<Loaded<HealthAssessmentHistory>>({ data: null, error: "" });
+  const [quiz, setQuiz] = useState<Loaded<SimpleQuizHistory>>({ data: null, error: "" });
 
   useEffect(() => {
+    getHealthAssessmentHistory().then((data) => setAssessment({ data, error: "" })).catch((reason: Error) => setAssessment({ data: null, error: reason.message }));
+    getSimpleQuizHistory().then((data) => setQuiz({ data, error: "" })).catch((reason: Error) => setQuiz({ data: null, error: reason.message }));
     getHealthNumberHistory().then((data) => setHealth({ data, error: "" })).catch((reason: Error) => setHealth({ data: null, error: reason.message }));
     getBodyCompositionHistory().then((data) => setBody({ data, error: "" })).catch((reason: Error) => setBody({ data: null, error: reason.message }));
     getBloodMarkersHistory().then((data) => setBlood({ data, error: "" })).catch((reason: Error) => setBlood({ data: null, error: reason.message }));
@@ -36,6 +42,8 @@ export default function ProgressPage() {
 
   const bloodUpdated = blood.data?.latest?.completed_at;
   const bodyUpdated = body.data?.latest?.completed_at;
+  const assessmentUpdated = assessment.data?.latest?.completed_at;
+  const quizUpdated = quiz.data?.latest?.completed_at;
 
   return (
     // The prototype pulls My Progress up 20px by id (#view-progress); keep the id so that rule applies.
@@ -69,13 +77,18 @@ export default function ProgressPage() {
         <ProgressModule
           title="Health Assessment"
           desc="The Veye health assessment provides a comprehensive overview of your current health condition without testing."
+          updated={assessmentUpdated}
+          error={assessment.error}
           href="/app/progress/health-assessment"
-          viz={<AssessmentViz />}
+          viz={<AssessmentViz history={assessment.data} />}
         />
         <ProgressModule
           title="Simple Quiz"
           desc="Hate tests of any kind, and still want to know if you are making progress? This simple quiz will help you track your progress using only 8 yes or no questions."
+          updated={quizUpdated}
+          error={quiz.error}
           href="/app/progress/simple-quiz"
+          viz={<SimpleQuizViz history={quiz.data} />}
         />
         <HealthNumberCard state={health} />
       </div>
@@ -151,14 +164,29 @@ function BodyCompositionViz({ history }: { history: BodyCompositionHistory | nul
   );
 }
 
-/** Health Assessment has no production slice yet, so only its honest empty
- *  state (the prototype's own) is rendered. */
-function AssessmentViz() {
+/** The Health Assessment card: the last three totals as bars (lower is
+ *  better, 11–33) and the latest band; the prototype's own empty state until
+ *  the first assessment is saved. */
+function AssessmentViz({ history }: { history: HealthAssessmentHistory | null }) {
+  const latest = history?.latest ?? null;
+  const last = [...(history?.history ?? [])].reverse().slice(-3);
+  const bars = last.length ? last.map((item) => `${Math.max(12, Math.round((item.total / 33) * 100))}%`) : ["18%", "18%", "18%"];
   return (
     <div className="assess-card-viz">
-      <div className="assess-card-bars" aria-hidden="true"><i style={{ height: "18%" }} /><i style={{ height: "18%" }} /><i style={{ height: "18%" }} /></div>
-      <div className="assess-card-latest"><strong>—</strong><span>No result yet</span></div>
-      <p className="assess-card-caption">Complete the assessment to begin your dated progress report.</p>
+      <div className="assess-card-bars" aria-hidden="true">{bars.map((height, index) => <i key={index} style={{ height }} />)}</div>
+      <div className="assess-card-latest"><strong>{latest ? `${latest.total} / 33` : "—"}</strong><span>{latest ? latest.status : "No result yet"}</span></div>
+      <p className="assess-card-caption">{latest ? "Lower is better. Re-take any time to add a dated report." : "Complete the assessment to begin your dated progress report."}</p>
+    </div>
+  );
+}
+
+/** The Simple Quiz card: latest count; fewer Yes answers over time means improvement. */
+function SimpleQuizViz({ history }: { history: SimpleQuizHistory | null }) {
+  const latest = history?.latest ?? null;
+  return (
+    <div className="assess-card-viz">
+      <div className="assess-card-latest"><strong>{latest ? `${latest.no_count} No / ${latest.yes_count} Yes` : "—"}</strong><span>{latest ? `${history?.history.length ?? 0} entr${(history?.history.length ?? 0) === 1 ? "y" : "ies"}` : "No entry yet"}</span></div>
+      <p className="assess-card-caption">{latest ? latest.progress_note : "Best health is 8 “No” answers."}</p>
     </div>
   );
 }

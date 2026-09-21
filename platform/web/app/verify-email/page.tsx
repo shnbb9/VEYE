@@ -34,7 +34,7 @@ function VerifyEmail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const signedIn = session.status === "signed-in";
+  const signedIn = session.member !== null;
   return (
     <AuthFrame photo="login">
       <div className="auth__form">

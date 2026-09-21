@@ -628,10 +628,18 @@ group('J · Correction pass — consumer', () => {
       'the Guided setup action is missing');
     assert.ok(/id="botNotNowBtn"[^>]*>Explore on my own<\/button>/.test(HTML.dashboard),
       'the Explore on my own action is missing');
-    assert.ok(/input\.value = 'Please guide me through the best next steps for my Veye plan\.'/i.test(DASH_SCRIPT),
-      'Guided setup no longer seeds the Companion prompt');
-    assert.ok(/flashToast\('Explore the dashboard at your own pace\.'\)/.test(DASH_SCRIPT),
-      'Explore on my own no longer provides dashboard feedback');
+    // 19 Sep 2026 (Cara's decision-tree package): Guided setup starts the
+    // First-Time User guided flow in the Companion; Explore on my own settles
+    // the offer with Cara's own line from the Progress Trackers document.
+    assert.ok(/botSuggestDinnerBtn'\)\?\.addEventListener\('click', \(\) => \{\s*guidedOpen\('first_time_user', 'start'\);/.test(DASH_SCRIPT),
+      'Guided setup no longer starts the First-Time User guided flow');
+    assert.ok(/VeyeGuidedFlows\.skip\('first_time_user'\)/.test(DASH_SCRIPT),
+      'Explore on my own no longer records the member’s choice');
+    assert.ok(/id="guidedOffer"/.test(HTML.dashboard) && /id="guidedChoices"/.test(HTML.dashboard) && /id="guidedBar"/.test(HTML.dashboard),
+      'the Companion is missing the guided offer / choices / bar');
+    assert.ok(/src="js\/veye-guided-flows-data\.js\?v=\d+"/.test(HTML.dashboard) && /src="js\/veye-guided-flows\.js\?v=\d+"/.test(HTML.dashboard),
+      'the guided-flow engine and definitions are not loaded');
+    assert.ok(/id="progressGuideBtn"/.test(HTML.dashboard), 'My Progress has no Progress Tracker Guide entry');
   });
   check('fresh dashboard restores start at the top', () => {
     assert.ok(/history\.scrollRestoration = 'manual'/.test(DASH_SCRIPT), 'browser scroll restoration is still automatic');
@@ -1215,8 +1223,25 @@ group('P · Client presentation finish', () => {
   check('Profile layout and useful account controls are functional', () => {
     ['settingsUnits', 'settingsTimezone', 'settingsDownloadBtn'].forEach(id =>
       assert.ok(HTML.dashboard.includes('id="' + id + '"'), 'missing settings control: ' + id));
-    assert.ok(/\.settings-profile \{[^}]*grid-template-columns:\s*160px minmax\(0,1fr\)/.test(DASH_STYLE),
+    // 21 Sep 2026 profile fidelity fix: a compact photo column beside a
+    // two-column field grid, photo on the first field row, Change photo
+    // directly beneath the image, and one identity record for every field.
+    assert.ok(/\.settings-profile \{[^}]*grid-template-columns:\s*148px minmax\(0,1fr\)/.test(DASH_STYLE),
       'profile photo and fields are no longer held in the aligned grid');
+    assert.ok(/\.settings-fields \{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\)/.test(DASH_STYLE),
+      'profile fields must sit in a two-column desktop grid');
+    assert.ok(/\.settings-photo \{[^}]*width:112px; height:112px/.test(DASH_STYLE),
+      'the profile photo must stay a 112px circle');
+    assert.ok(!/position:\s*absolute/.test((DASH_STYLE.match(/\.settings-(profile|photo)[^{]*\{[^}]*\}/g) || []).join('')),
+      'the profile row must not use absolute positioning');
+    assert.ok(/<div class="settings-photo-wrap"><div class="settings-photo" id="settingsPhotoPreview"[^>]*><\/div><label class="settings-photo-btn"/.test(HTML.dashboard),
+      'Change photo must sit directly below the profile image');
+    assert.ok(/function profileIdentity\(\)/.test(DASH_SCRIPT) && /function applyProfileIdentity\(\)/.test(DASH_SCRIPT),
+      'Settings, both avatars and the welcome heading must share one profile identity');
+    assert.ok(!/email\.value = 'cara@veye\.co'/.test(DASH_SCRIPT),
+      'the Settings email must come from the same record as the name, never a fixed persona value');
+    assert.ok(/if \(email && !email\.value\) email\.value = id\.email;/.test(DASH_SCRIPT),
+      'the Settings email must be filled from profileIdentity()');
     assert.ok(/new Blob\(\[JSON\.stringify\(payload/.test(DASH_SCRIPT),
       'demo-data download is not wired');
     assert.ok(/prefs\.units/.test(DASH_SCRIPT) && /prefs\.timezone/.test(DASH_SCRIPT),

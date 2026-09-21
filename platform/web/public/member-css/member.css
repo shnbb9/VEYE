@@ -48,23 +48,58 @@ a.module-cta--ghost { color: #446514; }
 /* Log out is a real action (it ends the API session), so it is a <button>
    wearing the prototype's .nav-link box. */
 button.nav-link { width: 100%; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
-/* The topbar avatar shows the signed-in member's initial instead of the
-   prototype's sample photograph. */
-.avatar--initial {
-  display: flex; align-items: center; justify-content: center;
-  background-image: none; background-color: var(--olive-medium); color: #fff;
-  font-family: 'Teachers', sans-serif; font-size: 30px; font-weight: 600; text-decoration: none;
-}
+/* The topbar avatar is one control wearing the member's own face: the
+   uploaded photo when there is one, else the initial (.avatar--initial lives
+   in dashboard.css). The Settings photo uses the same component. */
+a.avatar-link { text-decoration: none; background-image: none; background-color: transparent; overflow: hidden; }
+.avatar-face { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.avatar-face.avatar--initial { position: absolute; inset: 0; width: auto; height: auto; }
+.member-avatar--photo { overflow: hidden; background-image: none; background-color: #E4E8DC; }
+.member-avatar--photo img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+.settings-photo.member-avatar--photo { display: block; }
+.settings-photo-remove { border: 0; background: transparent; color: #7A8A66; font: 600 13px 'Teachers', sans-serif; cursor: pointer; text-decoration: underline; }
+.settings-photo-remove:hover { color: #446514; }
+.settings-fields label small { font-weight: 400; color: #7A8A66; }
+.settings-fields input:not([readonly]) { background: #fff; }
+.settings-profile-actions--form { display: flex; align-items: center; justify-content: space-between; gap: 18px; grid-column: 1 / -1; margin-top: 6px; }
+.settings-profile-actions--form .settings-help { margin: 0; flex: 1; }
+.settings-profile-actions--form .settings-save { margin-top: 0; flex: none; }
+.settings-note--error { background: #FBEDEA; color: #8A2E26; }
+@media (max-width: 880px) { .settings-profile-actions--form { flex-direction: column; align-items: stretch; } .settings-profile-actions--form .settings-save { width: 100%; } }
 
 /* ---- Settings: account-service states ------------------------------------ */
-.settings-photo--initial { display:flex; align-items:center; justify-content:center; background-image:none; background-color:var(--olive-medium);
-  color:#fff; font:600 44px 'Teachers',sans-serif; }
+/* The profile photo, name, email, status and tenure all come from the one
+   member-portal account; until photo upload exists the circle carries that
+   member's initial (the topbar avatar shows the same initial). */
 .settings-fields input[readonly] { color:#5C7041; background:#F7F5EE; }
+.settings-card--profile .settings-profile-actions { justify-content:flex-start; }
+.settings-card--profile .settings-profile-actions .settings-help { margin-bottom:0; }
 .settings-toggle.is-unavailable { opacity:.62; }
 .settings-toggle.is-unavailable input:disabled + i { cursor:not-allowed; }
 a.settings-outline { text-decoration:none; box-sizing:border-box; }
 .settings-note { margin-top:12px; padding:10px 12px; border-radius:10px; background:#FFF7E9; color:#446514; }
 .settings-save:disabled, .settings-outline:disabled { opacity:.6; cursor:progress; }
+
+/* ---- Dashboard: real member state on the approved cards ---------------------- */
+.beta-card__actions { margin-top: 12px; }
+.beta-card__btn { border: 0; border-radius: 999px; min-height: 40px; padding: 8px 18px; background: #446514; color: #fff;
+  font: 600 14px 'Teachers', sans-serif; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
+.beta-card__btn:hover { transform: translateY(-1px); box-shadow: 0 7px 16px rgba(56,76,12,.16); }
+.beta-card__btn:disabled { opacity: .6; cursor: progress; }
+.beta-card__status { margin: 0; font: 600 13.5px 'Teachers', sans-serif; color: #446514; }
+.tip-muted { color: var(--body-text-light); }
+button.mini-card { border: 0; font: inherit; text-align: center; cursor: pointer; color: inherit; }
+button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
+.contact-card { text-align: left; }
+.contact-label { display: block; margin: 12px 0 6px; color: #5C7041; font: 600 14px 'Teachers', sans-serif; }
+.contact-label small { font-weight: 400; color: #7A8A66; }
+.contact-card .fdx-input { box-sizing: border-box; width: 100%; }
+.contact-card .modal-sub a { color: #446514; }
+
+/* ---- Food Diary: persisted entries (no prototype macro placeholders) -------- */
+.fdx-form-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.fdx-form-actions .btn-ghost.fdx-add { margin-top: 20px; }
+.fdx-date-arrow:disabled { opacity: .4; cursor: default; }
 
 /* ---- Companion: states the static prototype could not have ---------------- */
 .msg-note { margin: 6px 0 0; font-family: 'Nunito Sans', sans-serif; font-size: 11.5px; color: var(--body-text-light); font-style: italic; }

@@ -160,7 +160,10 @@ class TestDefinitions:
             user = db.query(UserAccount).filter(UserAccount.email == account["email"]).one()
             snapshot = MemberStateService(db).snapshot(user.member_id)
         assert set(snapshot) == set(MEMBER_STATES)
-        assert snapshot["has_blood_markers"] is False and snapshot["health_assessment_available"] is False
+        assert snapshot["has_blood_markers"] is False and snapshot["has_health_assessment"] is False
+        # Connected trackers (19 Sep 2026): the guide opens them for real.
+        assert snapshot["health_assessment_available"] is True and snapshot["simple_quiz_available"] is True
+        assert snapshot["food_choices_available"] is False  # still no production slice
 
     def test_interpreter_is_deterministic_and_never_invents(self):
         yes_no = FIRST["nodes"]["b2"]["choices"]
@@ -392,7 +395,7 @@ class TestFirstTimeFlow:
 
 # =============================================================== progress tracker guide (API)
 class TestProgressGuide:
-    def test_labs_yes_walks_the_full_chain_with_navigation_and_honest_unavailable_trackers(self, member):
+    def test_labs_yes_walks_the_full_chain_with_navigation_to_every_connected_tracker(self, member):
         step = start(member, PG)
         assert node_id(step) == "labs_q" and step["section_title"] == "Blood Test Markers"
         step = answer(member, PG, choice="yes")
@@ -405,11 +408,11 @@ class TestProgressGuide:
         step = answer(member, PG, choice="yes")
         assert node_id(step) == "hsr_q" and step["node"]["text"] == "Would you like to fill in the Health Status Report?"
         step = answer(member, PG, choice="yes")
-        # the Health Assessment is not connected yet: honest message, no navigation, chain continues
-        assert step["actions"] == [] and "not connected in the Veye application yet" in step["messages"][0]
-        assert node_id(step) == "sq_after_hsr"
+        # the Health Assessment is a real tracker now: Sprout opens it and the chain continues
+        assert step["actions"] == [{"type": "OPEN_TRACKER", "target": "health_assessment"}]
+        assert node_id(step) == "sq_after_hsr" and "open the Health Status Report" in step["messages"][0]
         step = answer(member, PG, choice="yes")
-        assert "Simple Quiz is not connected" in step["messages"][0] and node_id(step) == "food_choices_q"
+        assert step["actions"] == [{"type": "OPEN_TRACKER", "target": "simple_quiz"}] and node_id(step) == "food_choices_q"
         step = answer(member, PG, choice="yes")
         assert step["actions"] == [{"type": "OPEN_FOOD_CHOICES", "target": None}]
         assert step["status"] == "completed" and step["node"]["type"] == "COMPLETE"
@@ -429,14 +432,14 @@ class TestProgressGuide:
 
     def test_hsr_yes_after_bmi_no_and_quiz_suggest_yes(self, member):
         start(member, PG); answer(member, PG, choice="no"); answer(member, PG, choice="no")
-        step = answer(member, PG, choice="yes")  # HSR yes -> unavailable message -> quiz question
-        assert node_id(step) == "sq_after_hsr" and step["messages"]
+        step = answer(member, PG, choice="yes")  # HSR yes -> opens the tracker -> quiz question
+        assert node_id(step) == "sq_after_hsr" and step["actions"] == [{"type": "OPEN_TRACKER", "target": "health_assessment"}]
         step = answer(member, PG, choice="no")
         assert node_id(step) == "food_choices_q"
         # quiz suggestion yes
         member.post(f"{PG}/restart"); answer(member, PG, choice="no"); answer(member, PG, choice="no"); answer(member, PG, choice="no")
         step = answer(member, PG, choice="yes")
-        assert node_id(step) == "food_choices_q" and "Simple Quiz is not connected" in step["messages"][0]
+        assert node_id(step) == "food_choices_q" and step["actions"] == [{"type": "OPEN_TRACKER", "target": "simple_quiz"}]
         # food choices offer yes -> navigation + complete
         member.post(f"{PG}/restart")
         for _ in range(4):
@@ -551,7 +554,8 @@ class TestAdmin:
         detail = admin_client.get(f"/api/v1/admin/companion/guided-flows/{version['id']}").json()
         assert detail["validation"] == "valid" and detail["definition"]["nodes"]["intro"]["type"] == "CHOICE"
         assert {"from_node": "intro", "via": "why_to", "to_node": "b1"} in detail["edges"]
-        assert member.get("/api/v1/admin/companion/guided-flows").status_code == 403
+        # a member-portal session carries no admin session at all
+        assert member.get("/api/v1/admin/companion/guided-flows").status_code == 401
         assert admin_client.post(f"/api/v1/admin/companion/guided-flows/{version['id']}/activate").status_code == 200  # already active: idempotent
 
 

@@ -25,10 +25,53 @@ function href(value: string) {
     .replaceAll("signup.html", "/signup");
 }
 
-function sourceMarkup(page: PublicPage) {
+/* The Help FAQ is editable in the console (Content → Help / FAQ). The page
+   renders the PUBLISHED entries; if the API is unreachable at render time it
+   falls back to the approved static list so the page never goes blank. */
+const FAQ_CATEGORY_KEYS: Record<string, string> = {
+  "About Veye": "about", "Subscription and My Account": "subscription", "Diet and Nutrition Terminology": "diet",
+  "Using the Platform": "platform", "Technical Issues": "technical",
+};
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+
+async function publishedFaq(): Promise<{ key: string; category: string | null; title: string; body: string }[] | null> {
+  const base = (process.env.VEYE_INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
+  if (!base) return null;
+  try {
+    const response = await fetch(`${base}/api/v1/content/help_faq`, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+    if (!response.ok) return null;
+    return (await response.json()) as { key: string; category: string | null; title: string; body: string }[];
+  } catch {
+    return null;
+  }
+}
+
+function faqMarkup(entries: { key: string; category: string | null; title: string; body: string }[]): string {
+  const columns: string[][] = [[], []];
+  entries.forEach((entry, index) => {
+    const cat = FAQ_CATEGORY_KEYS[entry.category ?? ""] ?? "about";
+    columns[index % 2].push(`<div class="faq__item" data-cat="${cat}" data-key="${escapeHtml(entry.key)}"><h4 class="faq__q">${escapeHtml(entry.title)}</h4><p class="faq__a">${escapeHtml(entry.body)}</p></div>`);
+  });
+  return `<div class="faq" data-source="published">${columns.map((items) => `<div class="faq__col">${items.join("")}</div>`).join("")}</div>`;
+}
+
+const ASK_ROW = `<div class="help-ask__row"><input class="help-ask__input" id="helpAskInput" type="text" placeholder="Type your question&hellip;" autocomplete="off"><input class="help-ask__input help-ask__email" id="helpAskEmail" type="email" placeholder="Your email (optional, so we can reply)" autocomplete="email"><button type="button" class="help-ask__submit" id="helpAskSubmit">Submit</button></div>`;
+
+async function sourceMarkup(page: PublicPage) {
   const file = path.join(process.cwd(), "content", "public", sourceFile[page]);
   const raw = fs.readFileSync(file, "utf8");
-  const body = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? "";
+  let body = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? "";
+  if (page === "help") {
+    const entries = await publishedFaq();
+    if (entries && entries.length) {
+      // The static block runs from <div class="faq"> to the empty-state paragraph that follows it.
+      const start = body.indexOf('<div class="faq">');
+      const end = body.indexOf('<p class="faq__empty"', start);
+      if (start !== -1 && end !== -1) body = `${body.slice(0, start)}${faqMarkup(entries)}
+    ${body.slice(end)}`;
+    }
+    body = body.replace(/<div class="help-ask__row">[\s\S]*?<\/div>/i, ASK_ROW);
+  }
   // A page may carry its own <style> block in <head> (privacy.html styles its
   // typographic title there); keep it with the page markup.
   const headStyles = (raw.match(/<head[^>]*>([\s\S]*?)<\/head>/i)?.[1] ?? "").match(/<style[\s\S]*?<\/style>/gi)?.join("\n") ?? "";
@@ -55,7 +98,8 @@ function PublicFooter() {
   </div><hr className="footer__divider" /><p className="footer__copy">©2024 Veye LLC. All rights reserved. <Link href="/terms">Terms</Link>. <Link href="/privacy">Privacy</Link>.<br />This website is for informational purpose and should not be used as medical advice.</p></div></footer>;
 }
 
-export function PublicSourcePage({ page }: { page: PublicPage }) {
+export async function PublicSourcePage({ page }: { page: PublicPage }) {
+  const markup = await sourceMarkup(page);
   // `site` is the prototype's own body class; its scoped rules (.site a.btn--…) must still apply.
   return <div className="public-site site">
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -65,7 +109,7 @@ export function PublicSourcePage({ page }: { page: PublicPage }) {
     {page !== "home" && <link rel="stylesheet" href="/marketing-css/pages.css" />}
     {page === "why" && <link rel="stylesheet" href="/marketing-css/why.css" />}
     <PublicHeader active={page} />
-    <div dangerouslySetInnerHTML={{ __html: sourceMarkup(page) }} />
+    <div dangerouslySetInnerHTML={{ __html: markup }} />
     <PublicFooter />
     <PublicInteractions />
   </div>;

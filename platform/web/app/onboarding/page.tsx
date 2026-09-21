@@ -54,7 +54,7 @@ export default function Onboarding() {
     // stored by the API straight away; a visitor sees the approved email gate
     // first, and the number is calculated (not stored) by the same service -
     // it is attached to the account at sign-up.
-    const signedInMember = session.status === "signed-in" && session.account?.role === "member";
+    const signedInMember = session.status === "ready" && session.member !== null;
     if (!signedInMember) { setGateOpen(true); return; }
     await calculate(true);
   }
