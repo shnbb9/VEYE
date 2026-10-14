@@ -35,12 +35,23 @@ services:
       VEYE_DATABASE_URL: ${VEYE_DATABASE_URL}
       VEYE_CORS_ORIGINS: ${VEYE_CORS_ORIGINS}
       VEYE_WEB_BASE_URL: ${VEYE_WEB_BASE_URL}
-      # Development email: plain SMTP to the optional Mailpit service. When the
-      # `mail` profile is not running, deliveries are recorded as failed —
-      # never faked.
-      VEYE_EMAIL_PROVIDER: local-smtp
-      VEYE_SMTP_HOST: mail
-      VEYE_SMTP_PORT: "1025"
+      # Email. The defaults are the development mailbox: plain SMTP to the
+      # optional Mailpit service (when the `mail` profile is not running,
+      # deliveries are recorded as failed — never faked). To send through a
+      # real relay, set these names in the ignored env file — never here:
+      #   VEYE_EMAIL_PROVIDER=smtp
+      #   VEYE_SMTP_HOST, VEYE_SMTP_PORT (587 STARTTLS / 465 implicit TLS)
+      #   VEYE_SMTP_TLS_MODE (auto | starttls | ssl), VEYE_SMTP_TIMEOUT_SECONDS
+      #   VEYE_SMTP_USERNAME, VEYE_SMTP_PASSWORD, VEYE_EMAIL_FROM
+      # An empty value falls back to the default below.
+      VEYE_EMAIL_PROVIDER: ${VEYE_EMAIL_PROVIDER:-local-smtp}
+      VEYE_SMTP_HOST: ${VEYE_SMTP_HOST:-mail}
+      VEYE_SMTP_PORT: ${VEYE_SMTP_PORT:-1025}
+      VEYE_SMTP_TLS_MODE: ${VEYE_SMTP_TLS_MODE:-auto}
+      VEYE_SMTP_TIMEOUT_SECONDS: ${VEYE_SMTP_TIMEOUT_SECONDS:-10}
+      VEYE_SMTP_USERNAME: ${VEYE_SMTP_USERNAME:-}
+      VEYE_SMTP_PASSWORD: ${VEYE_SMTP_PASSWORD:-}
+      VEYE_EMAIL_FROM: "${VEYE_EMAIL_FROM:-Veye <no-reply@veye.local>}"
       # Companion providers. Defaults are the offline mock and deterministic
       # local embeddings; a Groq development key is only ever read from the
       # ignored env file, never from this compose file.
