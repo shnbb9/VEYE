@@ -26,6 +26,8 @@ test = [
   "aiosmtpd>=1.4,<2",
   "httpx>=0.28,<1",
   "pytest>=8.4,<10",
+  # Throwaway in-memory CA/certificates for the STARTTLS SMTP tests.
+  "trustme>=1.1,<2",
 ]
 
 [tool.pytest.ini_options]
