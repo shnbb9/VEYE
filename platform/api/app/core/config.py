@@ -1,3 +1,4 @@
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,11 +32,20 @@ class Settings(BaseSettings):
 
     # ---- email -----------------------------------------------------------------
     # "local-smtp" delivers to a plain SMTP endpoint (Mailpit in the optional
-    # Compose profile); "memory" keeps messages in-process (tests); "none"
-    # records every message as undeliverable instead of pretending it was sent.
+    # Compose profile); "smtp" is the authenticated, TLS-protected provider for
+    # a real relay (e.g. Google Workspace); "memory" keeps messages in-process
+    # (tests); "none" records every message as undeliverable instead of
+    # pretending it was sent. Production refuses everything except "smtp".
     email_provider: str = "local-smtp"
     smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
+    # "auto" means implicit TLS on 465 and STARTTLS on any other port; "none" is
+    # refused in production and never allowed together with credentials.
+    smtp_tls_mode: str = "auto"
+    smtp_username: str | None = None
+    # Only ever read from the environment; masked in repr, never logged.
+    smtp_password: SecretStr | None = None
+    smtp_timeout_seconds: float = 10.0
     email_from: str = "Veye <no-reply@veye.local>"
 
     # ---- Companion / AI providers --------------------------------------------------
@@ -74,6 +84,14 @@ class Settings(BaseSettings):
     langfuse_base_url: str = "https://cloud.langfuse.com"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VEYE_", extra="ignore")
+
+    @field_validator("smtp_username", "smtp_password", "smtp_tls_mode", mode="before")
+    @classmethod
+    def _blank_smtp_value_is_unset(cls, value, info):
+        # Env files list these names with empty values; empty means "not set".
+        if isinstance(value, str) and not value.strip():
+            return "auto" if info.field_name == "smtp_tls_mode" else None
+        return value
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -51,7 +51,9 @@ def build_runtime(config: Settings | None = None) -> Runtime:
         cookie_names={"member": config.member_session_cookie_name, "admin": config.admin_session_cookie_name},
         session_hours=config.session_hours, remember_days=config.session_remember_days,
     )
-    email = build_email_provider(config.email_provider, host=config.smtp_host, port=config.smtp_port, sender=config.email_from)
+    email = build_email_provider(config.email_provider, host=config.smtp_host, port=config.smtp_port, sender=config.email_from,
+                                 production=config.is_production, tls_mode=config.smtp_tls_mode, username=config.smtp_username,
+                                 password=config.smtp_password, timeout=config.smtp_timeout_seconds)
     llm = build_llm_provider(config.llm_provider, groq_api_key=config.groq_api_key, groq_model=config.groq_model,
                              timeout_seconds=config.llm_timeout_seconds)
     embeddings = build_embedding_provider(config.embedding_provider, dimensions=config.embedding_dimensions)
