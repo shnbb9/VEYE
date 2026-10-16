@@ -118,22 +118,23 @@ def test_food_diary_day_entries_and_history(member_client):
     first = member_client.post("/api/v1/members/me/food-diary", json={"entry_date": day, "meal_time": "12:30", "description": "Grilled chicken salad",
                                                                        "feelings": ["Rushed", "Hungry"], "notes": "At the desk"})
     assert first.status_code == 201, first.text
-    assert first.json()["meals"][0]["feelings"] == ["Hungry", "Rushed"]  # screen order, no duplicates
+    assert first.json()["meals"][0]["feelings"] == ["Rushed", "Hungry"]  # the order chosen (prototype), no duplicates
     assert member_client.post("/api/v1/members/me/food-diary", json={"entry_date": day, "meal_time": "07:45", "description": "Yoghurt"}).status_code == 201
     assert member_client.post("/api/v1/members/me/food-diary", json={"entry_date": day, "meal_time": "25:00", "description": "x"}).status_code == 422
     assert member_client.post("/api/v1/members/me/food-diary", json={"entry_date": day, "meal_time": "10:00", "description": "x", "feelings": ["Elated"]}).status_code == 422
     view = member_client.get("/api/v1/members/me/food-diary", params={"date": day}).json()
-    assert [m["meal_time"] for m in view["meals"]] == ["07:45", "12:30"]  # a day reads in time order
+    assert [m["meal_time"] for m in view["meals"]] == ["12:30", "07:45"]  # a day reads in the order logged (prototype)
     assert view["history"][0]["entry_date"] == day and view["history"][0]["meals"] == 2 and view["days_logged"] == 1
     assert "Hungry" in view["feelings"] and len(view["feelings"]) == 9
-    meal = view["meals"][1]
+    meal = view["meals"][0]
     updated = member_client.put(f"/api/v1/members/me/food-diary/{meal['id']}", json={"entry_date": day, "meal_time": "12:45", "description": "Grilled chicken salad with avocado",
                                                                                      "feelings": ["Hungry"], "notes": ""})
-    assert updated.status_code == 200 and updated.json()["meals"][1]["description"].endswith("avocado")
+    assert updated.status_code == 200 and updated.json()["meals"][0]["description"].endswith("avocado")  # an edit keeps its place
     removed = member_client.delete(f"/api/v1/members/me/food-diary/{meal['id']}")
     assert removed.status_code == 200 and len(removed.json()["meals"]) == 1
-    # no nutritional figures are invented anywhere in the payload
-    assert not any(key in removed.json()["meals"][0] for key in ("protein", "carbs", "fat", "kcal", "macros"))
+    # the prototype estimate is stored with the entry ("Yoghurt" hits the yoghurt row: 10 g / 8 g / 4 g)
+    left = removed.json()["meals"][0]
+    assert (left["protein_g"], left["carbs_g"], left["fat_g"], left["kcal"]) == (10, 8, 4, 108)
 
 
 # ---------------------------------------------------------------- profile / photo / export
