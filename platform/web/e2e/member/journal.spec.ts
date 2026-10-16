@@ -79,14 +79,26 @@ test.describe.serial("Mood Tracker and Food Diary", () => {
     await expect(page.getByTestId("mood-balance")).toHaveText("100%");
   });
 
-  test("food diary: add, edit and remove meals; the day reloads from the server; no invented nutrition figures", async ({ page }) => {
+  test("food diary: the approved prototype screen — estimate, add, edit, remove, Save, feedback, history — all from the server", async ({ page }) => {
     await open(page, "/app/food-diary");
     await expect(page.getByText("No entries for the day")).toBeVisible();
+    // the prototype's one-time panel reveal, and its Teachers type (no 700 face: bold renders as 600)
+    await expect(page.locator(".fdx-left")).toHaveClass(/reveal-in/);
+    await expect(page.locator(".fdx-right")).toHaveClass(/reveal-in/);
+    await expect(page.locator("#fdxAdd")).toHaveCSS("font-weight", "600");
+    // the photo row is the prototype's "In Development" state
+    await expect(page.locator(".fdx-photo-btn")).toBeDisabled();
+    await expect(page.locator(".fdx-photo")).toContainText("In Development");
 
-    // Required time is enforced.
+    // Typing shows the prototype estimate (yoghurt + nut rows of its fixed table).
     await page.locator("#fdxWhat").fill("Greek yoghurt with walnuts");
+    await expect(page.locator("#fdxMacros")).toBeVisible();
+    await expect(page.locator("#fdxMacK")).toHaveText("282");
+    await expect(page.locator("#fdxMacros")).toContainText("Prototype estimate from your description");
+
+    // Required time is enforced, with the prototype's wording.
     await page.getByRole("button", { name: "Add Entry" }).click();
-    await expect(page.locator("#fdxErr")).toContainText("time you ate");
+    await expect(page.locator("#fdxErr")).toHaveText("The time you ate is required.");
 
     await page.locator("#fdxTime").fill("07:40");
     await page.getByRole("button", { name: "Hungry", exact: true }).click();
@@ -96,33 +108,41 @@ test.describe.serial("Mood Tracker and Food Diary", () => {
     const meals = page.getByTestId("diary-meals");
     await expect(meals.locator(".fdx-meal")).toHaveCount(1);
     await expect(meals).toContainText("Greek yoghurt with walnuts");
+    await expect(meals.locator(".fdx-meal-macros").first()).toHaveText("P 16g · C 14g · F 18g · 282 kcal");
     await expect(meals).toContainText("Hungry");
     await expect(meals).toContainText("Relaxed");
-    await expect(page.locator("#fdxSummary")).toContainText("1 meal logged");
-    // the prototype's placeholder macro chips never appear
-    await expect(page.locator(".fdx-meal-macros")).toHaveCount(0);
-    await expect(page.getByText(/kcal/)).toHaveCount(0);
+    await expect(page.locator("#fdxSummary")).toContainText("1 meal logged · Protein 16g · Carbs 14g · Fat 18g · 282 kcal (prototype estimates)");
+    await expect(page.locator("#fdxMacros")).toBeHidden();   // the form clears
 
     await page.locator("#fdxWhat").fill("Baked salmon, broccoli and quinoa");
     await page.locator("#fdxTime").fill("19:10");
     await page.getByRole("button", { name: "Add Entry" }).click();
     await expect(meals.locator(".fdx-meal")).toHaveCount(2);
-    // in time order
-    await expect(meals.locator(".fdx-meal-time").first()).toHaveText("07:40");
+    await expect(meals.locator(".fdx-meal-time").first()).toHaveText("07:40");   // the order logged
 
-    // Edit the first meal.
+    // Edit the first meal: the prototype keeps "Log a meal" and offers Update Entry.
     await meals.locator(".fdx-meal").first().getByRole("button", { name: "Edit" }).click();
-    await expect(page.getByRole("heading", { name: "Edit this meal" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Log a meal" })).toBeVisible();
+    await expect(page.locator("#fdxWhat")).toHaveValue("Greek yoghurt with walnuts");
     await page.locator("#fdxWhat").fill("Greek yoghurt with walnuts and blueberries");
     await page.getByRole("button", { name: "Update Entry" }).click();
     await expect(meals).toContainText("blueberries");
+    await expect(meals.locator(".fdx-meal-macros").first()).toHaveText("P 17g · C 34g · F 18g · 366 kcal");
+    await expect(page.getByRole("button", { name: "Add Entry" })).toBeVisible();
+
+    // Give me feedback: the prototype's fixed rules over the saved entries.
+    await page.getByRole("button", { name: "Give me feedback" }).click();
+    await expect(page.locator("#fdxFeedbackText")).toContainText("You logged 2 meals — roughly 47g protein, 72g carbs and 27g fat (719 kcal).");
+    // Save marks the day; History says so.
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator("#fdxSavedNote")).toHaveText("Day saved.");
 
     // Reload: the day comes back from the server, history lists it.
     await open(page, "/app/food-diary");
     await expect(meals.locator(".fdx-meal")).toHaveCount(2);
     await page.getByRole("button", { name: /^History/ }).click();
     await expect(page.locator(".fdx-hist-row")).toHaveCount(1);
-    await expect(page.locator(".fdx-hist-row").first()).toContainText("2 meals");
+    await expect(page.locator(".fdx-hist-row").first()).toContainText("2 meals · ~719 kcal · saved");
 
     // Remove one.
     await meals.locator(".fdx-meal").last().getByRole("button", { name: "Remove" }).click();

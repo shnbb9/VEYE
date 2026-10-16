@@ -47,14 +47,40 @@ export const removeMood = (entry_date: string) => apiJson<void>(`/api/v1/members
 
 /* ---- food diary ---------------------------------------------------------- */
 
-export type Meal = { id: string; entry_date: string; meal_time: string; description: string; feelings: string[]; notes: string; created_at: string; updated_at: string };
-export type DiaryDay = { entry_date: string; meals: Meal[]; history: { entry_date: string; meals: number; last_updated: string }[]; feelings: string[]; days_logged: number };
+/** The prototype macro estimate (grams and kcal), calculated by the API. */
+export type Macros = { protein_g: number; carbs_g: number; fat_g: number; kcal: number };
+export type Meal = { id: string; entry_date: string; meal_time: string; description: string; feelings: string[]; notes: string; created_at: string; updated_at: string } & Macros;
+export type DiaryHistoryDay = { entry_date: string; meals: number; kcal: number; saved: boolean; last_updated: string | null };
+export type DiaryDay = { entry_date: string; meals: Meal[]; totals: Macros; saved_at: string | null; history: DiaryHistoryDay[]; feelings: string[]; days_logged: number };
 export type MealInput = { entry_date: string; meal_time: string; description: string; feelings: string[]; notes: string };
 
 export const getDiaryDay = (date: string) => apiJson<DiaryDay>(`/api/v1/members/${ME}/food-diary?date=${date}`);
 export const addMeal = (input: MealInput) => postJson<DiaryDay>(`/api/v1/members/${ME}/food-diary`, input);
 export const updateMeal = (id: string, input: MealInput) => postJson<DiaryDay>(`/api/v1/members/${ME}/food-diary/${id}`, input, "PUT");
 export const removeMeal = (id: string) => apiJson<DiaryDay>(`/api/v1/members/${ME}/food-diary/${id}`, { method: "DELETE" });
+export const estimateMacros = (description: string) =>
+  postJson<{ estimate: Macros | null }>(`/api/v1/members/${ME}/food-diary/estimate`, { description });
+export const saveDiaryDay = (date: string) => postJson<DiaryDay>(`/api/v1/members/${ME}/food-diary/days/${date}/save`, {});
+export const getDiaryFeedback = (date: string) => apiJson<{ entry_date: string; text: string }>(`/api/v1/members/${ME}/food-diary/feedback?date=${date}`);
+
+/* ---- meal planning ------------------------------------------------------- */
+
+export const MEAL_TYPES = ["Meal", "Snack", "Breakfast", "Lunch", "Dinner", "Brunch", "Exercise", "Routine"] as const;
+export type PlanMeal = { name: string; type: string; time: string; notes: string };
+export type PlanDay = { id: string; name: string; notes: string; describe: string; mode: "manual" | "ai"; meals: PlanMeal[]; assigned_date: string | null; created_at: string; updated_at: string };
+export type PlanDays = { days: PlanDay[]; created_id: string | null };
+export type PlanDayInput = { name: string; notes: string; describe: string; mode: "manual" | "ai"; meals: PlanMeal[] };
+export type SampleDay = { key: string; label: string; options: { label: string | null; meals: PlanMeal[] }[] };
+
+const PLANS = `/api/v1/members/${ME}/meal-plans`;
+export const getPlanDays = () => apiJson<PlanDays>(`${PLANS}/days`);
+export const getSampleDays = () => apiJson<SampleDay[]>(`${PLANS}/samples`);
+export const createPlanDay = (input: PlanDayInput) => postJson<PlanDays>(`${PLANS}/days`, input);
+export const updatePlanDay = (id: string, input: PlanDayInput) => postJson<PlanDays>(`${PLANS}/days/${id}`, input, "PUT");
+export const duplicatePlanDay = (id: string) => postJson<PlanDays>(`${PLANS}/days/${id}/duplicate`, {});
+export const assignPlanDay = (id: string, date: string) => postJson<PlanDays>(`${PLANS}/days/${id}/assign`, { date });
+export const deletePlanDay = (id: string) => apiJson<PlanDays>(`${PLANS}/days/${id}`, { method: "DELETE" });
+export const copySampleDay = (key: string, option: number) => postJson<PlanDays>(`${PLANS}/samples/copy`, { key, option });
 
 /* ---- requests ------------------------------------------------------------ */
 

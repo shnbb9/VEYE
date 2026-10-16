@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.runtime import get_runtime
 from app.admin.qa_routes import router as admin_qa_router
 from app.food.routes import router as food_diary_router
+from app.meal_plans.routes import router as meal_plans_router
 from app.members.routes import router as member_account_router
 from app.mood.routes import router as mood_router
 from app.product_settings.routes import admin_router as admin_settings_router, public_router as settings_router
@@ -85,6 +86,7 @@ app.include_router(content_router)
 app.include_router(member_account_router)
 app.include_router(mood_router)
 app.include_router(food_diary_router)
+app.include_router(meal_plans_router)
 app.include_router(requests_router)
 app.include_router(member_requests_router)
 app.include_router(admin_requests_router)

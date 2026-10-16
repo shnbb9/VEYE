@@ -1,0 +1,35 @@
+/* Meal Planning and Food Diary type, exactly as the approved prototype draws it.
+
+   The prototype (build/dashboard.html) loads Teachers only at 400/500/600, so
+   wherever its CSS asks for Teachers at 700 or 800 the browser uses the 600
+   face: measured in the prototype, 600, 700 and 800 render pixel-identically.
+   This app also loads a Teachers 700 face (app/globals.css), which the rest of
+   the app relies on and which stays as it is. On these two screens only, the
+   elements whose prototype rules ask for Teachers at 700/800 are set to 600,
+   the face the prototype actually shows. Every selector is scoped to a screen
+   (the view holding #fdxWhat or #daysGrid) or to Meal Planning's own dialogs,
+   so other pages that reuse fdx- or btn- classes are unaffected. */
+
+/* Food Diary */
+.view:has(#fdxWhat) :is(
+  .btn-primary, .btn-ghost,
+  .fdx-chip b, .fdx-summary b,
+  .fdx-history h3, .fdx-history h4,
+  .fdx-indev-tag, .fdx-indev-note, .fdx-savednote
+) { font-weight: 600; }
+
+/* Meal Planning */
+.view:has(#daysGrid) :is(
+  .btn-primary, .btn-ghost, .plus, .bot-i,
+  .day-action, .day-status, .days-go-diary, .days-continue
+) { font-weight: 600; }
+/* Teachers has no "→", so the arrow is drawn by a fallback font, which does
+   change at 800: keep the prototype's weight for it. */
+.view:has(#daysGrid) .days-continue::after { font-weight: 800; }
+
+/* Meal Planning dialogs (portalled to <body>, outside the view) */
+:is(#dayModal, #assignModal, #sampleModal) :is(
+  .btn-primary, .btn-ghost, .btn-modal, .plus,
+  .day-add-meal, .day-field label, .day-meals-head label,
+  .day-mode-opt strong, .mode-soon, .day-ai-tips strong
+) { font-weight: 600; }

@@ -23,6 +23,7 @@ from app.content import models as content_models  # noqa: F401
 from app.requests import models as request_models  # noqa: F401
 from app.mood import models as mood_models  # noqa: F401
 from app.food import models as food_models  # noqa: F401
+from app.meal_plans import models as meal_plan_models  # noqa: F401
 from app.product_settings import models as product_setting_models  # noqa: F401
 
 config = context.config

@@ -512,7 +512,7 @@ def member_360(member_id: UUID, db: Session = Depends(get_db)) -> Member360Out:
         mood_entries=[mood_entry_out(m) for m in moods], mood_stats=compute_stats(moods, today=_now().date()),
         food_diary=[meal_out(m) for m in meals], food_diary_days=diary_days,
         requests=[request_out(r) for r in requests],
-        not_connected=["Food Choices", "Meal Planning", "Mindfulness", "Activity Tracker (Exercise, Meditation)"],
+        not_connected=["Food Choices", "Mindfulness", "Activity Tracker (Exercise, Meditation)"],
     )
 
 

@@ -19,8 +19,9 @@ from sqlalchemy.orm import Session
 from app.assessments.models import HealthNumberAttempt
 from app.auth.models import AuthSession, AuthToken, UserAccount
 from app.companion.models import CompanionConversation, CompanionFeedback, CompanionMessage, CompanionMessageSource
-from app.food.models import FoodDiaryEntry
+from app.food.models import FoodDiaryDay, FoodDiaryEntry
 from app.guided_flows.models import MemberGuidedFlowSession
+from app.meal_plans.models import MealPlanDay
 from app.members.models import Member
 from app.mood.models import MoodEntry
 from app.notifications.models import Notification, NotificationPreference
@@ -163,8 +164,12 @@ class MemberProfileService:
                                   for a in rows(HealthAssessmentAttempt, HealthAssessmentAttempt.completed_at)],
             "simple_quiz": [plain(a, attempt_fields + ("answers", "yes_count", "no_count")) for a in rows(SimpleQuizAttempt, SimpleQuizAttempt.completed_at)],
             "mood": [plain(m, ("entry_date", "mood", "note", "updated_at")) for m in rows(MoodEntry, MoodEntry.entry_date)],
-            "food_diary": [plain(m, ("entry_date", "meal_time", "description", "feelings", "notes", "updated_at"))
+            "food_diary": [plain(m, ("entry_date", "meal_time", "description", "feelings", "notes", "protein_g", "carbs_g", "fat_g", "kcal",
+                                     "updated_at"))
                            for m in rows(FoodDiaryEntry, FoodDiaryEntry.entry_date)],
+            "food_diary_saved_days": [plain(d, ("entry_date", "saved_at")) for d in rows(FoodDiaryDay, FoodDiaryDay.entry_date)],
+            "meal_plans": [plain(d, ("name", "notes", "describe", "mode", "meals", "assigned_date", "created_at", "updated_at"))
+                           for d in rows(MealPlanDay, MealPlanDay.created_at)],
             "requests": [plain(r, ("kind", "status", "subject", "message", "created_at")) for r in rows(MemberRequest, MemberRequest.created_at)],
             "guided_sessions": [plain(s, ("flow_key", "flow_version", "status", "current_node", "started_at", "updated_at", "completed_at"))
                                 for s in rows(MemberGuidedFlowSession, MemberGuidedFlowSession.started_at)],
@@ -192,7 +197,7 @@ class MemberProfileService:
                 self.db.query(CompanionMessage).filter(CompanionMessage.conversation_id.in_(conversation_ids)).delete(synchronize_session=False)
                 self.db.query(CompanionConversation).filter(CompanionConversation.id.in_(conversation_ids)).delete(synchronize_session=False)
             for model in (HealthNumberAttempt, BodyCompositionAttempt, BloodMarkerAttempt, HealthAssessmentAttempt, SimpleQuizAttempt,
-                          MoodEntry, FoodDiaryEntry, MemberGuidedFlowSession):
+                          MoodEntry, FoodDiaryEntry, FoodDiaryDay, MealPlanDay, MemberGuidedFlowSession):
                 self.db.query(model).filter(model.member_id == member_id).delete(synchronize_session=False)
             self.db.query(MemberRequest).filter(MemberRequest.member_id == member_id).update({"member_id": None}, synchronize_session=False)
         for model in (AuthSession, AuthToken, Notification, NotificationPreference):
