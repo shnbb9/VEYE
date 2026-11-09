@@ -8,6 +8,8 @@ client."""
 
 from __future__ import annotations
 
+import logging
+
 import hashlib
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -31,6 +33,8 @@ from app.progress.health_assessment.models import HealthAssessmentAttempt
 from app.progress.simple_quiz.models import SimpleQuizAttempt
 from app.requests.models import MemberRequest
 from app.storage.object_storage import ObjectNotFound, ObjectStorage
+
+log = logging.getLogger("veye.members")
 
 # Accepted photo types, checked by magic bytes — the browser's declared type is
 # never trusted on its own.
@@ -56,7 +60,14 @@ def sniff_photo_type(data: bytes) -> str | None:
 def photo_version(user: UserAccount) -> str | None:
     if not user.photo_object_key or not user.photo_updated_at:
         return None
-    return hashlib.sha1(f"{user.photo_object_key}:{user.photo_updated_at.isoformat()}".encode()).hexdigest()[:12]
+    # A cache-busting suffix for the photo URL, not a security token: it only
+    # has to change when the photo does. Declared non-security so the intent is
+    # explicit and so this keeps working where SHA-1 is disabled for security
+    # use (FIPS mode), which it otherwise would not.
+    return hashlib.sha1(
+        f"{user.photo_object_key}:{user.photo_updated_at.isoformat()}".encode(),
+        usedforsecurity=False,
+    ).hexdigest()[:12]
 
 
 class MemberProfileService:
@@ -103,16 +114,21 @@ class MemberProfileService:
         if old_key and old_key != key:
             try:
                 self.media.delete(old_key)
-            except Exception:  # the new photo is already in place; a stale file is not an error
-                pass
+            except Exception as exc:
+                # The new photo is already in place, so a stale file is not an
+                # error worth failing on — but it is worth saying, or an object
+                # store quietly refusing every delete looks like nothing at all.
+                log.warning("could not remove the previous profile photo: %s: %s",
+                            type(exc).__name__, str(exc)[:200])
         return user
 
     def remove_photo(self, user: UserAccount) -> UserAccount:
         if user.photo_object_key:
             try:
                 self.media.delete(user.photo_object_key)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("could not remove the profile photo bytes: %s: %s",
+                            type(exc).__name__, str(exc)[:200])
         user.photo_object_key = None
         user.photo_content_type = None
         user.photo_updated_at = datetime.now(timezone.utc)
