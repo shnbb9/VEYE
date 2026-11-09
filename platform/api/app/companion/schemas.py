@@ -58,6 +58,9 @@ class AskRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     message: str = Field(min_length=1, max_length=500)
     conversation_id: UUID | None = None
+    # A retried send must not pay for a second model call or put the member's
+    # own message in the conversation twice.
+    idempotency_key: str | None = Field(default=None, max_length=128)
 
 
 class AskResponse(BaseModel):

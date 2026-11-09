@@ -117,3 +117,7 @@ class SubmittedOut(BaseModel):
 
 class RequestReplyIn(BaseModel):
     body: str = Field(min_length=2, max_length=4000)
+    # Optional, and the console always sends one. A retried POST or a
+    # double-clicked button must not put a second reply in front of a member
+    # or a second message in their inbox.
+    idempotency_key: str | None = Field(default=None, max_length=128)

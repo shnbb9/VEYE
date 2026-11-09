@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth.principal import CurrentPrincipal
@@ -205,15 +206,37 @@ class PersonalTipService:
             return self._fallback(FALLBACK_NO_TIP)
 
         now = datetime.now(timezone.utc)
+        provider = getattr(self.llm, "name", "unknown")
         if row is None:
-            row = MemberPersonalTip(member_id=member_id)
+            # One row per member, and two first requests can arrive at once.
+            # The loser of that race re-reads the winner's row instead of
+            # failing the dashboard on a unique-constraint violation.
+            #
+            # Every column is set before the flush: `text` is NOT NULL, so a
+            # bare row would hit a constraint on the way in and the recovery
+            # path would swallow it as though the race had happened.
+            row = MemberPersonalTip(member_id=member_id, text=text, context_fingerprint=stamp,
+                                    tip_version=TIP_VERSION, provider=provider, generated_at=now)
             self.db.add(row)
-        row.text = text
-        row.context_fingerprint = stamp
-        row.tip_version = TIP_VERSION
-        row.provider = getattr(self.llm, "name", "unknown")
-        row.generated_at = now
-        self.db.flush()
+            try:
+                self.db.flush()
+            except IntegrityError:
+                self.db.rollback()
+                row = (self.db.query(MemberPersonalTip)
+                       .filter(MemberPersonalTip.member_id == member_id).one_or_none())
+                if row is None:  # pragma: no cover - the row must exist for the constraint to have fired
+                    return self._fallback(FALLBACK_NO_TIP)
+                if self._acceptable(row.text):
+                    return PersonalTip(text=row.text, generated=True, generated_at=row.generated_at,
+                                       context_version=row.tip_version, source="companion")
+                return self._fallback(FALLBACK_NO_TIP)
+        else:
+            row.text = text
+            row.context_fingerprint = stamp
+            row.tip_version = TIP_VERSION
+            row.provider = provider
+            row.generated_at = now
+            self.db.flush()
         return PersonalTip(text=text, generated=True, generated_at=now,
                            context_version=TIP_VERSION, source="companion")
 

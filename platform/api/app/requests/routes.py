@@ -18,6 +18,7 @@ from app.admin.audit import record_audit
 from app.auth.models import UserAccount
 from app.auth.principal import CurrentPrincipal, require_admin, require_member
 from app.core.runtime import Runtime, get_runtime
+from app.core.idempotency import Idempotency, Replay
 from app.core.rate_limit import RateLimiter, client_address
 from app.db.session import get_db
 from app.product_settings.routes import read_support
@@ -119,6 +120,13 @@ def reply_to_request(request_id: UUID, payload: RequestReplyIn, principal: Curre
 
     The status is deliberately left alone: moving it is a separate, visible
     decision the administrator makes with the buttons beside this box."""
+    idempotency = Idempotency(db)
+    try:
+        # Claimed before the send, so a replay never reaches the relay.
+        idempotency.claim("request_reply", payload.idempotency_key, subject=str(principal.user_id))
+    except Replay as replay:
+        db.commit()
+        return request_out(RequestService(db).get(request_id))
     sender = db.get(UserAccount, principal.user_id)
     support = read_support(db).support_email
     try:
@@ -129,5 +137,6 @@ def reply_to_request(request_id: UUID, payload: RequestReplyIn, principal: Curre
     row = RequestService(db).get(request_id)
     record_audit(db, principal, "requests.replied", "member_request", str(row.id),
                  {"kind": row.kind, "to": reply.to_email, "delivery": reply.delivery_status})
+    idempotency.complete("request_reply", payload.idempotency_key, str(reply.id))
     db.commit()
     return request_out(row)

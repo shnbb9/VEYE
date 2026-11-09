@@ -21,6 +21,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.core.idempotency import Idempotency, Replay
 from app.core.rate_limit import RateLimiter, client_address
 from app.companion.personal_tip import PersonalTipService
 from app.companion.service import CompanionError, CompanionService
@@ -82,14 +83,24 @@ def ask(payload: AskRequest, request: Request, principal: CurrentPrincipal = Dep
     # Enforced before the service is touched, so a refused message costs no
     # retrieval, no prompt assembly and no model call. Keyed on the member
     # rather than the conversation: a new conversation is not a new allowance.
-    RateLimiter(db).enforce("companion_message", subject=str(principal.member_id or principal.user_id),
-                            address=client_address(request))
+    subject = str(principal.member_id or principal.user_id)
+    RateLimiter(db).enforce("companion_message", subject=subject, address=client_address(request))
+
+    idempotency = Idempotency(db)
+    try:
+        # Claimed before the model is reached, so a retried send pays once.
+        idempotency.claim("companion_message", payload.idempotency_key, subject=subject)
+    except Replay as replay:
+        db.commit()
+        return _answered_earlier(db, principal, replay.entity_id)
     db.commit()
+
     try:
         reply = service.ask(principal, payload.message, conversation_id=payload.conversation_id)
     except CompanionError as exc:
         db.rollback()
         _raise(exc)
+    idempotency.complete("companion_message", payload.idempotency_key, str(reply.reply_message_id))
     db.commit()
     return AskResponse(
         conversation_id=reply.conversation_id, member_message_id=reply.member_message_id, reply_message_id=reply.reply_message_id,
@@ -144,3 +155,29 @@ def personal_tip(principal: CurrentPrincipal = Depends(require_member), db: Sess
     db.commit()
     return PersonalTipOut(text=tip.text, generated=tip.generated, generated_at=tip.generated_at,
                           source=tip.source, tip_version=tip.context_version)
+
+
+def _answered_earlier(db: Session, principal: CurrentPrincipal, reply_message_id: str) -> AskResponse:
+    """The answer the first attempt produced, read back rather than stored.
+
+    Only the message id is kept against the idempotency key, so a member's
+    words are not copied into a second table; the reply is re-read from the
+    conversation it belongs to, scoped to this member so one person replaying
+    another's key cannot be handed their answer."""
+    message = (db.query(CompanionMessage)
+               .join(CompanionConversation, CompanionConversation.id == CompanionMessage.conversation_id)
+               .filter(CompanionMessage.id == UUID(reply_message_id),
+                       CompanionConversation.member_id == principal.member_id)
+               .one_or_none())
+    if message is None:
+        raise HTTPException(status_code=404, detail="That earlier answer is no longer available.")
+    return AskResponse(
+        conversation_id=message.conversation_id, member_message_id=message.id, reply_message_id=message.id,
+        reply=message.content, outcome=message.outcome or "answered",
+        # The policy decision belongs to the attempt, not to the message row;
+        # a replay reports the answer it is handing back, not a fresh ruling.
+        policy_outcome="allow", policy_category=None,
+        sources=[], context_scopes=list(message.context_scopes or []),
+        provider=message.provider or "", model=message.model or "",
+        safety_result=message.safety_result or "ok", trace_id=message.trace_id, personalized=False,
+    )
