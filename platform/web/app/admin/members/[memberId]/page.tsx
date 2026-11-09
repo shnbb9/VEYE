@@ -9,6 +9,7 @@ import {
   getMember360,
   memberAccountAction,
   memberPhotoUrl,
+  requestHealthPermission,
   type Member360,
   type MemberAccountAction,
 } from "@/lib/admin-console-api";
@@ -35,6 +36,64 @@ function hnTone(value: number | null): string {
   if (value <= 6) return "var(--status-attention)";
   return "var(--status-significant)";
 }
+
+/* Health Data Sharing Permission, from the console's side. The API withholds
+   every health record until the member shares, so this banner explains an
+   empty Member 360 rather than letting it read as an inactive member. Asking
+   is the only thing the console can do here. */
+function SharingBanner({ member, memberId, onAsked }: { member: Member360; memberId: string; onAsked: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [asked, setAsked] = useState(false);
+
+  if (member.shares_health_data) {
+    return (
+      <div className="notice notice--quiet" data-testid="sharing-banner">
+        <Icon name="shield" size={18} />
+        <div>
+          <strong>{member.sharing_label}.</strong> This member has chosen to share their saved results with the
+          Veye team. They can stop at any time, and the records close again immediately.
+        </div>
+      </div>
+    );
+  }
+
+  const alreadyAsked = member.sharing_state === "requested" || asked;
+  const explanation = {
+    not_requested: "This member has not been asked to share their health records yet.",
+    requested: "This member has been asked and has not answered yet.",
+    declined: "This member was asked and chose not to share.",
+    revoked: "This member shared before and has since stopped.",
+    granted: "",
+  }[member.sharing_state];
+
+  return (
+    <div className="notice" data-testid="sharing-banner">
+      <Icon name="shield" size={18} />
+      <div style={{ minWidth: 0 }}>
+        <strong>Health records are not shared.</strong> {explanation}{" "}
+        Their Health Number, body composition, blood markers, questionnaires, moods and food diary are not sent to
+        this console — the tabs below are empty for that reason, not because nothing was recorded. Name, email and
+        their messages to Veye are not covered by sharing and stay visible so the team can answer them.
+        {error && <p className="t-support" style={{ color: "#A8402D", marginTop: 6 }}>{error}</p>}
+        <div style={{ marginTop: 10 }}>
+          <button className="btn btn--secondary btn--sm" type="button" disabled={busy || alreadyAsked}
+                  data-testid="sharing-ask"
+                  onClick={() => {
+                    setBusy(true); setError("");
+                    requestHealthPermission(memberId)
+                      .then(() => { setAsked(true); onAsked(); })
+                      .catch((reason) => setError(reason instanceof Error ? reason.message : "That request could not be sent."))
+                      .finally(() => setBusy(false));
+                  }}>
+            {busy ? "Asking…" : alreadyAsked ? "Already asked — waiting for their answer" : "Ask this member to share"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export default function Member360Page() {
   return <Suspense fallback={null}><Member360View /></Suspense>;
@@ -118,13 +177,21 @@ function Member360View() {
             </div>
             <div style={{ minWidth: 0 }}>
               <div className="t-eyebrow">Health Number</div>
-              <div className="t-strong" style={{ marginTop: 2 }}>{profile.health_number_status ?? "Not completed"}</div>
+              <div className="t-strong" style={{ marginTop: 2 }}>
+                {member.shares_health_data ? (profile.health_number_status ?? "Not completed") : "Not shared"}
+              </div>
               <p className="t-support" style={{ marginTop: 4 }}>A lower number is better on this scale.</p>
-              <p className="t-support">{profile.health_number_at ? `Taken ${fmtDate(profile.health_number_at)}` : "No Health Number saved yet."}</p>
+              <p className="t-support">
+                {!member.shares_health_data
+                  ? "Withheld until this member shares their records."
+                  : profile.health_number_at ? `Taken ${fmtDate(profile.health_number_at)}` : "No Health Number saved yet."}
+              </p>
             </div>
           </div>
         </div>
       </section>
+
+      <SharingBanner member={member} memberId={memberId} onAsked={reload} />
 
       <Subnav items={TABS.map((t) => ({ key: t.key, label: t.label, href: `/admin/members/${memberId}?tab=${t.key}` }))} active={tab} />
 

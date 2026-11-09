@@ -31,6 +31,8 @@ from app.requests.routes import (
 )
 from app.guided_flows.admin_routes import router as admin_guided_flows_router
 from app.guided_flows.routes import router as guided_flows_router
+from app.health_permission.routes import admin_router as health_permission_admin_router
+from app.health_permission.routes import member_router as health_permission_member_router
 from app.progress.blood_markers.routes import (
     member_router as blood_markers_member_router,
     router as blood_markers_router,
@@ -112,6 +114,8 @@ app.include_router(admin_advanced_router)
 app.include_router(admin_console_router)
 app.include_router(admin_administrators_router)
 app.include_router(admin_account_router)
+app.include_router(health_permission_member_router)
+app.include_router(health_permission_admin_router)
 app.include_router(admin_care_router)
 app.include_router(care_router)
 app.include_router(admin_content_router)

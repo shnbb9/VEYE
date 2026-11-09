@@ -272,6 +272,30 @@ def _seed_requests(db: Session, members: dict[str, UserAccount]) -> int:
     return count
 
 
+def _seed_health_sharing(db: Session, members: dict[str, UserAccount]) -> str:
+    """Let the synthetic demo members share their records with the console.
+
+    This is seed data for a demo, not a default. A real member starts at
+    `not_requested` and nothing in the product grants on their behalf — sign
+    up on this stack and Member 360 will show the withheld state. Without it
+    the demo console would be empty of exactly the screens it exists to show.
+    """
+    from app.health_permission.models import STATE_GRANTED
+    from app.health_permission.service import HealthPermissionService
+
+    service = HealthPermissionService(db)
+    granted = 0
+    for user in members.values():
+        if user.member_id is None:
+            continue
+        row = service.for_member(user.member_id)
+        if row.state == STATE_GRANTED:
+            continue
+        service.grant(user.member_id, by_user_id=user.id, by_name=user.display_name)
+        granted += 1
+    return f"{granted} demo member(s) sharing" if granted else "exists"
+
+
 def seed_users(db: Session | None = None) -> dict[str, str]:
     """Idempotent: creates whichever demo accounts are missing and their histories."""
     _guard()
@@ -297,6 +321,7 @@ def seed_users(db: Session | None = None) -> dict[str, str]:
             outcome[account.email] = "created" if created else ("backfilled " + ", ".join(backfilled) if backfilled else "exists")
         requests = _seed_requests(db, members)
         outcome["requests"] = f"{requests} sample requests" if requests else "exists"
+        outcome["health_sharing"] = _seed_health_sharing(db, members)
         db.commit()
         return outcome
     finally:

@@ -108,5 +108,31 @@ export const sendPublicRequest = (input: { kind: "contact_us" | "help_question";
 export type PublishedEntry = { key: string; category: string | null; title: string; body: string; display_order: number };
 export const getPublishedContent = (group: "help_faq" | "member_copy") => apiJson<PublishedEntry[]>(`/api/v1/content/${group}`);
 
+/* ---- Health Data Sharing Permission -------------------------------------- */
+/* Only the member grants, declines or withdraws. Withdrawal takes effect on
+   the console's next request, not when something expires. */
+export type HealthPermissionEvent = {
+  id: string; from_state: string; to_state: string; actor: string;
+  actor_name: string; source: string; policy_version: string; created_at: string;
+};
+export type HealthPermission = {
+  state: "not_requested" | "requested" | "granted" | "declined" | "revoked";
+  state_label: string;
+  shares_health_data: boolean;
+  policy_version: string;
+  current_policy_version: string;
+  explanation: string;
+  requested_at: string | null;
+  requested_by_name: string;
+  decided_at: string | null;
+  revoked_at: string | null;
+  events: HealthPermissionEvent[];
+};
+const PERMISSION = `/api/v1/members/${ME}/health-permission`;
+export const getHealthPermission = () => apiJson<HealthPermission>(PERMISSION);
+export const grantHealthPermission = () => postJson<HealthPermission>(`${PERMISSION}/grant`, {});
+export const declineHealthPermission = () => postJson<HealthPermission>(`${PERMISSION}/decline`, {});
+export const revokeHealthPermission = () => postJson<HealthPermission>(`${PERMISSION}/revoke`, {});
+
 export type SupportDetails = { support_email: string; support_phone: string };
 export const getSupportDetails = () => apiJson<SupportDetails>("/api/v1/settings/support");

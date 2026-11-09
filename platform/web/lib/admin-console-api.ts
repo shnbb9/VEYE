@@ -58,6 +58,32 @@ export type MemberRow = {
   onboarding: "Complete" | "Not started";
   has_photo: boolean;
   photo_version: string | null;
+  /* A null health_number means one of two things, so the state says which:
+     no saved result, or no permission to see it. */
+  sharing_state: HealthPermission["state"];
+  sharing_label: string;
+  shares_health_data: boolean;
+};
+
+/* ---- Health Data Sharing Permission -------------------------------------- */
+/* The member decides whether the Veye team may open their health records. The
+   console can ask and can read the answer; it can never set it. */
+export type HealthPermissionEvent = {
+  id: string; from_state: string; to_state: string; actor: string;
+  actor_name: string; source: string; policy_version: string; created_at: string;
+};
+export type HealthPermission = {
+  state: "not_requested" | "requested" | "granted" | "declined" | "revoked";
+  state_label: string;
+  shares_health_data: boolean;
+  policy_version: string;
+  current_policy_version: string;
+  explanation: string;
+  requested_at: string | null;
+  requested_by_name: string;
+  decided_at: string | null;
+  revoked_at: string | null;
+  events: HealthPermissionEvent[];
 };
 
 export type MembersPage = { rows: MemberRow[]; total: number; page: number; page_size: number };
@@ -96,6 +122,11 @@ export type Member360 = {
   food_diary_days: number;
   requests: ConsoleRequest[];
   not_connected: string[];
+  /* Every health list above is empty unless this is true — the API withholds
+     them, the screen does not hide them. */
+  sharing_state: HealthPermission["state"];
+  sharing_label: string;
+  shares_health_data: boolean;
   account: MemberAccount;
   account_activity: AccountActivity[];
 };
@@ -149,6 +180,11 @@ function query(params: Record<string, string | number | undefined | null>): stri
 export const getConsoleOverview = () => apiJson<ConsoleOverview>(`${CONSOLE}/overview`);
 export const listMembers = (params: MembersQuery = {}) => apiJson<MembersPage>(`${CONSOLE}/members${query(params)}`);
 export const getMember360 = (memberId: string) => apiJson<Member360>(`${CONSOLE}/members/${memberId}`);
+export const getHealthPermission = (memberId: string) =>
+  apiJson<HealthPermission>(`${CONSOLE}/members/${memberId}/health-permission`);
+/* Asking is the console's whole power here. */
+export const requestHealthPermission = (memberId: string) =>
+  postJson<HealthPermission>(`${CONSOLE}/members/${memberId}/health-permission/request`, {});
 export const listInstruments = () => apiJson<Instrument[]>(`${CONSOLE}/assessments`);
 export const listAttempts = (key: string, params: { q?: string; page?: number; page_size?: number } = {}) =>
   apiJson<AttemptsPage>(`${CONSOLE}/assessments/${key}/attempts${query(params)}`);

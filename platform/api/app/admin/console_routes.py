@@ -31,6 +31,8 @@ from app.db.session import get_db
 from app.food.models import FoodDiaryEntry
 from app.food.routes import MealOut, meal_out
 from app.guided_flows.models import GuidedFlow, MemberGuidedFlowSession
+from app.health_permission.models import STATE_GRANTED, STATE_LABELS as PERMISSION_LABELS, STATE_NOT_REQUESTED
+from app.health_permission.service import HealthPermissionService
 from app.members.models import Member
 from app.members.service import MemberProfileService, ProfileError, photo_version
 from app.mood.models import MoodEntry
@@ -136,9 +138,14 @@ class MemberRow(BaseModel):
     is_active: bool
     is_synthetic: bool
     admin_access: bool
+    # None here means one of two different things, so the state says which:
+    # the member has no result yet, or they have not shared their records.
     health_number: float | None
     health_number_status: str | None
     health_number_at: datetime | None
+    sharing_state: str = STATE_NOT_REQUESTED
+    sharing_label: str = ""
+    shares_health_data: bool = False
     trackers_completed: int
     last_active_at: datetime | None
     onboarding: str  # Complete | Not started
@@ -206,6 +213,12 @@ class Member360Out(BaseModel):
     food_diary_days: int
     requests: list[RequestOut]
     not_connected: list[str]
+    # Every health history above is empty unless the member shares. These three
+    # say so, rather than letting a reader take an empty history for an
+    # inactive member.
+    sharing_state: str = STATE_NOT_REQUESTED
+    sharing_label: str = ""
+    shares_health_data: bool = False
     account: MemberAccountOut
     account_activity: list[AccountActivityRow]
 
@@ -461,6 +474,27 @@ def overview(db: Session = Depends(get_db)) -> OverviewOut:
     )
 
 
+def _apply_sharing(db: Session, rows: list[MemberRow]) -> dict[UUID, str]:
+    """Stamp each row with the member's sharing state and withhold the Health
+    Number where it was not given.
+
+    Every screen that renders a MemberRow goes through here. The members list
+    and Member 360 both build rows from `_member_rows`, and gating only one of
+    them left the figure on the other — which is precisely what happened, and
+    why there is one function rather than two copies of the rule.
+    """
+    sharing = HealthPermissionService(db).states_for([r.member_id for r in rows])
+    for row in rows:
+        row.sharing_state = sharing.get(row.member_id, STATE_NOT_REQUESTED)
+        row.sharing_label = PERMISSION_LABELS.get(row.sharing_state, row.sharing_state)
+        row.shares_health_data = row.sharing_state == STATE_GRANTED
+        if not row.shares_health_data:
+            row.health_number = None
+            row.health_number_status = None
+            row.health_number_at = None
+    return sharing
+
+
 @router.get("/members", response_model=MembersPage)
 def members(
     q: str = Query(default="", max_length=120),
@@ -473,6 +507,10 @@ def members(
     db: Session = Depends(get_db),
 ) -> MembersPage:
     rows = _member_rows(db)
+    # Done before filtering and sorting, so neither can be used to infer a
+    # number the console is not entitled to see.
+    _apply_sharing(db, rows)
+    db.commit()
     needle = q.strip().lower()
     now = _now()
     if needle:
@@ -510,27 +548,45 @@ def members(
 
 
 @router.get("/members/{member_id}", response_model=Member360Out)
-def member_360(member_id: UUID, db: Session = Depends(get_db),
+def member_360(member_id: UUID, principal: CurrentPrincipal = Depends(require_admin),
+               db: Session = Depends(get_db),
                runtime: Runtime = Depends(get_runtime)) -> Member360Out:
     member, user = _member_or_404(db, member_id)
     profile = next((r for r in _member_rows(db) if r.member_id == member_id), None)
     if profile is None:
         raise HTTPException(status_code=404, detail="That member was not found.")
+    _apply_sharing(db, [profile])
     titles = {flow.key: flow.title for flow in db.query(GuidedFlow).all()}
     sessions = (db.query(MemberGuidedFlowSession).filter(MemberGuidedFlowSession.member_id == member_id)
                 .order_by(MemberGuidedFlowSession.updated_at.desc()).all())
     conversations = (db.query(CompanionConversation).filter(CompanionConversation.member_id == member_id)
                      .order_by(CompanionConversation.last_message_at.desc()).limit(20).all())
 
+    # The member's decision, read now rather than remembered: withdrawing has
+    # to take effect on the very next request, not when a cache expires.
+    permission = HealthPermissionService(db).for_member(member_id)
+    shares = permission.shares_health_data
+
     def history(model, item):
+        if not shares:
+            return []
         return [item(a) for a in db.query(model).filter(model.member_id == member_id)
                 .order_by(model.completed_at.desc(), model.created_at.desc()).all()]
 
-    moods = db.query(MoodEntry).filter(MoodEntry.member_id == member_id).order_by(MoodEntry.entry_date.desc()).all()
+    moods = (db.query(MoodEntry).filter(MoodEntry.member_id == member_id)
+             .order_by(MoodEntry.entry_date.desc()).all()) if shares else []
     meals = (db.query(FoodDiaryEntry).filter(FoodDiaryEntry.member_id == member_id)
-             .order_by(FoodDiaryEntry.entry_date.desc(), FoodDiaryEntry.meal_time.desc()).limit(60).all())
-    diary_days = db.query(func.count(func.distinct(FoodDiaryEntry.entry_date))).filter(FoodDiaryEntry.member_id == member_id).scalar() or 0
+             .order_by(FoodDiaryEntry.entry_date.desc(), FoodDiaryEntry.meal_time.desc()).limit(60).all()) if shares else []
+    diary_days = (db.query(func.count(func.distinct(FoodDiaryEntry.entry_date)))
+                  .filter(FoodDiaryEntry.member_id == member_id).scalar() or 0) if shares else 0
     requests = db.query(MemberRequest).filter(MemberRequest.member_id == member_id).order_by(MemberRequest.created_at.desc()).all()
+
+    # Who looked at whose records, when, and whether they were entitled to.
+    # The health values themselves are deliberately not in the entry: an audit
+    # log that copies the data it is auditing has doubled the problem.
+    record_audit(db, principal, "health.viewed" if shares else "health.withheld", "member", str(member_id),
+                 {"permission": permission.state, "policy_version": permission.policy_version or ""})
+    db.commit()
 
     return Member360Out(
         profile=profile, phone=user.phone, postal_code=user.postal_code,
@@ -548,6 +604,9 @@ def member_360(member_id: UUID, db: Session = Depends(get_db),
         food_diary=[meal_out(m) for m in meals], food_diary_days=diary_days,
         requests=[request_out(r) for r in requests],
         not_connected=["Food Choices", "Mindfulness", "Activity Tracker (Exercise, Meditation)"],
+        sharing_state=permission.state,
+        sharing_label=PERMISSION_LABELS.get(permission.state, permission.state),
+        shares_health_data=shares,
         account=_account_out(db, user, runtime),
         account_activity=account_activity(db, user_id=user.id, limit=10),
     )
@@ -586,6 +645,12 @@ def assessment_attempts(
     name, model, version, _ = INSTRUMENTS[key]
     accounts = {member.id: user for member, user in _member_accounts(db)}
     attempts = db.query(model).order_by(model.completed_at.desc(), model.created_at.desc()).all()
+    # One result per row is still that member's health record. A screen that
+    # lists every attempt is the easiest way to read around Member 360, so it
+    # asks the same question Member 360 asks.
+    sharing = HealthPermissionService(db).states_for(sorted({a.member_id for a in attempts}))
+    db.commit()
+    attempts = [a for a in attempts if sharing.get(a.member_id) == STATE_GRANTED]
     needle = q.strip().lower()
     rows: list[AttemptRow] = []
     for attempt in attempts:

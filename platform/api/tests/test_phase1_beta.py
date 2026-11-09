@@ -215,8 +215,12 @@ def test_member_360_shows_mood_diary_and_requests_for_that_member_only(member_cl
     member_client.put("/api/v1/members/me/mood", params={"today": today}, json={"entry_date": today, "mood": "calm"})
     member_client.post("/api/v1/members/me/food-diary", json={"entry_date": today, "meal_time": "08:00", "description": "Porridge"})
     member_client.post("/api/v1/members/me/requests", json={"kind": "contact_us", "message": "Hello from Aditya"})
+    # The console only ever sees health records a member has chosen to share.
+    assert member_client.post("/api/v1/members/me/health-permission/grant").status_code == 200
     other = _second_member()
     other.put("/api/v1/members/me/mood", params={"today": today}, json={"entry_date": today, "mood": "angry"})
+    # Each member shares for themselves; one granting never opens another's.
+    assert other.post("/api/v1/members/me/health-permission/grant").status_code == 200
     rows = {r["email"]: r for r in admin_client.get("/api/v1/admin/members").json()["rows"]}
     aditya = admin_client.get(f"/api/v1/admin/members/{rows['aditya.demo@demo.veye.test']['member_id']}").json()
     maya = admin_client.get(f"/api/v1/admin/members/{rows['maya.demo@demo.veye.test']['member_id']}").json()
