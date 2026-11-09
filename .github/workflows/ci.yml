@@ -1,0 +1,182 @@
+name: CI
+
+# Every green result in this repository used to be hand-run on one developer's
+# machine, which is how a date-pinned test went on passing until the day it
+# silently rotted. This runs the same suites the README documents, on every
+# push and pull request, in the same versions the Docker images use.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push supersedes an in-flight run on the same branch.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Mirrors platform/docker/*.Dockerfile, so CI cannot pass on a version the
+  # stack does not actually run.
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  backend:
+    name: API tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Same image as the local stack: the retrieval test needs real pgvector
+        # and skips itself when PostgreSQL is missing, which would hide it.
+        image: pgvector/pgvector:0.8.0-pg16
+        env:
+          POSTGRES_DB: veye
+          POSTGRES_USER: veye_ci
+          POSTGRES_PASSWORD: veye_ci_only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U veye_ci -d veye"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: platform/api/pyproject.toml
+      - name: Install the API and its test extras
+        working-directory: platform/api
+        run: pip install -e ".[test,ai]"
+      - name: pytest
+        working-directory: platform/api
+        env:
+          # The suite itself runs on SQLite (conftest). These two only point the
+          # pgvector retrieval test at a real database so it runs instead of
+          # skipping.
+          VEYE_TEST_PG_ADMIN_URL: postgresql+psycopg://veye_ci:veye_ci_only@127.0.0.1:5432/veye
+          VEYE_TEST_DATABASE_URL: postgresql+psycopg://veye_ci:veye_ci_only@127.0.0.1:5432/veye_test
+        run: python -m pytest -p no:cacheprovider -W ignore -q
+
+  web:
+    name: Types, build and the legacy suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: platform/web/package-lock.json
+      - name: Install
+        working-directory: platform/web
+        run: npm ci
+      - name: TypeScript
+        working-directory: platform/web
+        run: npm run typecheck
+      - name: Production build
+        working-directory: platform/web
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8001
+        run: npm run build
+      - name: Calculation engine (125 assertions)
+        run: node tests/veye-calculations.test.js
+      - name: Prototype UI contracts (127 assertions)
+        run: node tests/veye-ui-contracts.test.js
+      - name: API base helper
+        run: node platform/web/tests/api-base.test.js
+
+  e2e:
+    name: Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg16
+        env:
+          POSTGRES_DB: veye
+          POSTGRES_USER: veye_ci
+          POSTGRES_PASSWORD: veye_ci_only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U veye_ci -d veye"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      mail:
+        # The suite reads verification, invitation and reset links out of this
+        # mailbox, exactly as it does locally.
+        image: axllent/mailpit:v1.31.1
+        ports: ["8025:8025", "1025:1025"]
+    env:
+      VEYE_ENVIRONMENT: ci
+      VEYE_DATABASE_URL: postgresql+psycopg://veye_ci:veye_ci_only@127.0.0.1:5432/veye
+      # The suite serves its own production build here (playwright.config.ts).
+      VEYE_CORS_ORIGINS: http://localhost:3013,http://127.0.0.1:3013
+      VEYE_WEB_BASE_URL: http://localhost:3013
+      VEYE_EMAIL_PROVIDER: local-smtp
+      VEYE_SMTP_HOST: 127.0.0.1
+      VEYE_SMTP_PORT: "1025"
+      VEYE_LLM_PROVIDER: mock
+      VEYE_TELEMETRY_PSEUDONYM_KEY: ci-only-pseudonym-key
+      VEYE_MEDIA_OBJECT_ROOT: var/media-objects
+      VEYE_KNOWLEDGE_OBJECT_ROOT: var/knowledge-objects
+      E2E_API_URL: http://localhost:8001
+      E2E_MAILPIT_URL: http://localhost:8025
+      NEXT_PUBLIC_API_URL: http://localhost:8001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: platform/api/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: platform/web/package-lock.json
+
+      - name: Install the API
+        working-directory: platform/api
+        run: pip install -e ".[ai]"
+      - name: Migrate and seed
+        # Proves the migrations apply to an EMPTY database on every run, which
+        # the local stack only ever does the first time.
+        working-directory: platform/api
+        run: |
+          alembic upgrade head
+          python -m app.seed
+      - name: Start the API
+        working-directory: platform/api
+        run: |
+          nohup uvicorn app.main:app --host 127.0.0.1 --port 8001 > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8001/health > /dev/null && exit 0
+            sleep 1
+          done
+          echo "the API never became healthy:"; cat "$RUNNER_TEMP/api.log"; exit 1
+
+      - name: Install the web application
+        working-directory: platform/web
+        run: npm ci
+      - name: Install the browser
+        working-directory: platform/web
+        run: npx playwright install --with-deps chromium
+      - name: Playwright
+        working-directory: platform/web
+        # `npm run e2e` builds the production bundle, serves it on 3013, runs
+        # the suite and removes the identities it created.
+        run: npm run e2e
+
+      - name: Keep the report when something failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            platform/web/test-output/playwright-report
+            platform/web/test-output/playwright-results
+          retention-days: 7
+      - name: The API's own log, when something failed
+        if: failure()
+        run: cat "$RUNNER_TEMP/api.log" || true
