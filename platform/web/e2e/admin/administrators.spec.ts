@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ADITYA, ADMIN, ADMIN_TWO, DUAL, freshAdmin } from "../fixtures/accounts";
 import { adminSignIn, expectAdminHome, linkFrom, memberSignIn, open, toPath, waitForMail } from "../fixtures/helpers";
 
@@ -10,6 +10,33 @@ import { adminSignIn, expectAdminHome, linkFrom, memberSignIn, open, toPath, wai
    administrator capability and how; the guards that matter are that nobody
    can switch off their own access and the last administrator cannot be
    switched off either. */
+
+/** Invite a disposable administrator from Cara's console, activate the
+ *  invitation in its own browser, and sign in — the state most of these
+ *  tests need before they can act as "another administrator". */
+async function inviteAndActivate(page: Page, browser: Browser) {
+  const account = freshAdmin();
+  await adminSignIn(page, ADMIN.email, ADMIN.password);
+  await expectAdminHome(page);
+  await open(page, "/admin/settings?section=administrators");
+  await page.getByTestId("invite-admin").click();
+  await page.getByTestId("invite-first-name").fill(account.firstName);
+  await page.getByTestId("invite-email").fill(account.email);
+  await page.getByTestId("invite-send").click();
+  await expect(page.getByTestId("admins-notice")).toContainText(account.email);
+
+  const mail = await waitForMail(account.email, "invited to the Veye admin console");
+  const context = await browser.newContext();
+  const theirs = await context.newPage();
+  await theirs.goto(toPath(linkFrom(mail.text, "admin/accept-invitation")));
+  await theirs.locator('input[name="password"]').fill(account.password);
+  await theirs.locator('input[name="confirm"]').fill(account.password);
+  await theirs.getByTestId("accept-submit").click();
+  await expect(theirs.getByTestId("invitation-accepted")).toBeVisible();
+  await adminSignIn(theirs, account.email, account.password);
+  await expectAdminHome(theirs);
+  return { account, page: theirs, context };
+}
 
 test.describe.serial("Administrators", () => {
   test("an invited administrator activates their account and gets the whole console", async ({ page, browser }) => {
@@ -174,5 +201,95 @@ test.describe.serial("Administrators", () => {
     await open(page, "/admin/settings?section=administrators");
     await expect(page).toHaveURL(/\/admin\/login/);
     await expect(page.getByTestId("admins-table")).toHaveCount(0);
+  });
+});
+
+/* The administrator's own account: the console half of Settings → Sign-in
+   details. An administrator could previously only have a link emailed. */
+test.describe("My console account", () => {
+  test("an administrator changes their own password and keeps only this session", async ({ page, browser }) => {
+    const invited = freshAdmin();
+    // Use a disposable administrator: changing a seeded password would break
+    // every other spec that signs in with it.
+    await adminSignIn(page, ADMIN.email, ADMIN.password);
+    await expectAdminHome(page);
+    await open(page, "/admin/settings?section=administrators");
+    await page.getByTestId("invite-admin").click();
+    await page.getByTestId("invite-first-name").fill(invited.firstName);
+    await page.getByTestId("invite-email").fill(invited.email);
+    await page.getByTestId("invite-send").click();
+    await expect(page.getByTestId("admins-notice")).toContainText(invited.email);
+    const mail = await waitForMail(invited.email, "invited to the Veye admin console");
+
+    const context = await browser.newContext();
+    const theirs = await context.newPage();
+    await theirs.goto(toPath(linkFrom(mail.text, "admin/accept-invitation")));
+    await theirs.locator('input[name="password"]').fill(invited.password);
+    await theirs.locator('input[name="confirm"]').fill(invited.password);
+    await theirs.getByTestId("accept-submit").click();
+    await expect(theirs.getByTestId("invitation-accepted")).toBeVisible();
+    await adminSignIn(theirs, invited.email, invited.password);
+    await expectAdminHome(theirs);
+
+    // A second console session for the same person, on another device.
+    const otherContext = await browser.newContext();
+    const other = await otherContext.newPage();
+    await adminSignIn(other, invited.email, invited.password);
+    await expectAdminHome(other);
+
+    await open(theirs, "/admin/settings?section=account");
+    await expect(theirs.getByTestId("admin-sessions")).toContainText("2 sessions");
+    await theirs.getByTestId("admin-open-password").click();
+    const next = `${invited.password}-changed`;
+    await theirs.getByTestId("admin-password-current").fill("not-my-password");
+    await theirs.getByTestId("admin-password-new").fill(next);
+    await theirs.getByTestId("admin-password-confirm").fill(next);
+    await theirs.getByTestId("admin-password-save").click();
+    await expect(theirs.getByTestId("admin-security-note")).toContainText(/current password is not right/i);
+
+    await theirs.getByTestId("admin-password-current").fill(invited.password);
+    await theirs.getByTestId("admin-password-new").fill(next);
+    await theirs.getByTestId("admin-password-confirm").fill(next);
+    await theirs.getByTestId("admin-password-save").click();
+    await expect(theirs.getByTestId("admin-security-note")).toContainText(/password has been changed/i);
+
+    // This console session survived; the other device is out, old password dead.
+    await open(theirs, "/admin/members");
+    await expect(theirs.locator("#main-content h1")).toBeVisible();
+    await other.goto("/admin/members");
+    await expect(other).toHaveURL(/\/admin\/login/);
+    await adminSignIn(other, invited.email, invited.password);
+    await expect(other.locator(".auth__error, .field__error").first()).toBeVisible();
+    await adminSignIn(other, invited.email, next);
+    await expectAdminHome(other);
+
+    await otherContext.close();
+    await context.close();
+  });
+
+  test("the console account card shows sessions and can sign the others out", async ({ page, browser }) => {
+    // A disposable administrator: the seeded ones are shared by the whole
+    // suite, so their session count is never a number a test may assert on.
+    const invited = await inviteAndActivate(page, browser);
+
+    const otherContext = await browser.newContext();
+    const other = await otherContext.newPage();
+    await adminSignIn(other, invited.account.email, invited.account.password);
+    await expectAdminHome(other);
+
+    await open(invited.page, "/admin/settings?section=account");
+    await expect(invited.page.getByTestId("admin-sessions")).toContainText("2 sessions in all");
+    await invited.page.getByTestId("admin-revoke-others").click();
+    await expect(invited.page.getByTestId("admin-security-note")).toContainText(/signed out/i);
+    await expect(invited.page.getByTestId("admin-sessions")).toContainText("This console session only");
+    // Nothing left to end, so the control is withdrawn rather than greyed out.
+    await expect(invited.page.getByTestId("admin-revoke-others")).toHaveCount(0);
+
+    await other.goto("/admin/members");
+    await expect(other).toHaveURL(/\/admin\/login/);
+    await open(invited.page, "/admin/members");
+    await expect(invited.page.locator("#main-content h1")).toBeVisible();
+    await otherContext.close();
+    await invited.context.close();
   });
 });

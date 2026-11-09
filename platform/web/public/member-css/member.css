@@ -159,3 +159,4 @@ button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
   background: #E4EFD4; color: #446514; font-size: 12px; font-weight: 600; }
 .settings-note button.settings-link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
   color: #446514; text-decoration: underline; }
+.settings-session-more { background: none; padding: 2px 2px 0; color: #7A8A66; font-size: 13px; }

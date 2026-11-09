@@ -348,3 +348,111 @@ def test_qa_cleanup_removes_invited_console_accounts_but_never_a_seeded_one(admi
     assert "e2e.mubb7gjx@demo.veye.test" not in after
     # Every seeded administrator survives, including the dual-access account.
     assert {"cara.hogue@demo.veye.test", "priya.ops@demo.veye.test", "jordan.dual@demo.veye.test"} <= after
+
+
+# ---------------------------------------------------------------- the administrator's own account
+ADMIN_EMAIL = "cara.hogue@demo.veye.test"
+ADMIN_PASSWORD = "CaraAdmin!2026-local"
+
+
+def test_an_administrator_changes_their_own_password_from_the_console(admin_client):
+    """The console half of the member's Sign-in details: this session lives,
+    every other one ends, and the old password stops opening the door."""
+    other_console = TestClient(app)
+    assert admin_sign_in(other_console, ADMIN_EMAIL, ADMIN_PASSWORD).status_code == 200
+
+    wrong = admin_client.post("/api/v1/admin/account/password",
+                              json={"current_password": "not-it", "new_password": "a-brand-new-secret"})
+    assert wrong.status_code == 403
+    short = admin_client.post("/api/v1/admin/account/password",
+                              json={"current_password": ADMIN_PASSWORD, "new_password": "short"})
+    assert short.status_code == 422
+
+    changed = admin_client.post("/api/v1/admin/account/password",
+                                json={"current_password": ADMIN_PASSWORD, "new_password": "a-brand-new-secret"})
+    assert changed.status_code == 200, changed.text
+
+    # This console session survives; the other one is out.
+    assert admin_client.get("/api/v1/admin/members").status_code == 200
+    assert other_console.get("/api/v1/admin/members").status_code == 401
+    assert admin_sign_in(other_console, ADMIN_EMAIL, ADMIN_PASSWORD).status_code == 401
+    assert admin_sign_in(other_console, ADMIN_EMAIL, "a-brand-new-secret").status_code == 200
+
+
+def test_an_administrator_sees_and_ends_their_own_sessions_only(admin_client, client):
+    # A member signed in elsewhere must not appear in, or be ended by, this list.
+    assert sign_up(client).status_code == 201
+    for _ in range(2):
+        extra = TestClient(app)
+        assert admin_sign_in(extra, ADMIN_EMAIL, ADMIN_PASSWORD).status_code == 200
+
+    listed = admin_client.get("/api/v1/admin/account/sessions")
+    assert listed.status_code == 200, listed.text
+    rows = listed.json()["rows"]
+    assert len(rows) == 3 and sum(1 for r in rows if r["current"]) == 1
+    assert {r["portal"] for r in rows} == {"admin"}
+
+    ended = admin_client.post("/api/v1/admin/account/sessions/revoke-others")
+    assert ended.status_code == 200 and "2" in ended.json()["message"]
+    assert len(admin_client.get("/api/v1/admin/account/sessions").json()["rows"]) == 1
+    # The member elsewhere is untouched: a different account entirely.
+    assert client.get("/api/v1/members/me/sessions").status_code == 200
+
+
+def test_the_console_account_routes_need_the_console_session(client, member_client):
+    for path in ("/api/v1/admin/account/sessions", "/api/v1/admin/account/password"):
+        assert client.get(path).status_code in (401, 405)
+    assert member_client.post("/api/v1/admin/account/password",
+                              json={"current_password": MEMBER_PASSWORD, "new_password": "a-brand-new-secret"}).status_code == 401
+    assert member_client.post("/api/v1/admin/account/sessions/revoke-others").status_code == 401
+
+
+def test_a_dual_access_password_change_from_the_console_ends_the_member_session(admin_client):
+    """One account, one password: changing it in the console signs the same
+    person out of the member application, because the secret they used there
+    is no longer the secret."""
+    from app.seed.users import DUAL, seed_users
+
+    seed_users()
+    jordan_console = TestClient(app)
+    jordan_member = TestClient(app)
+    assert admin_sign_in(jordan_console, DUAL.email, DUAL.password).status_code == 200
+    assert sign_in(jordan_member, DUAL.email, DUAL.password).status_code == 200
+
+    changed = jordan_console.post("/api/v1/admin/account/password",
+                                  json={"current_password": DUAL.password, "new_password": "a-brand-new-secret"})
+    assert changed.status_code == 200, changed.text
+    assert jordan_console.get("/api/v1/admin/members").status_code == 200
+    assert jordan_member.get("/api/v1/members/me/sessions").status_code == 401
+    assert sign_in(jordan_member, DUAL.email, "a-brand-new-secret").status_code == 200
+
+
+def test_signing_out_everywhere_counts_only_sessions_somebody_could_use(admin_client):
+    """An account that has been signed in many times carries dead rows. They
+    are closed too, but the person is told about the live ones only — the
+    number has to match the list they were just shown."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.auth.models import AuthSession
+    from app.db.session import SessionLocal
+
+    live = TestClient(app)
+    assert admin_sign_in(live, ADMIN_EMAIL, ADMIN_PASSWORD).status_code == 200
+
+    db = SessionLocal()
+    try:
+        user_id = db.query(AuthSession).first().user_id
+        for _ in range(3):
+            db.add(AuthSession(user_id=user_id, token_hash=f"expired-{_}" * 4, portal="admin",
+                               expires_at=datetime.now(timezone.utc) - timedelta(days=1)))
+        db.commit()
+    finally:
+        db.close()
+
+    listed = admin_client.get("/api/v1/admin/account/sessions").json()["rows"]
+    assert len(listed) == 2  # the expired rows are not offered as sessions
+
+    ended = admin_client.post("/api/v1/admin/account/sessions/revoke-others")
+    assert ended.status_code == 200
+    assert "1 other session was signed out" in ended.json()["message"]
+    assert live.get("/api/v1/admin/members").status_code == 401

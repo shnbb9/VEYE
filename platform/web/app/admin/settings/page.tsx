@@ -11,14 +11,18 @@ import {
   INVITATION_LABELS,
   INVITATION_TONES,
   administratorAction,
+  changeMyConsolePassword,
   getFeatureStates,
   getSupportSettings,
   inviteAdministrator,
   listAdministrators,
+  listMyConsoleSessions,
   saveSupportSettings,
+  signOutMyOtherConsoleSessions,
   type AdminAction,
   type AdministratorRow,
   type AdministratorsPage,
+  type ConsoleSession,
   type FeatureState,
   type SupportDetails,
 } from "@/lib/admin-console-api";
@@ -63,12 +67,47 @@ function AccountSection() {
   const session = useSession();
   const account = session.admin;
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"password" | "link" | "sessions" | null>(null);
+  const [changing, setChanging] = useState(false);
+  const [passwords, setPasswords] = useState({ current: "", next: "", confirm: "" });
+  const [sessions, setSessions] = useState<ConsoleSession[] | null>(null);
+
+  const loadSessions = () => listMyConsoleSessions().then((result) => setSessions(result.rows)).catch(() => setSessions(null));
+  useEffect(() => { void loadSessions(); }, []);
+
   if (!account) return null;
   const initials = `${account.first_name[0] ?? ""}${account.last_name[0] ?? ""}`.toUpperCase();
 
-  async function changePassword() {
-    setBusy(true);
+  async function savePassword(event: FormEvent) {
+    event.preventDefault();
+    setNote("");
+    if (passwords.next.length < 12) { setNote("Choose a password of at least 12 characters."); return; }
+    if (passwords.next !== passwords.confirm) { setNote("The two new passwords do not match."); return; }
+    setBusy("password");
+    try {
+      const result = await changeMyConsolePassword(passwords.current, passwords.next);
+      setPasswords({ current: "", next: "", confirm: "" });
+      setChanging(false);
+      setNote(result.message ?? "Your password has been changed.");
+      await loadSessions();
+    } catch (reason) {
+      setNote(reason instanceof Error ? reason.message : "That password could not be changed.");
+    } finally { setBusy(null); }
+  }
+
+  async function endOtherSessions() {
+    setBusy("sessions"); setNote("");
+    try {
+      const result = await signOutMyOtherConsoleSessions();
+      setNote(result.message ?? "Other sessions were signed out.");
+      await loadSessions();
+    } catch (reason) {
+      setNote(reason instanceof Error ? reason.message : "Those sessions could not be ended.");
+    } finally { setBusy(null); }
+  }
+
+  async function emailResetLink() {
+    setBusy("link"); setNote("");
     try {
       const result = await forgotPassword(account!.email, "admin");
       setNote(result.delivery && result.delivery.status !== "sent"
@@ -76,7 +115,7 @@ function AccountSection() {
         : "A password-change link has been emailed to you (local development mailbox). It works once and expires in 30 minutes.");
     } catch (reason) {
       setNote(reason instanceof Error ? reason.message : "The password-change link could not be sent.");
-    } finally { setBusy(false); }
+    } finally { setBusy(null); }
   }
 
   return (
@@ -89,14 +128,68 @@ function AccountSection() {
           <div className="notice notice--quiet"><Icon name="info" size={18} /><div>This Beta console has one administrator capability. Roles, teams and organisation hierarchies are intentionally not included: every administrator account can do the same things. Who holds that access is managed under <Link href="/admin/settings?section=administrators">Administrators</Link>.</div></div>
         </div>
       </div>
-      <div className="card">
-        <div className="card__head"><div><h2 className="card__title">Account security</h2><p className="t-support">Passwords change through a single-use emailed link.</p></div></div>
+      <div className="card" data-testid="settings-admin-security">
+        <div className="card__head"><div><h2 className="card__title">Account security</h2><p className="t-support">Your own password and the places this account is signed in.</p></div></div>
         <div className="card__body card__body--flush"><div className="rows">
-          <div className="rowitem"><span className="rowitem__icon"><Icon name="lock" size={18} /></span><div><div className="rowitem__title">Password</div><div className="rowitem__meta">Sends a reset link to {account.email}; the link returns you to the console sign-in.</div></div><button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => void changePassword()}>{busy ? "Sending…" : "Send reset link"}</button></div>
+          {changing ? (
+            <form className="rowitem rowitem--form" onSubmit={(event) => void savePassword(event)} noValidate>
+              <span className="rowitem__icon"><Icon name="lock" size={18} /></span>
+              <div className="stack gap-3" style={{ minWidth: 0 }}>
+                <div className="rowitem__title">Change your password</div>
+                <div className="field"><label className="field__label" htmlFor="curPw">Current password</label>
+                  <input className="input" id="curPw" type="password" autoComplete="current-password" required value={passwords.current}
+                         onChange={(e) => { const v = e.target.value; setPasswords((c) => ({ ...c, current: v })); }} data-testid="admin-password-current" /></div>
+                <div className="field"><label className="field__label" htmlFor="newPw">New password</label>
+                  <input className="input" id="newPw" type="password" autoComplete="new-password" required value={passwords.next}
+                         onChange={(e) => { const v = e.target.value; setPasswords((c) => ({ ...c, next: v })); }} data-testid="admin-password-new" /></div>
+                <div className="field"><label className="field__label" htmlFor="confPw">Confirm new password</label>
+                  <input className="input" id="confPw" type="password" autoComplete="new-password" required value={passwords.confirm}
+                         onChange={(e) => { const v = e.target.value; setPasswords((c) => ({ ...c, confirm: v })); }} data-testid="admin-password-confirm" /></div>
+                <div className="row gap-2 wrap">
+                  <button className="btn btn--primary btn--sm" type="submit" disabled={busy === "password"} data-testid="admin-password-save">
+                    {busy === "password" ? "Saving…" : "Save new password"}
+                  </button>
+                  <button className="btn btn--ghost btn--sm" type="button" onClick={() => { setChanging(false); setNote(""); }}>Cancel</button>
+                </div>
+                <p className="t-support">At least 12 characters. You stay signed in here; every other session of this account ends — including the member application, because the password is the same one.</p>
+              </div>
+            </form>
+          ) : (
+            <div className="rowitem">
+              <span className="rowitem__icon"><Icon name="lock" size={18} /></span>
+              <div><div className="rowitem__title">Password</div><div className="rowitem__meta">Change it here with your current one, or have a single-use link emailed to {account.email}.</div></div>
+              <span className="row gap-2">
+                <button className="btn btn--secondary btn--sm" type="button" onClick={() => { setChanging(true); setNote(""); }} data-testid="admin-open-password">Change password</button>
+                <button className="btn btn--ghost btn--sm" type="button" disabled={busy === "link"} onClick={() => void emailResetLink()} data-testid="admin-email-link">
+                  {busy === "link" ? "Sending…" : "Email a link"}
+                </button>
+              </span>
+            </div>
+          )}
+
+          <div className="rowitem">
+            <span className="rowitem__icon"><Icon name="users" size={18} /></span>
+            <div style={{ minWidth: 0 }}>
+              <div className="rowitem__title">Where you are signed in</div>
+              <div className="rowitem__meta" data-testid="admin-sessions">
+                {sessions === null ? "Checking…" : describeSessions(sessions)}
+              </div>
+            </div>
+            {/* Offered only when there is something to end: a disabled button
+                with nothing to explain it is exactly what the control audit
+                forbids, and the line above already says you are alone here. */}
+            {sessions && sessions.some((s) => !s.current) ? (
+              <button className="btn btn--ghost btn--sm" type="button" data-testid="admin-revoke-others"
+                      disabled={busy === "sessions"} onClick={() => void endOtherSessions()}>
+                {busy === "sessions" ? "Signing out…" : "Sign out everywhere else"}
+              </button>
+            ) : <span />}
+          </div>
+
           <div className="rowitem"><span className="rowitem__icon rowitem__icon--off"><Icon name="shield" size={18} /></span><div><div className="rowitem__title">Two-step verification</div><div className="rowitem__meta">Not built. A production identity decision (provider, enforcement) belongs to the client.</div></div><Chip label="Client input" tone="attention" /></div>
           <div className="rowitem"><span className="rowitem__icon"><Icon name="log-out" size={18} /></span><div><div className="rowitem__title">Sign out</div><div className="rowitem__meta">Ends this console session only; a member session in the same browser stays.</div></div><button className="btn btn--ghost btn--sm" type="button" onClick={() => void session.signOut("admin", "/admin/login?flash=signed-out")}>Sign out</button></div>
         </div></div>
-        {note && <div className="card__foot"><p className="t-support" role="status">{note}</p></div>}
+        {note && <div className="card__foot"><p className="t-support" role="status" data-testid="admin-security-note">{note}</p></div>}
       </div>
     </div>
   );
@@ -374,6 +467,19 @@ function AdministratorsSection() {
       )}
     </div>
   );
+}
+
+/** A one-line summary of where this account is signed in. Counts, not a list:
+ *  a long-lived account accumulates sessions and naming each one is noise. */
+function describeSessions(rows: ConsoleSession[]): string {
+  if (rows.length <= 1) return "This console session only.";
+  const others = rows.filter((row) => !row.current);
+  const consoles = others.filter((row) => row.portal === "admin").length;
+  const members = others.length - consoles;
+  const parts: string[] = [];
+  if (consoles) parts.push(`${consoles} other console ${consoles === 1 ? "session" : "sessions"}`);
+  if (members) parts.push(`${members} member application ${members === 1 ? "session" : "sessions"}`);
+  return `${rows.length} sessions in all: this one, plus ${parts.join(" and ")}.`;
 }
 
 function initialsOf(name: string): string {

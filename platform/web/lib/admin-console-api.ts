@@ -312,3 +312,24 @@ export type MemberAccountAction = "deactivate" | "reactivate" | "resend-verifica
 
 export const memberAccountAction = (memberId: string, action: MemberAccountAction) =>
   postJson<MemberAccountResult>(`${CONSOLE}/members/${memberId}/${action}`, {});
+
+/* ---- the administrator's own account -------------------------------------
+   The console half of the member's Sign-in details. Acts on the signed-in
+   administrator only; it grants nothing and touches no other account. */
+
+export type ConsoleSession = {
+  id: string;
+  portal: "member" | "admin";
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  remember: boolean;
+  current: boolean;
+};
+
+export const changeMyConsolePassword = (current_password: string, new_password: string) =>
+  postJson<{ ok: boolean; message: string | null }>(`${CONSOLE}/account/password`, { current_password, new_password });
+export const listMyConsoleSessions = () =>
+  apiJson<{ rows: ConsoleSession[]; current_session_id: string | null }>(`${CONSOLE}/account/sessions`);
+export const signOutMyOtherConsoleSessions = () =>
+  postJson<{ ok: boolean; message: string | null }>(`${CONSOLE}/account/sessions/revoke-others`, {});

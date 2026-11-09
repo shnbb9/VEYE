@@ -379,13 +379,16 @@ function SecuritySection({ account, onEmailChangeRequested }: { account: Account
             {others > 0 ? ` — ${others} other than this one.` : "."}
           </p>
           <ul className="settings-session-list">
-            {sessions.map((row) => (
+            {/* The newest handful: an account that has been signed in many
+                times should not turn this card into a wall of rows. */}
+            {sessions.slice(0, 5).map((row) => (
               <li key={row.id} data-testid={row.current ? "session-current" : "session-other"}>
                 <b>{row.portal === "admin" ? "Admin console" : "Member application"}</b>
                 {row.current && <span className="settings-session-tag">this device</span>}
                 <small>Last used {new Date(row.last_seen_at).toLocaleString()}{row.remember ? " · stays signed in" : ""}</small>
               </li>
             ))}
+            {sessions.length > 5 && <li className="settings-session-more">and {sessions.length - 5} more</li>}
           </ul>
           {others > 0 && (
             <button className="settings-outline" type="button" disabled={busy === "sessions"} onClick={() => void endOtherSessions()} data-testid="revoke-others">

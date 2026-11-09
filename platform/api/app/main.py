@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.admin.account_routes import router as admin_account_router
 from app.admin.administrators_routes import router as admin_administrators_router
 from app.admin.advanced_routes import router as admin_advanced_router
 from app.admin.companion_routes import router as admin_companion_router
@@ -81,6 +82,7 @@ app.include_router(admin_knowledge_router)
 app.include_router(admin_advanced_router)
 app.include_router(admin_console_router)
 app.include_router(admin_administrators_router)
+app.include_router(admin_account_router)
 app.include_router(admin_care_router)
 app.include_router(care_router)
 app.include_router(admin_content_router)

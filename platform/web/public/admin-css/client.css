@@ -692,3 +692,10 @@ body.is-auth-screen .topbar { display: none !important; }
   font-size: var(--fs-support);
 }
 .wherebtn svg { color: var(--green-medium); }
+
+/* A row that opens into a form (changing your own console password): same
+   grid as .rowitem, but the icon sits with the first line rather than being
+   centred against a tall body. */
+.rowitem--form { align-items: start; grid-template-columns: 44px minmax(0, 1fr); }
+.rowitem--form .field { max-width: 360px; }
+.rowitem--form .field__label { font-size: var(--fs-support); }

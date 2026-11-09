@@ -123,7 +123,11 @@ class DevelopmentSessionAuthProvider:
             if keep_session_id is not None and row.id == keep_session_id:
                 continue
             row.revoked_at = now
-            ended += 1
+            # Only sessions somebody could still be using are counted: an
+            # expired row cannot authenticate, and counting it would tell the
+            # person they signed out far more places than they recognise.
+            if _aware(row.expires_at) > now:
+                ended += 1
         db.flush()
         return ended
 
