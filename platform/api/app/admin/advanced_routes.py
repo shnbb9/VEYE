@@ -27,6 +27,7 @@ from app.admin.schemas import (
 from app.auth.principal import require_admin
 from app.companion.models import CompanionConversation, CompanionMessage, CompanionPolicyDecision
 from app.companion.settings import get_or_create_settings
+from app.core.config import Settings
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.knowledge.service import KnowledgeService
@@ -108,6 +109,25 @@ def safety_analytics(days: int = Query(default=30, ge=1, le=365), db: Session = 
     )
 
 
+def _email_status(runtime: Runtime, settings: Settings) -> dict:
+    """Derived from what is actually configured.
+
+    This used to say "development / undecided" whatever was running, which
+    stopped being true the moment a real relay was configured — a console that
+    misreports its own transport is worse than one that says nothing. The
+    provider's own describe() never contains the password.
+    """
+    described = runtime.email.describe()
+    live = runtime.email.name == "smtp"
+    return described | {
+        "mode": "production" if live else "development",
+        "production_transport": "Google Workspace SMTP (smtp.gmail.com:587, STARTTLS)",
+        "production_ready": live,
+        "reply_to_configured": bool(settings.email_reply_to),
+        "environment_footer": "suppressed" if settings.is_production else "marks the message as non-production",
+    }
+
+
 @router.get("/provider-status", response_model=ProviderStatusOut)
 def provider_status(db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)) -> ProviderStatusOut:
     bind = db.get_bind()
@@ -119,7 +139,7 @@ def provider_status(db: Session = Depends(get_db), runtime: Runtime = Depends(ge
     return ProviderStatusOut(
         environment=settings.environment,
         auth_provider={"provider": runtime.auth_provider.name, "production_provider": "undecided (client decision)"},
-        email=runtime.email.describe() | {"mode": "development", "production_provider": "undecided (client decision)"},
+        email=_email_status(runtime, settings),
         llm=runtime.llm.describe(), embeddings=runtime.embeddings.describe(),
         object_store=runtime.object_store.describe() | {"production_target": "S3 (not configured)"},
         telemetry=runtime.telemetry.describe(),

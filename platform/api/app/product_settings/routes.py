@@ -115,9 +115,9 @@ def feature_states(db: Session = Depends(get_db)) -> list[FeatureState]:
         ("supplements", "Supplements", "available", f"{published.get('supplement', 0)} published; Vitamin Overview awaits citations."),
         ("resources", "Resources", "client_input", f"{published.get('resource', 0)} published; card content not supplied."),
         ("companion", "Veye Companion (Sprout)", "available", f"{active_flows} guided experience(s) active; local mock provider by default."),
-        ("requests", "Requests & Inbox", "available", "Contact Us, Help questions and Join Beta land in the console."),
+        ("requests", "Requests & Inbox", "available", "Contact Us, Help questions and Join Beta land in the console and are answered from it; the reply is emailed and kept on the request."),
         ("activity_tracker", "Activity Tracker (Exercise, Meditation)", "client_input", "Data source not chosen (manual, phone health, wearable)."),
-        ("production_email", "Production email (Google Workspace)", "client_input", "Mailpit locally; sender/relay details listed in the access doc."),
-        ("production_ai", "Production AI provider", "client_input", "Cara's provider preference pending; no external provider receives member data."),
+        ("production_email", "Production email (Google Workspace)", "holding", "Transport selected: Google Workspace SMTP (smtp.gmail.com:587, STARTTLS) from contact@veye.co. Mailpit locally; live delivery pending the rotated credential and a verified send."),
+        ("production_ai", "Production AI provider (Gemini on Google Cloud)", "holding", "Provider selected: Gemini on Google Cloud. Integration, covered-service configuration and the BAA gate are outstanding; no member data reaches an external provider today."),
     ]
     return [FeatureState(key=k, label=l, state=s, state_label=STATE_LABELS[s], note=n) for k, l, s, n in rows]

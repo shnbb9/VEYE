@@ -10,6 +10,7 @@ never redirect them."""
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -24,6 +25,8 @@ from app.core.config import Settings
 from app.members.models import Member
 from app.notifications import templates
 from app.notifications.service import NotificationService
+
+log = logging.getLogger("veye.auth")
 
 PURPOSE_VERIFY = "verify_email"
 PURPOSE_RESET = "reset_password"
@@ -298,7 +301,8 @@ class AuthService:
         if not active:
             self.provider.revoke_all(self.db, user.id)
             if notify:
-                delivery = self._notify(user, "account_deactivated", templates.account_deactivated(user.first_name))
+                delivery = self._notify(user, "account_deactivated",
+                                        templates.account_deactivated(user.first_name, self._support_email()))
         self.db.flush()
         return delivery
 
@@ -350,6 +354,7 @@ class AuthService:
         if self.find_by_email(pending) is not None:
             raise AuthError(409, "That email address has been taken since the change was requested.")
         self._consume_token(raw_token, PURPOSE_EMAIL_CHANGE)
+        previous = user.email
         user.email = pending
         user.pending_email = None
         user.email_verified_at = datetime.now(timezone.utc)
@@ -358,7 +363,29 @@ class AuthService:
         # The identity on the account moved: everyone signs in again.
         self.provider.revoke_all(self.db, user.id)
         self.db.flush()
+        # Only the new address was ever asked to confirm. The old one is told
+        # afterwards, so an address change nobody authorised is visible to the
+        # person who still holds that mailbox. A failed send must not undo a
+        # change the member completed correctly, so it is recorded, not raised.
+        if previous and previous.lower() != pending.lower():
+            self._notify(user, "email_changed",
+                         templates.email_changed_notice(user.first_name, previous, pending, self._support_email()),
+                         to_email=previous)
         return user
+
+    def _support_email(self) -> str | None:
+        """The address the console maintains, for messages that go to people
+        who cannot open the application — a deactivated account, or a mailbox
+        that no longer signs in anywhere.
+
+        Imported here rather than at module scope: product settings reach back
+        into auth for the admin guard on their own routes."""
+        try:
+            from app.product_settings.routes import read_support
+
+            return read_support(self.db).support_email or None
+        except Exception:  # settings are a convenience here, never a blocker
+            return None
 
     # ---- internals ----------------------------------------------------------------------
     def _invalidate_tokens(self, user: UserAccount, purpose: str) -> None:

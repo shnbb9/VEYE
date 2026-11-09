@@ -1,5 +1,9 @@
 """Email wording for the notification kinds that exist today. Passwords never
-appear in any message; links carry single-use tokens only."""
+appear in any message; links carry single-use tokens only.
+
+Two facts about the deployment reach every message from here rather than from
+its caller: which environment really sent it, and whether a reply reaches a
+person. See `Presentation` below."""
 
 from dataclasses import dataclass
 from html import escape
@@ -10,6 +14,58 @@ class Rendered:
     subject: str
     text: str
     html: str
+
+
+@dataclass(frozen=True)
+class Presentation:
+    """How Veye presents itself in email: the environment the message really
+    came from, and whether a reply reaches anybody.
+
+    Fixed for the life of the process and set once at start-up from settings,
+    because it is deployment configuration rather than per-message content —
+    no caller should have to pass it, and none does."""
+
+    environment: str = "local"
+    reply_to: str | None = None
+
+
+PRODUCTION_ENVIRONMENTS = frozenset({"production", "prod"})
+_presentation = Presentation()
+
+
+def configure(*, environment: str, reply_to: str | None = None) -> None:
+    """Called once by `build_runtime`. Tests that need other wording set it
+    directly and restore it afterwards."""
+    global _presentation
+    _presentation = Presentation(environment=environment or "local", reply_to=(reply_to or None))
+
+
+def presentation() -> Presentation:
+    return _presentation
+
+
+def _footer() -> str:
+    """A real recipient must never be told their message came from a
+    development environment, and a developer must always be told that it did."""
+    brand = "Veye &mdash; Nutrition Reimagined."
+    if _presentation.environment.lower() in PRODUCTION_ENVIRONMENTS:
+        return brand
+    return f"{brand} Sent from the Veye {escape(_presentation.environment)} environment &mdash; not a live message."
+
+
+def _how_to_reach_us(support_email: str | None = None) -> str:
+    """Where to write, truthfully.
+
+    With a monitored Reply-To, replying works and is the simplest thing to
+    offer. Without one the sender is a no-reply address, so inviting a reply
+    would be a lie — the support address is offered instead. The fallback never
+    points at the application, because some of these messages go to people who
+    cannot sign in."""
+    if _presentation.reply_to:
+        return "Replying to this message reaches the Veye team."
+    if support_email:
+        return f"Write to {support_email} and the Veye team will pick it up."
+    return "Write to the Veye team at the support address on the website."
 
 
 def _wrap(title: str, paragraphs: list[str], button: tuple[str, str] | None = None) -> str:
@@ -28,8 +84,7 @@ def _wrap(title: str, paragraphs: list[str], button: tuple[str, str] | None = No
         '<div style="font-family:Kumbh Sans,Arial,sans-serif;background:#FBF8F1;padding:32px">'
         '<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:32px">'
         f'<h1 style="margin:0 0 18px;font-size:24px;color:#2E4A1A">{escape(title)}</h1>{body}{cta}'
-        '<p style="margin:26px 0 0;font-size:13px;color:#7A8A6A">Veye &mdash; Nutrition Reimagined. '
-        "This message was sent by the local development environment.</p>"
+        f'<p style="margin:26px 0 0;font-size:13px;color:#7A8A6A">{_footer()}</p>'
         "</div></div>"
     )
 
@@ -138,40 +193,74 @@ def email_change(first_name: str, link: str, hours: int, new_email: str) -> Rend
     )
 
 
-def account_deactivated(first_name: str) -> Rendered:
+def account_deactivated(first_name: str, support_email: str | None = None) -> Rendered:
     """Sent when an administrator switches an account off, so the person is
-    never left guessing why they cannot sign in."""
+    never left guessing why they cannot sign in.
+
+    They cannot use Contact Us inside the application any more, so the way
+    back has to be an address rather than a screen."""
     name = escape(first_name)
+    contact = _how_to_reach_us(support_email)
     return Rendered(
         subject="Your Veye account has been deactivated",
         text=(
             f"Hi {first_name},\n\nYour Veye account has been deactivated, so you will not be able to sign in. "
-            "Your saved results are kept. Reply to this message if you think this was a mistake.\n"
+            f"Your saved results are kept.\n\nIf you think this was a mistake, let us know. {contact}\n"
         ),
         html=_wrap(
             "Your account has been deactivated",
             [f"Hi {name},",
              "Your Veye account has been deactivated, so you will not be able to sign in. Your saved results are kept.",
-             "Reply to this message if you think this was a mistake."],
+             f"If you think this was a mistake, let us know. {escape(contact)}"],
         ),
     )
 
+
+def email_changed_notice(first_name: str, previous_email: str, new_email: str, support_email: str | None = None) -> Rendered:
+    """Sent to the OLD address once a change has actually taken effect.
+
+    The confirmation link only ever goes to the new address; this is the other
+    half — the person who held the old mailbox is told what happened, in
+    enough detail to recognise a change they did not make. The new address is
+    given in full deliberately: if somebody else moved the account, that is
+    the single most useful fact the real owner can have. No password, no link
+    and no token is included, so the message is worth nothing to a thief."""
+    name = escape(first_name)
+    contact = _how_to_reach_us(support_email)
+    return Rendered(
+        subject="Your Veye sign-in email address was changed",
+        text=(
+            f"Hi {first_name},\n\nThe email address used to sign in to your Veye account has been changed "
+            f"from {previous_email} to {new_email}. Sign-in now works with the new address only, and every "
+            "device that was signed in has been signed out.\n\n"
+            f"If you made this change, there is nothing to do. If you did not, act now — whoever made it can "
+            f"reach your account. {contact}\n"
+        ),
+        html=_wrap(
+            "Your sign-in email address was changed",
+            [f"Hi {name},",
+             f"The email address used to sign in to your Veye account has been changed from "
+             f"{escape(previous_email)} to {escape(new_email)}. Sign-in now works with the new address only, "
+             "and every device that was signed in has been signed out.",
+             f"If you made this change, there is nothing to do. If you did not, act now &mdash; whoever made it "
+             f"can reach your account. {escape(contact)}"],
+        ),
+    )
 
 def request_reply(subject: str, body: str, support_email: str) -> Rendered:
     """An administrator's answer to a Contact Us message, Help question or
     Join Beta request.
 
     The administrator's words are sent as written and nothing is added to
-    them. The framing only says what the message is and where to go next: it
-    does not promise that replying to this address reaches anybody, because
-    the sender is a no-reply address until the client says otherwise.
+    them. The framing only says what the message is and where to go next, and
+    it only invites a reply when a monitored Reply-To is actually configured.
 
     There is deliberately no "Hi <name>," line: the administrator writes the
     whole answer, their own salutation included if they want one, and a
     template greeting stacked on a typed one reads like two people talking."""
     about = f" about \u201c{subject}\u201d" if subject else ""
     about_html = f" about &ldquo;{escape(subject)}&rdquo;" if subject else ""
-    where = f"If you need anything more, write to {support_email}."
+    where = _how_to_reach_us(support_email)
     return Rendered(
         subject=f"Veye replied to your message{(': ' + subject) if subject else ''}"[:180],
         text=f"Thank you for writing to Veye{about}. Here is our reply:\n\n{body}\n\n{where}\n",
@@ -182,7 +271,6 @@ def request_reply(subject: str, body: str, support_email: str) -> Rendered:
              escape(where)],
         ),
     )
-
 
 def companion_escalation(first_name: str, category: str, admin_link: str) -> Rendered:
     """Placeholder escalation for the team. Deliberately carries no member

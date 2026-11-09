@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     smtp_timeout_seconds: float = 10.0
     email_from: str = "Veye <no-reply@veye.local>"
+    # Where a reply should land. Unset locally, because there is no mailbox
+    # behind the development sender and a message must not invite a reply that
+    # reaches nobody; production points this at the monitored address. Set once
+    # here and applied at the transport, so no caller carries it.
+    email_reply_to: str | None = None
 
     # ---- Companion / AI providers --------------------------------------------------
     # LLMProvider: "mock" (deterministic, offline) or "groq" (development only,
@@ -104,7 +109,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VEYE_", extra="ignore")
 
-    @field_validator("smtp_username", "smtp_password", "smtp_tls_mode", mode="before")
+    @field_validator("smtp_username", "smtp_password", "smtp_tls_mode", "email_reply_to", mode="before")
     @classmethod
     def _blank_smtp_value_is_unset(cls, value, info):
         # Env files list these names with empty values; empty means "not set".

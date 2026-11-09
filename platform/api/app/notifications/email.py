@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import smtplib
 import ssl
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from email.message import EmailMessage as MimeMessage
 from email.utils import make_msgid, parseaddr
 from typing import Protocol
@@ -53,6 +53,17 @@ class EmailProvider(Protocol):
     def describe(self) -> dict[str, object]: ...
 
 
+def apply_reply_to(message: EmailMessage, reply_to: str | None) -> EmailMessage:
+    """Attach the configured Reply-To, once, at the transport.
+
+    Every message leaves through a provider, so this is the only place that has
+    to remember it — no caller does, and none should start. A message that sets
+    its own Reply-To keeps it: the setting is the default, not an override."""
+    if not reply_to or any(key.lower() == "reply-to" for key in message.headers):
+        return message
+    return replace(message, headers={**message.headers, "Reply-To": reply_to})
+
+
 def _build_mime(message: EmailMessage, sender: str, domain: str) -> tuple[MimeMessage, str]:
     mime = MimeMessage()
     mime["From"] = sender
@@ -74,13 +85,15 @@ class LocalSmtpEmailProvider:
 
     name = "local-smtp"
 
-    def __init__(self, host: str, port: int, sender: str, timeout: float = 5.0) -> None:
+    def __init__(self, host: str, port: int, sender: str, timeout: float = 5.0, *, reply_to: str | None = None) -> None:
         self.host = host
         self.port = port
         self.sender = sender
         self.timeout = timeout
+        self.reply_to = reply_to or None
 
     def send(self, message: EmailMessage) -> DeliveryResult:
+        message = apply_reply_to(message, self.reply_to)
         mime, message_id = _build_mime(message, self.sender, "veye.local")
         try:
             with smtplib.SMTP(self.host, self.port, timeout=self.timeout) as smtp:
@@ -90,7 +103,8 @@ class LocalSmtpEmailProvider:
         return DeliveryResult(accepted=True, provider=self.name, message_id=message_id)
 
     def describe(self) -> dict[str, object]:
-        return {"provider": self.name, "host": self.host, "port": self.port, "sender": self.sender}
+        return {"provider": self.name, "host": self.host, "port": self.port, "sender": self.sender,
+                "reply_to": self.reply_to}
 
 
 def resolve_tls_mode(mode: str | None, port: int) -> str:
@@ -115,13 +129,14 @@ class SmtpEmailProvider:
 
     def __init__(self, host: str, port: int, sender: str, *, tls_mode: str | None = "auto", username: str | None = None,
                  password: SecretStr | str | None = None, timeout: float = 10.0,
-                 ssl_context: ssl.SSLContext | None = None) -> None:
+                 ssl_context: ssl.SSLContext | None = None, reply_to: str | None = None) -> None:
         if not host:
             raise EmailConfigurationError("VEYE_SMTP_HOST is required for the smtp email provider.")
         self.host = host
         self.port = int(port)
         self.sender = sender
         self.timeout = float(timeout)
+        self.reply_to = reply_to or None
         self.tls_mode = resolve_tls_mode(tls_mode, self.port)
         self.username = username or None
         if isinstance(password, str):
@@ -146,6 +161,7 @@ class SmtpEmailProvider:
         return self._ssl_context or ssl.create_default_context()
 
     def send(self, message: EmailMessage) -> DeliveryResult:
+        message = apply_reply_to(message, self.reply_to)
         mime, message_id = _build_mime(message, self.sender, self._domain)
         smtp: smtplib.SMTP | None = None
         try:
@@ -203,7 +219,7 @@ class SmtpEmailProvider:
 
     def describe(self) -> dict[str, object]:
         return {"provider": self.name, "host": self.host, "port": self.port, "tls_mode": self.tls_mode,
-                "sender": self.sender, "auth": self._auth_state()}
+                "sender": self.sender, "auth": self._auth_state(), "reply_to": self.reply_to}
 
 
 class InMemoryEmailProvider:
@@ -211,15 +227,19 @@ class InMemoryEmailProvider:
 
     name = "memory"
 
-    def __init__(self) -> None:
+    def __init__(self, *, reply_to: str | None = None) -> None:
         self.sent: list[EmailMessage] = []
+        self.reply_to = reply_to or None
 
     def send(self, message: EmailMessage) -> DeliveryResult:
+        # Stored exactly as it would leave, Reply-To included, so a test reads
+        # what a recipient would receive rather than what a caller passed.
+        message = apply_reply_to(message, self.reply_to)
         self.sent.append(message)
         return DeliveryResult(accepted=True, provider=self.name, message_id=f"memory-{len(self.sent)}")
 
     def describe(self) -> dict[str, object]:
-        return {"provider": self.name, "sent": len(self.sent)}
+        return {"provider": self.name, "sent": len(self.sent), "reply_to": self.reply_to}
 
 
 class NoEmailProvider:
@@ -237,21 +257,23 @@ class NoEmailProvider:
 
 def build_email_provider(kind: str, *, host: str, port: int, sender: str, production: bool = False,
                          tls_mode: str | None = "auto", username: str | None = None,
-                         password: SecretStr | str | None = None, timeout: float = 10.0) -> EmailProvider:
+                         password: SecretStr | str | None = None, timeout: float = 10.0,
+                         reply_to: str | None = None) -> EmailProvider:
     """Built once at start-up. Invalid or unsafe settings raise here, so the API
     refuses to start rather than run with a broken or development transport."""
     if production and kind in DEVELOPMENT_PROVIDERS:
         raise EmailConfigurationError(
             f"Email provider '{kind}' is for development only; production requires VEYE_EMAIL_PROVIDER=smtp.")
     if kind == "smtp":
-        provider = SmtpEmailProvider(host, port, sender, tls_mode=tls_mode, username=username, password=password, timeout=timeout)
+        provider = SmtpEmailProvider(host, port, sender, tls_mode=tls_mode, username=username, password=password,
+                                     timeout=timeout, reply_to=reply_to)
         if production and provider.tls_mode == "none":
             raise EmailConfigurationError("Production email must use TLS: set VEYE_SMTP_TLS_MODE to starttls, ssl or auto.")
         return provider
     if kind == "local-smtp":
-        return LocalSmtpEmailProvider(host, port, sender)
+        return LocalSmtpEmailProvider(host, port, sender, reply_to=reply_to)
     if kind == "memory":
-        return InMemoryEmailProvider()
+        return InMemoryEmailProvider(reply_to=reply_to)
     if kind == "none":
         return NoEmailProvider()
     raise EmailConfigurationError(f"Unknown email provider '{kind}'. Use smtp, local-smtp, memory or none.")

@@ -6,7 +6,7 @@ import { getProviderStatus, type ProviderStatus } from "@/lib/admin-api";
 
 const SECTIONS: { key: keyof ProviderStatus; title: string; note: string }[] = [
   { key: "auth_provider", title: "Authentication", note: "Development provider: password hashes and server-side sessions held by Veye. Production identity provider is a client decision." },
-  { key: "email", title: "Email", note: "Local SMTP delivery to the Mailpit development mailbox. No real email is sent; the production sender is a client decision." },
+  { key: "email", title: "Email", note: "Which transport is actually in use is below: mode reads development while messages go to the Mailpit mailbox, and production once a real relay is configured. Google Workspace SMTP is the selected production transport. No password is shown here." },
   { key: "llm", title: "Language model", note: "The Companion talks to the model only through the LLMProvider interface. Absence of a provider is reported, never worked around." },
   { key: "embeddings", title: "Embeddings", note: "Deterministic local embeddings for development retrieval. The production embedding provider is a client decision." },
   { key: "object_store", title: "Object store", note: "Original source files. Local files in development; S3 is the production target and is not configured." },

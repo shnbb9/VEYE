@@ -15,6 +15,7 @@ from app.companion.providers.embeddings import EmbeddingProvider, build_embeddin
 from app.companion.providers.llm import LLMProvider, build_llm_provider
 from app.core.config import Settings, settings
 from app.knowledge.object_store import KnowledgeObjectStore, build_object_store
+from app.notifications import templates
 from app.notifications.email import EmailProvider, build_email_provider
 from app.observability.telemetry import DatabaseTraceExporter, TelemetryExporter, TelemetryRecorder
 from app.storage.object_storage import ObjectStorage, build_media_storage
@@ -53,7 +54,11 @@ def build_runtime(config: Settings | None = None) -> Runtime:
     )
     email = build_email_provider(config.email_provider, host=config.smtp_host, port=config.smtp_port, sender=config.email_from,
                                  production=config.is_production, tls_mode=config.smtp_tls_mode, username=config.smtp_username,
-                                 password=config.smtp_password, timeout=config.smtp_timeout_seconds)
+                                 password=config.smtp_password, timeout=config.smtp_timeout_seconds,
+                                 reply_to=config.email_reply_to)
+    # The two deployment facts every message carries: where it really came
+    # from, and whether replying reaches anybody.
+    templates.configure(environment=config.environment, reply_to=config.email_reply_to)
     llm = build_llm_provider(config.llm_provider, groq_api_key=config.groq_api_key, groq_model=config.groq_model,
                              timeout_seconds=config.llm_timeout_seconds)
     embeddings = build_embedding_provider(config.embedding_provider, dimensions=config.embedding_dimensions)

@@ -15,12 +15,14 @@ from app.notifications.email import EmailMessage, EmailProvider
 from app.notifications.models import Notification, NotificationOutbox, NotificationPreference
 
 NOTIFICATION_KINDS = ("welcome", "email_verification", "password_reset", "companion_escalation",
-                      "admin_invitation", "email_change", "account_deactivated")
+                      "admin_invitation", "email_change", "email_changed", "account_deactivated")
 # Security messages are always delivered regardless of preference: nobody may
 # switch off the message that activates their console account, confirms a new
-# address, or tells them their account was switched off.
+# address, tells the old address that the account moved, or tells them their
+# account was switched off. ("email_change" is the confirmation sent to the new
+# address; "email_changed" is the warning sent to the old one afterwards.)
 TRANSACTIONAL_KINDS = frozenset({"email_verification", "password_reset",
-                                 "admin_invitation", "email_change", "account_deactivated"})
+                                 "admin_invitation", "email_change", "email_changed", "account_deactivated"})
 
 
 class NotificationService:
