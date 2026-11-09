@@ -170,9 +170,35 @@ class MemberProfileService:
             "food_diary_saved_days": [plain(d, ("entry_date", "saved_at")) for d in rows(FoodDiaryDay, FoodDiaryDay.entry_date)],
             "meal_plans": [plain(d, ("name", "notes", "describe", "mode", "meals", "assigned_date", "created_at", "updated_at"))
                            for d in rows(MealPlanDay, MealPlanDay.created_at)],
-            "requests": [plain(r, ("kind", "status", "subject", "message", "created_at")) for r in rows(MemberRequest, MemberRequest.created_at)],
+            # What they wrote in, and what Veye wrote back. The docstring
+            # promises what the member "has been given" as well as what they
+            # entered, and an answer they received is part of their record.
+            # The console's internal note and the delivery result are not.
+            "requests": [plain(r, ("kind", "status", "subject", "message", "created_at")) | {
+                "replies": [plain(reply, ("body", "created_at"))
+                            for reply in sorted(r.replies, key=lambda x: x.created_at)],
+            } for r in rows(MemberRequest, MemberRequest.created_at)],
+            # Their own decisions about sharing, with the wording each was made
+            # against — evidence belongs to the person who gave it.
+            "health_data_sharing": self._sharing_export(member_id),
             "guided_sessions": [plain(s, ("flow_key", "flow_version", "status", "current_node", "started_at", "updated_at", "completed_at"))
                                 for s in rows(MemberGuidedFlowSession, MemberGuidedFlowSession.started_at)],
+        }
+
+    def _sharing_export(self, member_id: UUID | None) -> dict[str, Any]:
+        if member_id is None:
+            return {}
+        from app.health_permission.service import HealthPermissionService
+
+        row = HealthPermissionService(self.db).for_member(member_id)
+        return {
+            "state": row.state,
+            "policy_version": row.policy_version or "",
+            "decided_at": row.decided_at.isoformat() if row.decided_at else None,
+            "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None,
+            "history": [{"to_state": e.to_state, "actor": e.actor, "source": e.source,
+                         "policy_version": e.policy_version, "created_at": e.created_at.isoformat()}
+                        for e in row.events],
         }
 
     # ---- deletion ---------------------------------------------------------------------

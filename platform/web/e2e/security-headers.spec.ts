@@ -21,6 +21,44 @@ test.describe("Security headers and CSRF", () => {
     }
   });
 
+  test("the production bundle runs without unsafe-eval, and still hydrates", async ({ page }) => {
+    /* Two halves of one claim. Removing a directive is only an improvement if
+       the application works without it, so this asserts the header AND that
+       the pages it covers come up clean — a CSP violation surfaces as a
+       console error, and so does a hydration failure. */
+    const problems: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") problems.push(`${page.url()} :: ${message.text()}`);
+    });
+    page.on("pageerror", (error) => problems.push(`${page.url()} :: ${error.message}`));
+
+    for (const path of ["/", "/why-veye", "/help", "/login", "/admin/login"]) {
+      const response = await page.goto(path);
+      const csp = response!.headers()["content-security-policy"] ?? "";
+      expect(csp, `${path} has no CSP`).toContain("script-src");
+      expect(csp, `${path} still allows unsafe-eval`).not.toContain("unsafe-eval");
+      // The directives that are load-bearing today.
+      expect(csp, path).toContain("base-uri 'self'");
+      expect(csp, path).toContain("form-action 'self'");
+      await page.waitForLoadState("networkidle");
+    }
+
+    const violations = problems.filter((p) => /content security policy|refused to (evaluate|execute)/i.test(p));
+    expect(violations, "the page broke its own CSP").toEqual([]);
+    expect(problems, "errors on pages served under the tightened CSP").toEqual([]);
+  });
+
+  test("the CSP still admits what the approved design actually needs", async ({ page }) => {
+    /* Honest about what is NOT locked down: inline script and inline style are
+       still permitted. If a future change removes either, this test should be
+       updated deliberately rather than discovered by a blank page. */
+    const response = await page.goto("/");
+    const csp = response!.headers()["content-security-policy"] ?? "";
+    expect(csp).toContain("'unsafe-inline'");
+    expect(csp).toContain("https://www.youtube-nocookie.com");
+    expect(csp).toContain("https://fonts.gstatic.com");
+  });
+
   test("the pages a signed-in member and administrator see are covered too", async ({ page }) => {
     await memberSignIn(page, ADITYA.email, ADITYA.password);
     await expectMemberDashboard(page);

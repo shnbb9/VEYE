@@ -253,3 +253,34 @@ def test_the_member_facing_words_never_call_it_a_hipaa_authorization(member_clie
     assert "hipaa" not in text
     assert "authorization" not in text
     assert "authorisation" not in text
+
+
+def test_a_members_export_carries_what_they_were_given_as_well_as_what_they_entered(member_client, admin_client):
+    """The export promises "everything the member has entered or been given".
+    An answer Veye sent them, and their own sharing decisions, are both part of
+    that — the console's internal note and the delivery result are not."""
+    sent = member_client.post("/api/v1/members/me/requests",
+                              json={"kind": "contact_us", "subject": "A question", "message": "Is my history kept?"})
+    request_id = sent.json()["id"]
+    assert admin_client.post(f"/api/v1/admin/requests/{request_id}/reply",
+                             json={"body": "Yes, every result is kept."}).status_code == 200
+    assert admin_client.post(f"/api/v1/admin/requests/{request_id}/status",
+                             json={"status": "resolved", "resolution_note": "Internal only."}).status_code == 200
+    assert member_client.post(GRANT).status_code == 200
+    assert member_client.post(REVOKE).status_code == 200
+
+    export = member_client.get("/api/v1/members/me/export").json()
+    thread = [r for r in export["requests"] if r["subject"] == "A question"][0]
+    assert [reply["body"] for reply in thread["replies"]] == ["Yes, every result is kept."]
+    assert "resolution_note" not in thread
+    for reply in thread["replies"]:
+        assert set(reply) == {"body", "created_at"}
+
+    sharing = export["health_data_sharing"]
+    assert sharing["state"] == "revoked"
+    assert [e["to_state"] for e in sharing["history"]] == ["granted", "revoked"]
+    assert all(e["policy_version"] == POLICY_VERSION for e in sharing["history"])
+
+    # The export is still the member's own data and nothing else.
+    assert "password_hash" not in str(export)
+    assert "token" not in str(export).lower()
