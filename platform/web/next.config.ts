@@ -40,6 +40,13 @@ const csp = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  /* The Docker web service bind-mounts ./web, so its `next dev` writes into
+     the same .next as a build started on the host. A host build then reads
+     type files the container is still writing and fails on a half-written
+     one. The acceptance suite therefore builds into its own directory and
+     leaves the running 3012 development server entirely alone — the same rule
+     that keeps it off port 3012. */
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // The Docker preview is intentionally reachable on the local loopback host
   // as well as localhost; permit its development client to hydrate there.
   allowedDevOrigins: ["127.0.0.1"],

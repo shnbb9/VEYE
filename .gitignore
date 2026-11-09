@@ -99,6 +99,9 @@ __pycache__/
 venv/
 node_modules/
 .next/
+# The acceptance suite builds into its own directory so it never collides
+# with the Docker development server's .next (they share ./web).
+.next-e2e/
 out/
 coverage/
 test-output/

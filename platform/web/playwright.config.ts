@@ -37,7 +37,8 @@ export default defineConfig({
     url: `${baseURL}/login`,
     reuseExistingServer: true,
     timeout: 120_000,
-    env: { NEXT_PUBLIC_API_URL: apiURL },
+    // The same directory `pree2e` built into, never the development server's.
+    env: { NEXT_PUBLIC_API_URL: apiURL, NEXT_DIST_DIR: process.env.NEXT_DIST_DIR ?? ".next-e2e" },
   },
   use: {
     baseURL,
