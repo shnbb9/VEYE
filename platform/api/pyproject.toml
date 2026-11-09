@@ -28,7 +28,9 @@ ai = [
 # Gemini on Google Cloud, the selected production provider. Optional because
 # nothing in the default deployment reaches it: VEYE_LLM_PROVIDER is "mock".
 gemini = [
-  "google-genai>=1.0,<2",
+  # The unified SDK. Not pinned below 2: the Interactions API and the current
+  # model generation need the 2.x line, and 1.x is the superseded surface.
+  "google-genai>=2.3,<3",
 ]
 # Member media in Google Cloud Storage. Optional: the default store is local.
 gcs = [

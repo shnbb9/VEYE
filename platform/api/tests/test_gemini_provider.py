@@ -80,7 +80,7 @@ def test_the_check_reads_the_prompt_rather_than_trusting_a_caller_flag():
 
 def test_member_context_is_refused_until_a_deployment_is_cleared_for_it():
     vertex = FakeVertex()
-    provider = GeminiLLMProvider(project="veye-dev", location="us-central1", model="gemini-2.0-flash",
+    provider = GeminiLLMProvider(project="veye-dev", location="us", model="gemini-3.8-flash",
                                  member_data_cleared=False, client=vertex)
     with pytest.raises(MemberDataNotCleared) as refused:
         provider.complete(_request(WITH_CONTEXT))
@@ -92,7 +92,7 @@ def test_the_refusal_is_a_failure_not_a_quiet_strip():
     """An answer confidently built from a prompt whose context was silently
     removed is worse than no answer at all."""
     vertex = FakeVertex()
-    provider = GeminiLLMProvider(project="veye-dev", location="us-central1", model="m",
+    provider = GeminiLLMProvider(project="veye-dev", location="us", model="m",
                                  member_data_cleared=False, client=vertex)
     with pytest.raises(ProviderNotConfigured):
         provider.complete(_request(WITH_CONTEXT))
@@ -101,7 +101,7 @@ def test_the_refusal_is_a_failure_not_a_quiet_strip():
 
 def test_a_prompt_without_member_context_goes_through_uncleared():
     vertex = FakeVertex()
-    provider = GeminiLLMProvider(project="veye-dev", location="us-central1", model="gemini-2.0-flash",
+    provider = GeminiLLMProvider(project="veye-dev", location="us", model="gemini-3.8-flash",
                                  member_data_cleared=False, client=vertex)
     answer = provider.complete(_request(WITHOUT_CONTEXT, DataClassification.GENERAL))
     assert answer.text == "A short answer."
@@ -111,7 +111,7 @@ def test_a_prompt_without_member_context_goes_through_uncleared():
 
 def test_once_cleared_member_context_is_sent():
     vertex = FakeVertex()
-    provider = GeminiLLMProvider(project="veye-prod", location="us-central1", model="gemini-2.0-flash",
+    provider = GeminiLLMProvider(project="veye-prod", location="us", model="gemini-3.8-flash",
                                  member_data_cleared=True, client=vertex)
     provider.complete(_request(WITH_CONTEXT))
     assert len(vertex.sent) == 1
@@ -122,30 +122,30 @@ def test_once_cleared_member_context_is_sent():
 
 def test_a_personal_api_key_is_refused_in_production():
     with pytest.raises(ProviderNotConfigured) as refused:
-        GeminiLLMProvider(project="", location="us-central1", model="m", api_key="dev-key", production=True)
+        GeminiLLMProvider(project="", location="us", model="m", api_key="dev-key", production=True)
     assert "production identity" in str(refused.value).lower() or "Application Default" in str(refused.value)
 
 
 def test_a_personal_api_key_may_never_carry_member_data():
     with pytest.raises(ProviderNotConfigured) as refused:
-        GeminiLLMProvider(project="", location="us-central1", model="m",
+        GeminiLLMProvider(project="", location="us", model="m",
                           api_key="dev-key", member_data_cleared=True)
     assert "service identity" in str(refused.value)
 
 
 def test_vertex_needs_a_project():
     with pytest.raises(ProviderNotConfigured) as refused:
-        GeminiLLMProvider(project="", location="us-central1", model="m")
+        GeminiLLMProvider(project="", location="us", model="m")
     assert "VEYE_GCP_PROJECT" in str(refused.value)
 
 
 def test_vertex_uses_the_services_own_identity_not_a_key_file():
-    provider = GeminiLLMProvider(project="veye-prod", location="europe-west4", model="gemini-2.0-flash",
+    provider = GeminiLLMProvider(project="veye-prod", location="eu", model="gemini-3.8-flash",
                                  client=FakeVertex())
     described = provider.describe()
     assert described["auth"] == "application default credentials"
     assert described["project"] == "veye-prod"
-    assert described["location"] == "europe-west4"
+    assert described["location"] == "eu"
     assert described["external"] is True
     assert described["member_data_cleared"] is False
 
@@ -155,7 +155,7 @@ def test_vertex_uses_the_services_own_identity_not_a_key_file():
 def test_sprout_never_reaches_the_open_web():
     """Approved Veye knowledge and the member's own summaries, nothing else."""
     vertex = FakeVertex()
-    GeminiLLMProvider(project="veye-dev", location="us-central1", model="m", client=vertex).complete(
+    GeminiLLMProvider(project="veye-dev", location="us", model="m", client=vertex).complete(
         _request(WITHOUT_CONTEXT, DataClassification.GENERAL))
     assert vertex.sent[0]["config"]["tools"] == []
 
@@ -197,7 +197,7 @@ def test_a_personal_tip_for_a_real_member_cannot_leave_through_an_api_key():
     """The Personal Tip puts a member's summaries in the USER message under no
     heading at all, so nothing in the prompt's text marks it as theirs."""
     vertex = FakeVertex()
-    developer = GeminiLLMProvider(project="", location="us-central1", model="m",
+    developer = GeminiLLMProvider(project="", location="us", model="m",
                                   api_key="dev-key", client=vertex)
     tip_like = LLMRequest(
         system="You are Sprout, writing one short personal note.",
@@ -214,7 +214,7 @@ def test_ordinary_real_member_chat_cannot_use_an_api_key_even_with_an_empty_cont
     """A member typing their own health information is a disclosure whatever
     the context block says."""
     vertex = FakeVertex()
-    developer = GeminiLLMProvider(project="", location="us-central1", model="m",
+    developer = GeminiLLMProvider(project="", location="us", model="m",
                                   api_key="dev-key", client=vertex)
     typed = _request(EMPTY_CONTEXT, DataClassification.REAL_MEMBER,
                      message="My fasting glucose was 6.2 this morning, should I worry?")
@@ -229,7 +229,7 @@ def test_a_synthetic_member_may_use_an_api_key():
     """Seeded demo accounts and disposable E2E identities are what a developer
     key is for."""
     vertex = FakeVertex()
-    developer = GeminiLLMProvider(project="", location="us-central1", model="m",
+    developer = GeminiLLMProvider(project="", location="us", model="m",
                                   api_key="dev-key", client=vertex)
     answer = developer.complete(_request(WITH_CONTEXT, DataClassification.SYNTHETIC_MEMBER))
     assert answer.text == "A short answer."
@@ -238,7 +238,7 @@ def test_a_synthetic_member_may_use_an_api_key():
 
 def test_general_evaluation_with_no_member_may_use_an_api_key():
     vertex = FakeVertex()
-    developer = GeminiLLMProvider(project="", location="us-central1", model="m",
+    developer = GeminiLLMProvider(project="", location="us", model="m",
                                   api_key="dev-key", client=vertex)
     developer.complete(_request(WITHOUT_CONTEXT, DataClassification.GENERAL))
     assert len(vertex.sent) == 1
@@ -301,3 +301,66 @@ def test_every_request_must_choose_a_classification():
     silently inherits the permissive answer."""
     with pytest.raises(TypeError):
         LLMRequest(system="x", messages=())  # type: ignore[call-arg]
+
+
+# ---- the model and the region ------------------------------------------------
+# Checked against Google's documentation on 9 Nov 2026. These assertions exist
+# so that the next model retirement is a failing test rather than a NOT_FOUND
+# in front of a member.
+
+def test_the_default_model_is_one_that_still_exists():
+    """gemini-2.0-flash, the previous default, was retired on 1 June 2026."""
+    from app.companion.providers.gemini import DEFAULT_MODEL
+    from app.core.config import Settings
+
+    assert DEFAULT_MODEL == "gemini-3.8-flash"
+    assert Settings(database_url="sqlite:///unused").gemini_model == "gemini-3.8-flash"
+
+
+def test_a_region_that_does_not_serve_the_model_is_refused_at_start_up():
+    """Not at the first member's message. us-central1 is not in Google's list
+    for this model, and an unserved region answers NOT_FOUND to every call."""
+    with pytest.raises(ProviderNotConfigured) as refused:
+        GeminiLLMProvider(project="veye-prod", location="us-central1", model="gemini-3.8-flash")
+    assert "us-central1" in str(refused.value)
+    assert "global, us, eu" in str(refused.value)
+
+    for served in ("global", "us", "eu"):
+        GeminiLLMProvider(project="veye-prod", location=served, model="gemini-3.8-flash",
+                          client=FakeVertex())
+
+
+def test_the_default_region_keeps_processing_in_the_united_states():
+    from app.companion.providers.gemini import DEFAULT_LOCATION
+    from app.core.config import Settings
+
+    assert DEFAULT_LOCATION == "us"
+    assert Settings(database_url="sqlite:///unused").gcp_location == "us"
+
+
+def test_deprecated_sampling_parameters_are_never_sent():
+    """temperature, top_p and top_k are ignored by this model generation and
+    the migration guide says to remove them. frequency_penalty,
+    presence_penalty and candidate_count throw an API error outright."""
+    vertex = FakeVertex()
+    provider = GeminiLLMProvider(project="veye-prod", location="us", model="gemini-3.8-flash",
+                                 client=vertex)
+    provider.complete(_request(WITHOUT_CONTEXT, DataClassification.GENERAL))
+    config = vertex.sent[0]["config"]
+    for banned in ("temperature", "top_p", "top_k", "topP", "topK",
+                   "frequency_penalty", "presence_penalty", "candidate_count"):
+        assert banned not in config, f"{banned} was sent to a model that does not accept it"
+    # What it does send.
+    assert config["system_instruction"]
+    assert config["max_output_tokens"] > 0
+    assert config["tools"] == []
+
+
+def test_thinking_level_is_left_at_its_default():
+    """MEDIUM is the documented default and nothing here needs to move it.
+    MINIMAL is rejected by the API, so it must never be sent speculatively."""
+    vertex = FakeVertex()
+    GeminiLLMProvider(project="veye-prod", location="us", model="gemini-3.8-flash",
+                      client=vertex).complete(_request(WITHOUT_CONTEXT, DataClassification.GENERAL))
+    assert "thinking_level" not in vertex.sent[0]["config"]
+    assert "thinking_budget" not in vertex.sent[0]["config"]

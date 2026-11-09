@@ -99,9 +99,13 @@ class Settings(BaseSettings):
     # Vertex AI with the service's own identity, not a personal API key: a key
     # belongs to a person, is covered by no agreement, and cannot be rotated or
     # audited like a service identity.
-    gemini_model: str = "gemini-2.0-flash"
+    # gemini-3.8-flash is GA; gemini-2.0-flash was retired on 1 June 2026.
+    gemini_model: str = "gemini-3.8-flash"
     gcp_project: str | None = None
-    gcp_location: str = "us-central1"
+    # Google serves this model on `global` and the `us` / `eu` multi-regions
+    # only. `us` keeps processing inside the United States, which `global` does
+    # not promise. us-central1 does not serve it at all.
+    gcp_location: str = "us"
     # Local experimentation only. Refused in production, and never permitted to
     # carry member data.
     gemini_api_key: str | None = None

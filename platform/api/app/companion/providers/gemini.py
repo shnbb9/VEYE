@@ -41,8 +41,25 @@ log = logging.getLogger("veye.companion.gemini")
 # is what makes a request PHI-bearing.
 MEMBER_CONTEXT_MARKER = "## MEMBER CONTEXT"
 
-DEFAULT_MODEL = "gemini-2.0-flash"
-DEFAULT_LOCATION = "us-central1"
+# Checked against Google's own documentation on 9 Nov 2026:
+# docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash
+# and .../models/guides/gemini-3-8-flash
+#
+# gemini-3.8-flash is GA (released 2 Sep 2026, retirement no earlier than
+# 2 Sep 2027). gemini-2.0-flash, which this provider defaulted to, was retired
+# on 1 June 2026 — the default was a model that no longer exists.
+DEFAULT_MODEL = "gemini-3.8-flash"
+
+# The model page lists serving on `global` and the `us` / `eu` multi-regions
+# only; us-central1 is not listed, and a model that is not served in a region
+# answers NOT_FOUND to every call.
+#
+# `us` rather than `global` because this deployment is intended to carry health
+# information for people in the United States, and a multi-region keeps
+# processing inside that boundary where `global` does not promise to. Change it
+# only with a reason, and only to a value Google documents.
+SUPPORTED_LOCATIONS = ("global", "us", "eu")
+DEFAULT_LOCATION = "us"
 
 
 class MemberDataNotCleared(ProviderNotConfigured):
@@ -89,6 +106,14 @@ class GeminiLLMProvider:
                 "Production uses Vertex AI with VEYE_GCP_PROJECT and Application Default Credentials.")
         if not self._api_key and not project:
             raise ProviderNotConfigured("VEYE_GCP_PROJECT is required for the Gemini provider on Vertex AI.")
+        if not self._api_key and self.location not in SUPPORTED_LOCATIONS:
+            # Refused at start-up rather than at the first member's message. A
+            # region that does not serve the model answers NOT_FOUND to every
+            # call, and discovering that from a member's broken conversation is
+            # the worst way to find out.
+            raise ProviderNotConfigured(
+                f"Gemini is not served from '{self.location}'. VEYE_GCP_LOCATION must be one of: "
+                f"{', '.join(SUPPORTED_LOCATIONS)}.")
         if self._api_key and self.member_data_cleared:
             # Refused at construction as well as per request: a deployment that
             # has configured both has misunderstood what the clearance means,
@@ -155,12 +180,19 @@ class GeminiLLMProvider:
         config = {
             "system_instruction": request.system,
             "max_output_tokens": request.max_tokens,
-            "temperature": request.temperature,
             # No public web grounding. Sprout answers from approved Veye
             # knowledge and the member's own summaries, and a model that can
             # reach the open web is answering from something else.
             "tools": [],
         }
+        # Deliberately NOT sent:
+        #   temperature / top_p / top_k — "ignored by the backend" on this model
+        #     generation, and the migration guide says to remove them. The other
+        #     providers still use request.temperature, so it stays on LLMRequest.
+        #   thinking_level — MEDIUM is the documented default and nothing here
+        #     needs to move it. (MINIMAL is rejected outright by the API.)
+        #   frequency_penalty / presence_penalty / candidate_count — these do
+        #     throw an API error, so they must never be added casually.
         response = client.models.generate_content(model=self.model, contents=contents, config=config)
         usage = getattr(response, "usage_metadata", None)
         return LLMResponse(
