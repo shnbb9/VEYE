@@ -2,9 +2,16 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
-import { REQUEST_STATUS_LABELS, getMember360, memberPhotoUrl, type Member360 } from "@/lib/admin-console-api";
+import {
+  REQUEST_STATUS_LABELS,
+  getMember360,
+  memberAccountAction,
+  memberPhotoUrl,
+  type Member360,
+  type MemberAccountAction,
+} from "@/lib/admin-console-api";
 
 /* Member 360 (admin prototype screens/member-360.js): the member header with
    the Health Number dial, then Overview · Assessments · Companion · Account.
@@ -41,9 +48,12 @@ function Member360View() {
   const [member, setMember] = useState<Member360 | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    getMember360(memberId).then(setMember).catch((reason) => setError(reason instanceof Error ? reason.message : "That member could not be loaded."));
+  const reload = useCallback(() => {
+    getMember360(memberId).then(setMember)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "That member could not be loaded."));
   }, [memberId]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   if (error) {
     return (
@@ -260,23 +270,140 @@ function Member360View() {
       )}
 
       {tab === "account" && (
-        <div className="card">
-          <div className="card__head"><div><h2 className="card__title">Account</h2><p className="t-support">Identity and access facts. Administrator access is provisioned by the system, never self-served.</p></div></div>
-          <div className="card__body">
-            <dl className="kv">
-              <dt>Name</dt><dd>{profile.name}</dd>
-              <dt>Email</dt><dd>{profile.email} · {profile.email_verified ? "verified" : "not verified"}</dd>
-              <dt>Account id</dt><dd className="mono">{profile.account_id}</dd>
-              <dt>Member id</dt><dd className="mono">{profile.member_id}</dd>
-              <dt>Member portal</dt><dd>Yes — this account owns a member profile</dd>
-              <dt>Admin console</dt><dd>{profile.admin_access ? "Yes — signs in separately at /admin/login" : "No"}</dd>
-              <dt>Status</dt><dd>{profile.is_active ? "Active" : "Inactive"}{profile.is_synthetic ? " · synthetic local demo account" : ""}</dd>
-              <dt>Joined</dt><dd>{fmtDate(profile.joined_at)}</dd>
-              <dt>Last active</dt><dd>{profile.last_active_at ? fmtDate(profile.last_active_at) : "Never"}</dd>
-            </dl>
+        <div className="stack gap-5">
+          <div className="card">
+            <div className="card__head"><div><h2 className="card__title">Account</h2><p className="t-support">Identity and access facts. Administrator access is provisioned by the system, never self-served.</p></div></div>
+            <div className="card__body">
+              <dl className="kv">
+                <dt>Name</dt><dd>{profile.name}</dd>
+                <dt>Email</dt><dd>{member.account.email} · {member.account.email_verified ? "verified" : "not verified"}</dd>
+                {member.account.pending_email && <><dt>Pending email</dt><dd>{member.account.pending_email} · waiting for the member to confirm from that mailbox</dd></>}
+                <dt>Account id</dt><dd className="mono">{profile.account_id}</dd>
+                <dt>Member id</dt><dd className="mono">{profile.member_id}</dd>
+                <dt>Member portal</dt><dd>Yes — this account owns a member profile</dd>
+                <dt>Admin console</dt><dd>{member.account.admin_access ? "Yes — managed under Settings → Administrators" : "No"}</dd>
+                <dt>Status</dt><dd>{member.account.is_active ? "Active" : `Deactivated${member.account.deactivated_at ? ` on ${fmtDate(member.account.deactivated_at)}` : ""}`}{member.account.is_synthetic ? " · synthetic local demo account" : ""}</dd>
+                <dt>Signed in now</dt><dd>{member.account.active_sessions === 0 ? "No live session" : `${member.account.active_sessions} session${member.account.active_sessions === 1 ? "" : "s"}`}{member.account.last_session_at ? ` · last seen ${fmtDate(member.account.last_session_at)}` : ""}</dd>
+                <dt>Joined</dt><dd>{fmtDate(profile.joined_at)}</dd>
+                <dt>Last active</dt><dd>{profile.last_active_at ? fmtDate(profile.last_active_at) : "Never"}</dd>
+              </dl>
+            </div>
           </div>
+          <AccountActions member={member} onChanged={reload} />
         </div>
       )}
+    </div>
+  );
+}
+
+/* What an administrator may do to a member's SIGN-IN account. Deliberately
+   small: switch the account off or back on, and re-send the two emails the
+   member may need. No administrator ever sets or sees a password, and nothing
+   here touches a stored assessment result. */
+function AccountActions({ member, onChanged }: { member: Member360; onChanged: () => void }) {
+  const [busy, setBusy] = useState<MemberAccountAction | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const account = member.account;
+  const name = member.profile.name;
+
+  async function run(action: MemberAccountAction, confirmText?: string) {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setBusy(action); setNotice(""); setError("");
+    try {
+      const result = await memberAccountAction(member.profile.member_id, action);
+      const failed = result.delivery && result.delivery.status !== "sent";
+      setNotice(failed
+        ? `${result.message} The email could not be sent: ${result.delivery?.detail ?? "mail service unavailable"}.`
+        : result.message);
+      onChanged();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "That action could not be completed.");
+    } finally { setBusy(null); }
+  }
+
+  if (account.admin_access) {
+    return (
+      <div className="card" data-testid="m360-account-actions">
+        <div className="card__head"><div><h2 className="card__title">Account actions</h2></div></div>
+        <div className="card__body">
+          <div className="notice notice--quiet"><Icon name="info" size={18} /><div>
+            {name} also has console access, so this account is managed under{" "}
+            <Link href="/admin/settings?section=administrators">Settings → Administrators</Link>, where the
+            last-administrator guard lives.
+          </div></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" data-testid="m360-account-actions">
+      <div className="card__head">
+        <div><h2 className="card__title">Account actions</h2>
+          <p className="t-support">Access and email only. Results stay read-only, and a password is always chosen by the member.</p></div>
+      </div>
+      <div className="card__body card__body--flush">
+        {error && <p className="errorbar">{error}</p>}
+        {notice && <p className="t-support" role="status" style={{ padding: "12px 20px 0" }} data-testid="account-action-notice">{notice}</p>}
+        <div className="rows">
+          <div className="rowitem">
+            <span className={`rowitem__icon${account.is_active ? "" : " rowitem__icon--off"}`}><Icon name="lock" size={18} /></span>
+            <div>
+              <div className="rowitem__title">{account.is_active ? "Deactivate account" : "Reactivate account"}</div>
+              <div className="rowitem__meta">
+                {account.is_active
+                  ? "Signs them out everywhere at once and refuses their password until reactivated. Their saved results are kept."
+                  : `Deactivated${account.deactivated_at ? ` on ${fmtDate(account.deactivated_at)}` : ""}. Reactivating lets them sign in with the password they already had.`}
+              </div>
+            </div>
+            {account.is_active ? (
+              <button className="btn btn--ghost btn--sm" type="button" disabled={busy !== null} data-testid="account-deactivate"
+                      onClick={() => void run("deactivate", `Deactivate ${name}? They are signed out at once and cannot sign in until reactivated.`)}>
+                {busy === "deactivate" ? "Working…" : "Deactivate"}
+              </button>
+            ) : (
+              <button className="btn btn--secondary btn--sm" type="button" disabled={busy !== null} data-testid="account-reactivate"
+                      onClick={() => void run("reactivate")}>
+                {busy === "reactivate" ? "Working…" : "Reactivate"}
+              </button>
+            )}
+          </div>
+
+          <div className="rowitem">
+            <span className={`rowitem__icon${account.email_verified ? " rowitem__icon--off" : ""}`}><Icon name="mail" size={18} /></span>
+            <div>
+              <div className="rowitem__title">Verification email</div>
+              <div className="rowitem__meta">
+                {account.email_verified
+                  ? `${account.email} is already verified, so there is nothing to resend.`
+                  : `Sends a fresh verification link to ${account.email}. It works once and expires in 48 hours.`}
+              </div>
+            </div>
+            <button className="btn btn--secondary btn--sm" type="button" data-testid="account-resend-verification"
+                    disabled={busy !== null || account.email_verified || !account.is_active}
+                    onClick={() => void run("resend-verification")}>
+              {busy === "resend-verification" ? "Sending…" : "Resend"}
+            </button>
+          </div>
+
+          <div className="rowitem">
+            <span className="rowitem__icon"><Icon name="shield" size={18} /></span>
+            <div>
+              <div className="rowitem__title">Password reset link</div>
+              <div className="rowitem__meta">
+                Emails {account.email} the ordinary single-use reset link (30 minutes). You never see or choose their password.
+              </div>
+            </div>
+            <button className="btn btn--secondary btn--sm" type="button" data-testid="account-send-reset"
+                    disabled={busy !== null || !account.is_active}
+                    onClick={() => void run("send-password-reset", `Email ${name} a password-reset link?`)}>
+              {busy === "send-password-reset" ? "Sending…" : "Send reset link"}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="card__foot"><span className="t-support">Every action here is written to the admin audit log.</span></div>
     </div>
   );
 }

@@ -96,6 +96,7 @@ export type Member360 = {
   food_diary_days: number;
   requests: ConsoleRequest[];
   not_connected: string[];
+  account: MemberAccount;
 };
 
 /** The member's profile photo as the console sees it (same bytes the member sees). */
@@ -249,3 +250,65 @@ export const listContentEntries = (group?: ContentGroup, status?: string) => api
 export const createContentEntry = (input: ContentEntryInput) => postJson<ContentEntry>(`${CONSOLE}/content/entries`, input);
 export const updateContentEntry = (id: string, input: ContentEntryInput) => postJson<ContentEntry>(`${CONSOLE}/content/entries/${id}`, input, "PUT");
 export const transitionContentEntry = (id: string, action: LifecycleAction) => postJson<ContentEntry>(`${CONSOLE}/content/entries/${id}/${action}`, {});
+
+/* ---- Administrators ------------------------------------------------------
+   Who may use the console. There are no roles: every administrator has the
+   same console, so a row carries provisioning facts (invitation, last active,
+   account state) and never a permission level. */
+
+export type InvitationStatus = "accepted" | "pending" | "expired" | "seeded";
+export const INVITATION_LABELS: Record<InvitationStatus, string> = {
+  accepted: "Accepted", pending: "Invitation sent", expired: "Invitation expired", seeded: "System account",
+};
+export const INVITATION_TONES: Record<InvitationStatus, string> = {
+  accepted: "live", pending: "draft", expired: "attention", seeded: "archived",
+};
+
+export type AdministratorRow = {
+  user_id: string;
+  name: string;
+  email: string;
+  invitation_status: InvitationStatus;
+  invited_at: string | null;
+  invited_by: string | null;
+  accepted_at: string | null;
+  last_active_at: string | null;
+  active_sessions: number;
+  is_active: boolean;
+  deactivated_at: string | null;
+  also_member: boolean;
+  is_self: boolean;
+  is_synthetic: boolean;
+};
+export type AdministratorsPage = { rows: AdministratorRow[]; total: number; active: number; pending: number };
+export type DeliveryOut = { kind: string; status: string; detail: string | null };
+export type AdministratorResult = { row: AdministratorRow; delivery: DeliveryOut | null };
+export type AdminAction = "resend" | "revoke-invitation" | "deactivate" | "reactivate";
+
+export const listAdministrators = () => apiJson<AdministratorsPage>(`${CONSOLE}/administrators`);
+export const inviteAdministrator = (input: { email: string; first_name: string; last_name: string }) =>
+  postJson<AdministratorResult>(`${CONSOLE}/administrators/invite`, input);
+export const administratorAction = (userId: string, action: AdminAction) =>
+  postJson<AdministratorResult>(`${CONSOLE}/administrators/${userId}/${action}`, {});
+
+/* ---- A member's sign-in account ------------------------------------------
+   Account state only: no route here reads or writes an assessment result, and
+   no administrator ever sets a password. */
+
+export type MemberAccount = {
+  user_id: string;
+  email: string;
+  pending_email: string | null;
+  email_verified: boolean;
+  is_active: boolean;
+  deactivated_at: string | null;
+  active_sessions: number;
+  last_session_at: string | null;
+  admin_access: boolean;
+  is_synthetic: boolean;
+};
+export type MemberAccountResult = { account: MemberAccount; delivery: DeliveryOut | null; message: string };
+export type MemberAccountAction = "deactivate" | "reactivate" | "resend-verification" | "send-password-reset";
+
+export const memberAccountAction = (memberId: string, action: MemberAccountAction) =>
+  postJson<MemberAccountResult>(`${CONSOLE}/members/${memberId}/${action}`, {});

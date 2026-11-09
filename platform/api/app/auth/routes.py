@@ -17,6 +17,7 @@ from app.auth.schemas import (
     DeliveryOut,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
+    InvitationPreviewOut,
     NotificationPreferencesOut,
     NotificationPreferenceUpdate,
     OkResponse,
@@ -41,7 +42,8 @@ def account_out(user: UserAccount, portal: str | None = None) -> AccountOut:
     return AccountOut(
         id=user.id, email=user.email, role=user.role, first_name=user.first_name, last_name=user.last_name,
         member_id=user.member_id, member_access=user.member_access, admin_access=user.admin_access, portal=portal,
-        email_verified=user.email_verified_at is not None, is_synthetic=user.is_synthetic, created_at=user.created_at,
+        email_verified=user.email_verified_at is not None, pending_email=user.pending_email,
+        is_synthetic=user.is_synthetic, created_at=user.created_at,
         phone=user.phone, postal_code=user.postal_code, photo_version=photo_version(user),
     )
 
@@ -202,6 +204,47 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db),
         _raise(exc)
     db.commit()
     return OkResponse(ok=True, message="Your password has been changed. Sign in with your new password.")
+
+
+@router.get("/admin-invitation", response_model=InvitationPreviewOut)
+def preview_admin_invitation(token: str, db: Session = Depends(get_db),
+                             auth: AuthService = Depends(get_auth_service)) -> InvitationPreviewOut:
+    """What the activation screen may show before a password is set. Only the
+    holder of the link sees it, and it reveals nothing beyond the invitation."""
+    try:
+        user = auth.invitation_for(token)
+    except AuthError as exc:
+        _raise(exc)
+    inviter = db.get(UserAccount, user.invited_by_user_id) if user.invited_by_user_id else None
+    return InvitationPreviewOut(email=user.email, first_name=user.first_name, last_name=user.last_name,
+                                invited_by=(inviter.display_name if inviter else None))
+
+
+@router.post("/admin-invitation/accept", response_model=OkResponse)
+def accept_admin_invitation(payload: ResetPasswordRequest, db: Session = Depends(get_db),
+                            auth: AuthService = Depends(get_auth_service)) -> OkResponse:
+    """Activate an invited console account by setting its first password. It
+    does not sign anyone in: the new administrator goes to /admin/login, so the
+    portal they enter through is still the thing that decides where they land."""
+    try:
+        auth.accept_admin_invitation(payload.token, payload.password)
+    except AuthError as exc:
+        _raise(exc)
+    db.commit()
+    return OkResponse(ok=True, message="Your administrator account is ready. Sign in to the console.")
+
+
+@router.post("/confirm-email-change", response_model=OkResponse)
+def confirm_email_change(payload: TokenRequest, db: Session = Depends(get_db),
+                         auth: AuthService = Depends(get_auth_service)) -> OkResponse:
+    """Finish an email change. The link was sent to the NEW address, so using
+    it proves that mailbox is reachable; every session then ends."""
+    try:
+        user = auth.confirm_email_change(payload.token)
+    except AuthError as exc:
+        _raise(exc)
+    db.commit()
+    return OkResponse(ok=True, message=f"Your email address is now {user.email}. Please sign in again.")
 
 
 @router.get("/notification-preferences", response_model=NotificationPreferencesOut)

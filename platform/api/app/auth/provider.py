@@ -110,6 +110,32 @@ class DevelopmentSessionAuthProvider:
             session.revoked_at = datetime.now(timezone.utc)
             db.flush()
 
+    def revoke_others(self, db: Session, user_id: UUID, *, keep_session_id: UUID | None) -> int:
+        """End every live session of the account except the one making the
+        request — "sign out everywhere else", and what an in-app password
+        change does: the person stays signed in here, anyone else is out."""
+        now = datetime.now(timezone.utc)
+        rows = (db.query(AuthSession)
+                .filter(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
+                .all())
+        ended = 0
+        for row in rows:
+            if keep_session_id is not None and row.id == keep_session_id:
+                continue
+            row.revoked_at = now
+            ended += 1
+        db.flush()
+        return ended
+
+    def live_sessions(self, db: Session, user_id: UUID) -> list[AuthSession]:
+        """Sessions the person could still be using, newest first."""
+        now = datetime.now(timezone.utc)
+        rows = (db.query(AuthSession)
+                .filter(AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None))
+                .all())
+        live = [row for row in rows if _aware(row.expires_at) > now]
+        return sorted(live, key=lambda row: _aware(row.last_seen_at), reverse=True)
+
     def revoke_all(self, db: Session, user_id: UUID, *, portal: str | None = None) -> int:
         """End every live session of the account — both portals unless one is
         named (a password change signs the person out everywhere)."""

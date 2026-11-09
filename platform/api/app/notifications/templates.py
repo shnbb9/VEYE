@@ -89,6 +89,74 @@ def password_reset(first_name: str, link: str, minutes: int) -> Rendered:
     )
 
 
+def admin_invitation(first_name: str, link: str, hours: int, invited_by: str) -> Rendered:
+    """An invitation to the admin console. Administrator access is provisioned,
+    never self-served, so this link is the only way in."""
+    name = escape(first_name)
+    inviter = escape(invited_by)
+    return Rendered(
+        subject="You have been invited to the Veye admin console",
+        text=(
+            f"Hi {first_name},\n\n{invited_by} has invited you to the Veye admin console. "
+            f"Use this link to set your password and activate the account:\n{link}\n\n"
+            f"The link works once and expires in {hours} hours. If you were not expecting this invitation, "
+            "ignore this message and no account is activated.\n"
+        ),
+        html=_wrap(
+            "You have been invited to the Veye admin console",
+            [f"Hi {name},",
+             f"{inviter} has invited you to the Veye admin console. Use the button below to set your password "
+             "and activate the account.",
+             f"The link works once and expires in {hours} hours. If you were not expecting this invitation, "
+             "ignore this message and no account is activated."],
+            ("Set my password", link),
+        ),
+    )
+
+
+def email_change(first_name: str, link: str, hours: int, new_email: str) -> Rendered:
+    """Sent to the NEW address: the change only takes effect when the person
+    holding that mailbox uses the link."""
+    name = escape(first_name)
+    address = escape(new_email)
+    return Rendered(
+        subject="Confirm your new Veye email address",
+        text=(
+            f"Hi {first_name},\n\nSomeone asked to move a Veye account to this address ({new_email}). "
+            f"Use this link to confirm it:\n{link}\n\n"
+            f"The link works once and expires in {hours} hours. Until then the account keeps its current address. "
+            "If this was not you, ignore this message.\n"
+        ),
+        html=_wrap(
+            "Confirm your new email address",
+            [f"Hi {name},",
+             f"Someone asked to move a Veye account to this address ({address}). Use the button below to confirm it.",
+             f"The link works once and expires in {hours} hours. Until then the account keeps its current address. "
+             "If this was not you, ignore this message."],
+            ("Confirm this address", link),
+        ),
+    )
+
+
+def account_deactivated(first_name: str) -> Rendered:
+    """Sent when an administrator switches an account off, so the person is
+    never left guessing why they cannot sign in."""
+    name = escape(first_name)
+    return Rendered(
+        subject="Your Veye account has been deactivated",
+        text=(
+            f"Hi {first_name},\n\nYour Veye account has been deactivated, so you will not be able to sign in. "
+            "Your saved results are kept. Reply to this message if you think this was a mistake.\n"
+        ),
+        html=_wrap(
+            "Your account has been deactivated",
+            [f"Hi {name},",
+             "Your Veye account has been deactivated, so you will not be able to sign in. Your saved results are kept.",
+             "Reply to this message if you think this was a mistake."],
+        ),
+    )
+
+
 def companion_escalation(first_name: str, category: str, admin_link: str) -> Rendered:
     """Placeholder escalation for the team. Deliberately carries no member
     identity and no message content — minimum necessary."""

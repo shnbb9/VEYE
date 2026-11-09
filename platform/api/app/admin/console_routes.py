@@ -19,8 +19,12 @@ from app.assessments.models import HealthNumberAttempt
 from app.assessments.routes import history_item as health_number_item
 from app.assessments.schemas import HealthNumberHistoryItem
 from app.assessments.service import CALCULATION_VERSION as HEALTH_NUMBER_VERSION
+from app.admin.audit import record_audit
+from app.auth.dependencies import get_auth_service
 from app.auth.models import AuthSession, UserAccount
-from app.auth.principal import require_admin
+from app.auth.principal import PORTAL_MEMBER, CurrentPrincipal, require_admin
+from app.auth.schemas import DeliveryOut
+from app.auth.service import AuthService
 from app.companion.models import CompanionConversation, CompanionFeedback, CompanionMessage
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
@@ -169,6 +173,22 @@ class ConversationRow(BaseModel):
     reviewed_at: datetime | None
 
 
+class MemberAccountOut(BaseModel):
+    """The sign-in account behind a member profile: what an administrator may
+    see and act on. No health content, and nothing role-shaped."""
+
+    user_id: UUID
+    email: str
+    pending_email: str | None
+    email_verified: bool
+    is_active: bool
+    deactivated_at: datetime | None
+    active_sessions: int
+    last_session_at: datetime | None
+    admin_access: bool
+    is_synthetic: bool
+
+
 class Member360Out(BaseModel):
     profile: MemberRow
     phone: str | None
@@ -186,6 +206,7 @@ class Member360Out(BaseModel):
     food_diary_days: int
     requests: list[RequestOut]
     not_connected: list[str]
+    account: MemberAccountOut
 
 
 class InstrumentOut(BaseModel):
@@ -324,6 +345,18 @@ def _member_rows(db: Session) -> list[MemberRow]:
             has_photo=bool(user.photo_object_key), photo_version=photo_version(user),
         ))
     return rows
+
+
+def _account_out(db: Session, user: UserAccount, runtime: Runtime) -> MemberAccountOut:
+    sessions = runtime.auth_provider.live_sessions(db, user.id)
+    return MemberAccountOut(
+        user_id=user.id, email=user.email, pending_email=user.pending_email,
+        email_verified=user.email_verified_at is not None, is_active=user.is_active,
+        deactivated_at=_aware(user.deactivated_at) if user.deactivated_at else None,
+        active_sessions=len(sessions),
+        last_session_at=max((_aware(s.last_seen_at) for s in sessions), default=None),
+        admin_access=user.admin_access, is_synthetic=user.is_synthetic,
+    )
 
 
 def _member_or_404(db: Session, member_id: UUID) -> tuple[Member, UserAccount]:
@@ -476,7 +509,8 @@ def members(
 
 
 @router.get("/members/{member_id}", response_model=Member360Out)
-def member_360(member_id: UUID, db: Session = Depends(get_db)) -> Member360Out:
+def member_360(member_id: UUID, db: Session = Depends(get_db),
+               runtime: Runtime = Depends(get_runtime)) -> Member360Out:
     member, user = _member_or_404(db, member_id)
     profile = next((r for r in _member_rows(db) if r.member_id == member_id), None)
     if profile is None:
@@ -513,6 +547,7 @@ def member_360(member_id: UUID, db: Session = Depends(get_db)) -> Member360Out:
         food_diary=[meal_out(m) for m in meals], food_diary_days=diary_days,
         requests=[request_out(r) for r in requests],
         not_connected=["Food Choices", "Mindfulness", "Activity Tracker (Exercise, Meditation)"],
+        account=_account_out(db, user, runtime),
     )
 
 
@@ -595,4 +630,93 @@ def insights(db: Session = Depends(get_db)) -> InsightsOut:
         mood_entries=_count(db, MoodEntry), mood_members=_distinct_members(db, MoodEntry),
         food_diary_entries=_count(db, FoodDiaryEntry), food_diary_members=_distinct_members(db, FoodDiaryEntry),
         generated_at=_now(),
+    )
+
+
+# ---- member account actions ---------------------------------------------------
+# What an administrator may do to a member's SIGN-IN account. Assessment data
+# stays read-only everywhere; none of these routes touches a stored result.
+
+class MemberAccountActionOut(BaseModel):
+    account: MemberAccountOut
+    delivery: DeliveryOut | None = None
+    message: str
+
+
+def _account_target(db: Session, member_id: UUID) -> UserAccount:
+    _, user = _member_or_404(db, member_id)
+    if user.admin_access:
+        # An administrator's own access is managed on the Administrators page,
+        # where the "last active administrator" guard lives.
+        raise HTTPException(status_code=409,
+                            detail="This person also has console access. Manage their account under Settings → Administrators.")
+    return user
+
+
+@router.post("/members/{member_id}/deactivate", response_model=MemberAccountActionOut)
+def deactivate_member(member_id: UUID, principal: CurrentPrincipal = Depends(require_admin),
+                      db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime),
+                      auth: AuthService = Depends(get_auth_service)) -> MemberAccountActionOut:
+    user = _account_target(db, member_id)
+    if not user.is_active:
+        raise HTTPException(status_code=409, detail="That account is already deactivated.")
+    delivery = auth.set_account_active(user, active=False)
+    record_audit(db, principal, "member_account.deactivated", "user_account", str(user.id), {"email": user.email})
+    db.commit()
+    return MemberAccountActionOut(
+        account=_account_out(db, user, runtime),
+        delivery=DeliveryOut(kind=delivery.kind, status=delivery.status, detail=delivery.detail) if delivery else None,
+        message="The account is deactivated and every session has ended.",
+    )
+
+
+@router.post("/members/{member_id}/reactivate", response_model=MemberAccountActionOut)
+def reactivate_member(member_id: UUID, principal: CurrentPrincipal = Depends(require_admin),
+                      db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime),
+                      auth: AuthService = Depends(get_auth_service)) -> MemberAccountActionOut:
+    user = _account_target(db, member_id)
+    if user.is_active:
+        raise HTTPException(status_code=409, detail="That account is already active.")
+    auth.set_account_active(user, active=True)
+    record_audit(db, principal, "member_account.reactivated", "user_account", str(user.id), {"email": user.email})
+    db.commit()
+    return MemberAccountActionOut(account=_account_out(db, user, runtime),
+                                  message="The account is active again. They can sign in as before.")
+
+
+@router.post("/members/{member_id}/resend-verification", response_model=MemberAccountActionOut)
+def resend_member_verification(member_id: UUID, principal: CurrentPrincipal = Depends(require_admin),
+                               db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime),
+                               auth: AuthService = Depends(get_auth_service)) -> MemberAccountActionOut:
+    user = _account_target(db, member_id)
+    if user.email_verified_at is not None:
+        raise HTTPException(status_code=409, detail="That email address is already verified.")
+    delivery = auth.send_verification(user)
+    record_audit(db, principal, "member_account.verification_resent", "user_account", str(user.id),
+                 {"email": user.email, "delivery": delivery.status})
+    db.commit()
+    return MemberAccountActionOut(
+        account=_account_out(db, user, runtime),
+        delivery=DeliveryOut(kind=delivery.kind, status=delivery.status, detail=delivery.detail),
+        message="A fresh verification email has been sent.",
+    )
+
+
+@router.post("/members/{member_id}/send-password-reset", response_model=MemberAccountActionOut)
+def send_member_password_reset(member_id: UUID, principal: CurrentPrincipal = Depends(require_admin),
+                               db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime),
+                               auth: AuthService = Depends(get_auth_service)) -> MemberAccountActionOut:
+    """Send the member the ordinary reset link. An administrator never sets or
+    sees a password: only the person holding that mailbox can choose one."""
+    user = _account_target(db, member_id)
+    delivery = auth.request_password_reset(user.email, portal=PORTAL_MEMBER)
+    if delivery is None:
+        raise HTTPException(status_code=409, detail="That account cannot receive a reset link.")
+    record_audit(db, principal, "member_account.password_reset_sent", "user_account", str(user.id),
+                 {"email": user.email, "delivery": delivery.status})
+    db.commit()
+    return MemberAccountActionOut(
+        account=_account_out(db, user, runtime),
+        delivery=DeliveryOut(kind=delivery.kind, status=delivery.status, detail=delivery.detail),
+        message="A password-reset link has been emailed to the member.",
     )

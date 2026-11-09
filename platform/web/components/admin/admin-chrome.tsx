@@ -82,8 +82,10 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
 
 export function AdminChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
-  // The console's own door is not behind the console's guard.
-  if (pathname === "/admin/login") return <>{children}</>;
+  // The console's own doors are not behind the console's guard: signing in,
+  // and activating an invitation (whoever opens that link has no session yet,
+  // and the single-use token is the only thing that admits them).
+  if (pathname === "/admin/login" || pathname === "/admin/accept-invitation") return <>{children}</>;
   return (
     <RequirePortal portal="admin" fallback={<Opening />}>
       <AdminFrame>{children}</AdminFrame>

@@ -36,6 +36,15 @@ class UserAccount(Base):
     photo_content_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     photo_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # An address the person asked to move to. It replaces `email` only when the
+    # link sent to that address is used, so a typo can never lock them out.
+    pending_email: Mapped[str | None] = mapped_column(String(320), nullable=True, index=True)
+    # How administrator access was granted, and whether the invitation has been
+    # accepted. Not a role: `admin_access` above is still the whole permission.
+    invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invitation_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invited_by_user_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

@@ -13,11 +13,20 @@ export const API_URL = process.env.E2E_API_URL ?? "http://localhost:8001";
 export const MAILPIT_URL = process.env.E2E_MAILPIT_URL ?? "http://localhost:8026";
 
 /** Prefixes the suite signs members up with; the global teardown removes exactly these. */
-export const E2E_PREFIXES = ["e2e", "signup", "guided", "journey", "iso", "photo", "probe", "reset", "trackers", "gone"];
+export const E2E_PREFIXES = ["e2e", "signup", "guided", "journey", "iso", "photo", "probe", "reset", "trackers", "gone", "invited", "security"];
 
 /** A unique member address per run, so sign-up tests never collide. */
 export function freshMember(prefix = "e2e") {
   if (!E2E_PREFIXES.includes(prefix)) throw new Error(`Add "${prefix}" to E2E_PREFIXES so the teardown can clean it up.`);
   const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   return { email: `${prefix}.${stamp}@demo.veye.test`, password: `E2E-Member!${stamp}-2026`, firstName: "Ember", lastName: `Test${stamp.slice(-3)}` };
+}
+
+/** A disposable ADMINISTRATOR identity for the provisioning journey. The same
+ *  teardown removes it: the QA endpoint deletes stamped console accounts that
+ *  hold no member profile, and never a seeded one. */
+export function freshAdmin(prefix = "invited") {
+  if (!E2E_PREFIXES.includes(prefix)) throw new Error(`Add "${prefix}" to E2E_PREFIXES so the teardown can clean it up.`);
+  const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return { email: `${prefix}.${stamp}@demo.veye.test`, password: `E2E-Admin!${stamp}-2026`, firstName: "Avery", lastName: `Ops${stamp.slice(-3)}` };
 }

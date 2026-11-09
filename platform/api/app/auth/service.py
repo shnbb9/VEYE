@@ -27,6 +27,12 @@ from app.notifications.service import NotificationService
 
 PURPOSE_VERIFY = "verify_email"
 PURPOSE_RESET = "reset_password"
+# An invitation to the admin console: administrator access is provisioned by
+# someone who already has it, never self-served.
+PURPOSE_ADMIN_INVITE = "admin_invite"
+# Confirming a new email address. The link goes to the NEW address, so the
+# account only moves when the person holding that mailbox uses it.
+PURPOSE_EMAIL_CHANGE = "change_email"
 
 
 class AuthError(Exception):
@@ -187,7 +193,196 @@ class AuthService:
         self.db.flush()
         return user
 
+    # ---- administrator invitations ----------------------------------------------------
+    def invite_administrator(self, *, email: str, first_name: str, last_name: str,
+                             invited_by: UserAccount) -> tuple[UserAccount, DeliveryStatus, bool]:
+        """Create (or upgrade) an account that may use the console and email it
+        a single-use activation link. Returns (account, delivery, created).
+
+        An existing member can be invited: the same person then holds a member
+        profile and administrator access, and the portal they sign in through
+        still decides where they land. Nothing here grants a level of access —
+        every administrator has exactly the same one."""
+        email = normalise_email(email)
+        first_name, last_name = first_name.strip(), last_name.strip()
+        if not first_name:
+            raise AuthError(422, "An administrator needs a first name.")
+        existing = self.find_by_email(email)
+        created = False
+        if existing is None:
+            # No usable password until the invitation is accepted: the account
+            # cannot be signed into, only activated through the link.
+            user = UserAccount(
+                email=email, password_hash=hash_password(new_token()), role=ROLE_ADMIN, admin_access=True,
+                first_name=first_name, last_name=last_name, member_id=None,
+            )
+            self.db.add(user)
+            created = True
+        else:
+            user = existing
+            if user.admin_access and user.invitation_accepted_at is not None:
+                raise AuthError(409, "That person already has administrator access.")
+            if not user.is_active:
+                raise AuthError(409, "That account is deactivated. Reactivate it before inviting them again.")
+            user.admin_access = True
+        user.invited_at = datetime.now(timezone.utc)
+        user.invited_by_user_id = invited_by.id
+        user.invitation_accepted_at = None
+        self.db.flush()
+        delivery = self._send_admin_invitation(user, invited_by)
+        return user, delivery, created
+
+    def resend_admin_invitation(self, user: UserAccount, invited_by: UserAccount) -> DeliveryStatus:
+        if user.invitation_accepted_at is not None:
+            raise AuthError(409, "That invitation has already been accepted.")
+        if not user.is_active:
+            raise AuthError(409, "That account is deactivated.")
+        user.invited_at = datetime.now(timezone.utc)
+        self.db.flush()
+        return self._send_admin_invitation(user, invited_by)
+
+    def revoke_admin_invitation(self, user: UserAccount) -> None:
+        """Withdraw an invitation nobody has accepted yet. An invited-only
+        account (no member profile) is switched off as well, so a stale row
+        can never become a way in."""
+        if user.invitation_accepted_at is not None:
+            raise AuthError(409, "That invitation has already been accepted. Deactivate the account instead.")
+        self._invalidate_tokens(user, PURPOSE_ADMIN_INVITE)
+        user.admin_access = False
+        user.invited_at = None
+        if user.member_id is None:
+            user.is_active = False
+            user.deactivated_at = datetime.now(timezone.utc)
+        self.provider.revoke_all(self.db, user.id)
+        self.db.flush()
+
+    def invitation_for(self, raw_token: str) -> UserAccount:
+        """The account an unused invitation belongs to, for the activation
+        screen. Reading it consumes nothing."""
+        token = self._peek_token(raw_token, PURPOSE_ADMIN_INVITE)
+        return token.user
+
+    def accept_admin_invitation(self, raw_token: str, password: str) -> UserAccount:
+        self._check_password(password)
+        token = self._consume_token(raw_token, PURPOSE_ADMIN_INVITE)
+        user = token.user
+        if not user.is_active:
+            raise AuthError(409, "That account is deactivated. Ask another administrator to reactivate it.")
+        user.password_hash = hash_password(password)
+        user.admin_access = True
+        user.invitation_accepted_at = datetime.now(timezone.utc)
+        if user.email_verified_at is None:
+            user.email_verified_at = datetime.now(timezone.utc)
+        # Anything issued before the password existed is worthless now.
+        self.provider.revoke_all(self.db, user.id)
+        self.db.flush()
+        return user
+
+    def _send_admin_invitation(self, user: UserAccount, invited_by: UserAccount) -> DeliveryStatus:
+        self._invalidate_tokens(user, PURPOSE_ADMIN_INVITE)
+        raw = self._issue_token(user, PURPOSE_ADMIN_INVITE, timedelta(hours=self.settings.admin_invitation_hours))
+        link = f"{self.settings.web_base_url}/admin/accept-invitation?token={raw}"
+        rendered = templates.admin_invitation(user.first_name, link, self.settings.admin_invitation_hours,
+                                              invited_by.display_name or "A Veye administrator")
+        return self._notify(user, "admin_invitation", rendered)
+
+    # ---- account state --------------------------------------------------------------------
+    def set_account_active(self, user: UserAccount, *, active: bool, notify: bool = True) -> DeliveryStatus | None:
+        """Switch an account on or off. Deactivating ends every live session at
+        once — access is withdrawn now, not when the cookie happens to expire."""
+        if user.is_active == active:
+            return None
+        user.is_active = active
+        user.deactivated_at = None if active else datetime.now(timezone.utc)
+        delivery = None
+        if not active:
+            self.provider.revoke_all(self.db, user.id)
+            if notify:
+                delivery = self._notify(user, "account_deactivated", templates.account_deactivated(user.first_name))
+        self.db.flush()
+        return delivery
+
+    # ---- the member's own credentials -------------------------------------------------------
+    def change_password(self, user: UserAccount, *, current_password: str, new_password: str,
+                        keep_session_id: UUID | None) -> int:
+        """Change a password from inside the application. The person stays
+        signed in where they are; every other session ends."""
+        if not verify_password(user.password_hash, current_password):
+            raise AuthError(403, "That current password is not right.")
+        self._check_password(new_password)
+        if verify_password(user.password_hash, new_password):
+            raise AuthError(422, "Choose a password you have not used here before.")
+        user.password_hash = hash_password(new_password)
+        ended = self.provider.revoke_others(self.db, user.id, keep_session_id=keep_session_id)
+        self.db.flush()
+        return ended
+
+    def request_email_change(self, user: UserAccount, *, new_email: str, password: str) -> DeliveryStatus:
+        """Ask to move the account to another address. Nothing changes until
+        the link sent to that address is used."""
+        if not verify_password(user.password_hash, password):
+            raise AuthError(403, "That password is not right.")
+        email = normalise_email(new_email)
+        if email == user.email:
+            raise AuthError(422, "That is already the address on this account.")
+        if self.find_by_email(email) is not None:
+            raise AuthError(409, "That email address is already in use.")
+        self._invalidate_tokens(user, PURPOSE_EMAIL_CHANGE)
+        user.pending_email = email
+        self.db.flush()
+        raw = self._issue_token(user, PURPOSE_EMAIL_CHANGE, timedelta(hours=self.settings.email_change_hours))
+        link = f"{self.settings.web_base_url}/confirm-email?token={raw}"
+        rendered = templates.email_change(user.first_name, link, self.settings.email_change_hours, email)
+        # Deliberately sent to the NEW address, not the current one.
+        return self._notify(user, "email_change", rendered, to_email=email)
+
+    def cancel_email_change(self, user: UserAccount) -> None:
+        self._invalidate_tokens(user, PURPOSE_EMAIL_CHANGE)
+        user.pending_email = None
+        self.db.flush()
+
+    def confirm_email_change(self, raw_token: str) -> UserAccount:
+        token = self._peek_token(raw_token, PURPOSE_EMAIL_CHANGE)
+        user = token.user
+        pending = user.pending_email
+        if not pending:
+            raise AuthError(400, "There is no pending email change for this account.")
+        if self.find_by_email(pending) is not None:
+            raise AuthError(409, "That email address has been taken since the change was requested.")
+        self._consume_token(raw_token, PURPOSE_EMAIL_CHANGE)
+        user.email = pending
+        user.pending_email = None
+        user.email_verified_at = datetime.now(timezone.utc)
+        if user.member is not None:
+            user.member.email = pending
+        # The identity on the account moved: everyone signs in again.
+        self.provider.revoke_all(self.db, user.id)
+        self.db.flush()
+        return user
+
     # ---- internals ----------------------------------------------------------------------
+    def _invalidate_tokens(self, user: UserAccount, purpose: str) -> None:
+        """Burn every unused token of this kind, so only the newest link works."""
+        now = datetime.now(timezone.utc)
+        rows = (self.db.query(AuthToken)
+                .filter(AuthToken.user_id == user.id, AuthToken.purpose == purpose, AuthToken.used_at.is_(None))
+                .all())
+        for row in rows:
+            row.used_at = now
+        self.db.flush()
+
+    def _peek_token(self, raw_token: str, purpose: str) -> AuthToken:
+        """Validate a token without spending it."""
+        token = self.db.query(AuthToken).filter(AuthToken.token_hash == hash_token(raw_token or "")).one_or_none()
+        if token is None or token.purpose != purpose:
+            raise AuthError(400, "This link is not valid. Request a new one.")
+        if token.used_at is not None:
+            raise AuthError(400, "This link has already been used. Request a new one.")
+        expires_at = token.expires_at if token.expires_at.tzinfo else token.expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= datetime.now(timezone.utc):
+            raise AuthError(400, "This link has expired. Request a new one.")
+        return token
+
     def _check_password(self, password: str) -> None:
         if len(password) < self.settings.password_min_length:
             raise AuthError(422, f"Choose a password of at least {self.settings.password_min_length} characters.")
@@ -214,8 +409,10 @@ class AuthService:
         self.db.flush()
         return token
 
-    def _notify(self, user: UserAccount, kind: str, rendered: templates.Rendered) -> DeliveryStatus:
-        notification = self.notifications.notify(user, kind, subject=rendered.subject, text=rendered.text, html=rendered.html)
+    def _notify(self, user: UserAccount, kind: str, rendered: templates.Rendered,
+                *, to_email: str | None = None) -> DeliveryStatus:
+        notification = self.notifications.notify(user, kind, subject=rendered.subject, text=rendered.text,
+                                                 html=rendered.html, to_email=to_email)
         outbox = self.notifications.latest_outbox(notification.id)
         status = outbox.status if outbox else "failed"
         return DeliveryStatus(kind=kind, status=status, detail=outbox.last_error if outbox else None)

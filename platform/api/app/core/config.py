@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     email_verification_hours: int = 48
     password_reset_minutes: int = 30
     password_min_length: int = 12
+    # An administrator invitation is a single-use link; a working week is long
+    # enough for someone to pick it up and short enough to expire on its own.
+    admin_invitation_hours: int = 72
+    # Confirming a new email address: the link goes to the NEW address.
+    email_change_hours: int = 24
 
     # ---- email -----------------------------------------------------------------
     # "local-smtp" delivers to a plain SMTP endpoint (Mailpit in the optional

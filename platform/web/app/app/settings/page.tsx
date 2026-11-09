@@ -5,7 +5,19 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useToast } from "@/components/member/member-chrome";
 import { MemberAvatar } from "@/components/member/member-avatar";
 import { useSession } from "@/components/session";
-import { forgotPassword, getNotificationPreferences, resendVerification, setNotificationPreference } from "@/lib/auth-api";
+import {
+  cancelEmailChange,
+  changeMyPassword,
+  forgotPassword,
+  getNotificationPreferences,
+  listMySessions,
+  requestEmailChange,
+  resendVerification,
+  setNotificationPreference,
+  signOutEverywhereElse,
+  type Account,
+  type MemberSession,
+} from "@/lib/auth-api";
 import { exportUrl, removePhoto, updateProfile, uploadPhoto } from "@/lib/member-api";
 
 /* The approved Settings view (build/dashboard.html, #view-settings): four
@@ -160,7 +172,7 @@ export default function SettingsPage() {
               <label>Signed-in name<input type="text" value={fullName} readOnly data-testid="settings-name" /></label>
             </div>
             <div className="settings-profile-actions settings-profile-actions--form">
-              <p className="settings-help">Email changes are handled through support so your sign-in address stays verified. Everything else saves to your account.</p>
+              <p className="settings-help">To change your email address, use <b>Sign-in details</b> below — we confirm the new address before it replaces this one. Everything else saves to your account.</p>
               <button className="settings-save" type="submit" disabled={busy === "profile" || !dirty} data-testid="settings-save">
                 {busy === "profile" ? "Saving…" : "Save profile"} <span aria-hidden="true">&rarr;</span>
               </button>
@@ -202,18 +214,192 @@ export default function SettingsPage() {
           <Link className="settings-outline" href="/app/companion">Open Sprout <span aria-hidden="true">&rarr;</span></Link>
         </section>
 
-        <section className="settings-card fade-in d4">
-          <div className="settings-card__head"><div><span className="settings-kicker">Security</span><h2>Sign-in details</h2></div><span className="settings-card__mark">04</span></div>
-          <p className="settings-help">Passwords are changed through a single-use emailed link. Signing out ends this session on the server.</p>
-          <button className="settings-outline" type="button" onClick={() => void changePassword()} disabled={busy === "password"}>
-            {busy === "password" ? "Sending…" : "Change password"} <span aria-hidden="true">&rarr;</span>
-          </button>
-          <a className="settings-outline" href={exportUrl()} download data-testid="settings-export">Download my data (JSON) <span aria-hidden="true">&rarr;</span></a>
-          <button className="settings-outline" type="button" onClick={() => void logOut()}>Sign out <span aria-hidden="true">&rarr;</span></button>
-          {note && <p className="settings-help settings-note" role="status">{note}</p>}
-          <div className="settings-link-row"><Link className="settings-link" href="/privacy">Privacy</Link><Link className="settings-link" href="/terms">Terms</Link></div>
-        </section>
+        <SecuritySection account={account} onEmailChangeRequested={() => void session.refresh()} />
       </div>
     </>
+  );
+}
+
+/* Security — the member's own credentials and sessions. Everything here acts
+   on the signed-in account only, and the member always proves who they are
+   with their current password before anything changes. */
+function SecuritySection({ account, onEmailChangeRequested }: { account: Account; onEmailChangeRequested: () => void }) {
+  const session = useSession();
+  const [open, setOpen] = useState<"password" | "email" | null>(null);
+  const [busy, setBusy] = useState<"password" | "email" | "cancel" | "sessions" | "link" | null>(null);
+  const [note, setNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [passwords, setPasswords] = useState({ current: "", next: "", confirm: "" });
+  const [emailForm, setEmailForm] = useState({ new_email: "", password: "" });
+  const [sessions, setSessions] = useState<MemberSession[] | null>(null);
+
+  const loadSessions = () => listMySessions().then((result) => setSessions(result.rows)).catch(() => setSessions(null));
+  useEffect(() => { void loadSessions(); }, []);
+
+  async function submitPassword(event: FormEvent) {
+    event.preventDefault();
+    setNote(null);
+    if (passwords.next.length < 12) { setNote({ tone: "error", text: "Choose a password of at least 12 characters." }); return; }
+    if (passwords.next !== passwords.confirm) { setNote({ tone: "error", text: "The two new passwords do not match." }); return; }
+    setBusy("password");
+    try {
+      const result = await changeMyPassword(passwords.current, passwords.next);
+      setPasswords({ current: "", next: "", confirm: "" });
+      setOpen(null);
+      setNote({ tone: "ok", text: result.message ?? "Your password has been changed." });
+      await loadSessions();
+    } catch (reason) {
+      setNote({ tone: "error", text: reason instanceof Error ? reason.message : "That password could not be changed." });
+    } finally { setBusy(null); }
+  }
+
+  async function submitEmail(event: FormEvent) {
+    event.preventDefault();
+    setNote(null); setBusy("email");
+    try {
+      const delivery = await requestEmailChange(emailForm.new_email.trim(), emailForm.password);
+      setEmailForm({ new_email: "", password: "" });
+      setOpen(null);
+      setNote(delivery.status === "sent"
+        ? { tone: "ok", text: "Check the new address for a confirmation link. Your current address stays until you use it." }
+        : { tone: "error", text: `The confirmation could not be sent: ${delivery.detail ?? "mail service unavailable"}.` });
+      onEmailChangeRequested();
+    } catch (reason) {
+      setNote({ tone: "error", text: reason instanceof Error ? reason.message : "That address could not be set." });
+    } finally { setBusy(null); }
+  }
+
+  async function cancelChange() {
+    setBusy("cancel"); setNote(null);
+    try {
+      await cancelEmailChange();
+      setNote({ tone: "ok", text: "The email change has been cancelled." });
+      onEmailChangeRequested();
+    } catch (reason) {
+      setNote({ tone: "error", text: reason instanceof Error ? reason.message : "That could not be cancelled." });
+    } finally { setBusy(null); }
+  }
+
+  async function endOtherSessions() {
+    setBusy("sessions"); setNote(null);
+    try {
+      const result = await signOutEverywhereElse();
+      setNote({ tone: "ok", text: result.message ?? "Other sessions were signed out." });
+      await loadSessions();
+    } catch (reason) {
+      setNote({ tone: "error", text: reason instanceof Error ? reason.message : "Those sessions could not be ended." });
+    } finally { setBusy(null); }
+  }
+
+  async function emailMeALink() {
+    setBusy("link"); setNote(null);
+    try {
+      const result = await forgotPassword(account.email);
+      setNote(result.delivery && result.delivery.status !== "sent"
+        ? { tone: "error", text: `The link could not be sent: ${result.delivery.detail ?? "mail service unavailable"}.` }
+        : { tone: "ok", text: "A password-change link has been emailed to you. It works once and expires in 30 minutes." });
+    } catch (reason) {
+      setNote({ tone: "error", text: reason instanceof Error ? reason.message : "The link could not be sent." });
+    } finally { setBusy(null); }
+  }
+
+  const others = (sessions ?? []).filter((row) => !row.current).length;
+
+  return (
+    <section className="settings-card fade-in d4" data-testid="settings-security">
+      <div className="settings-card__head"><div><span className="settings-kicker">Security</span><h2>Sign-in details</h2></div><span className="settings-card__mark">04</span></div>
+
+      {/* Password */}
+      {open === "password" ? (
+        <form className="settings-fields settings-fields--security" onSubmit={(event) => void submitPassword(event)} noValidate>
+          <label>Current password
+            <input type="password" autoComplete="current-password" required value={passwords.current}
+                   onChange={(e) => { const v = e.target.value; setPasswords((c) => ({ ...c, current: v })); }} data-testid="password-current" /></label>
+          <label>New password
+            <input type="password" autoComplete="new-password" required value={passwords.next}
+                   onChange={(e) => { const v = e.target.value; setPasswords((c) => ({ ...c, next: v })); }} data-testid="password-new" /></label>
+          <label>Confirm new password
+            <input type="password" autoComplete="new-password" required value={passwords.confirm}
+                   onChange={(e) => { const v = e.target.value; setPasswords((c) => ({ ...c, confirm: v })); }} data-testid="password-confirm" /></label>
+          <div className="settings-profile-actions settings-profile-actions--form">
+            <button className="settings-save" type="submit" disabled={busy === "password"} data-testid="password-save">
+              {busy === "password" ? "Saving…" : "Save new password"}
+            </button>
+            <button className="settings-outline" type="button" onClick={() => { setOpen(null); setNote(null); }}>Cancel</button>
+            <p className="settings-help">At least 12 characters. You stay signed in here; every other device is signed out.</p>
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className="settings-help">Change your password here, or have a single-use link emailed to you instead.</p>
+          <button className="settings-outline" type="button" onClick={() => { setOpen("password"); setNote(null); }} data-testid="open-password">
+            Change password <span aria-hidden="true">&rarr;</span>
+          </button>
+          <button className="settings-outline" type="button" disabled={busy === "link"} onClick={() => void emailMeALink()} data-testid="email-password-link">
+            {busy === "link" ? "Sending…" : "Email me a change link"} <span aria-hidden="true">&rarr;</span>
+          </button>
+        </>
+      )}
+
+      {/* Email address */}
+      {account.pending_email ? (
+        <p className="settings-help settings-note" data-testid="pending-email">
+          Waiting for you to confirm <b>{account.pending_email}</b> from that mailbox. Until then this account keeps{" "}
+          {account.email}.{" "}
+          <button className="settings-link" type="button" disabled={busy === "cancel"} onClick={() => void cancelChange()} data-testid="cancel-email-change">
+            {busy === "cancel" ? "Cancelling…" : "Cancel the change"}
+          </button>
+        </p>
+      ) : open === "email" ? (
+        <form className="settings-fields settings-fields--security" onSubmit={(event) => void submitEmail(event)} noValidate>
+          <label>New email address
+            <input type="email" required value={emailForm.new_email}
+                   onChange={(e) => { const v = e.target.value; setEmailForm((c) => ({ ...c, new_email: v })); }} data-testid="email-new" /></label>
+          <label>Your password
+            <input type="password" autoComplete="current-password" required value={emailForm.password}
+                   onChange={(e) => { const v = e.target.value; setEmailForm((c) => ({ ...c, password: v })); }} data-testid="email-password" /></label>
+          <div className="settings-profile-actions settings-profile-actions--form">
+            <button className="settings-save" type="submit" disabled={busy === "email"} data-testid="email-save">
+              {busy === "email" ? "Sending…" : "Send confirmation"}
+            </button>
+            <button className="settings-outline" type="button" onClick={() => { setOpen(null); setNote(null); }}>Cancel</button>
+            <p className="settings-help">We email the new address a single-use link. Nothing changes until you use it.</p>
+          </div>
+        </form>
+      ) : (
+        <button className="settings-outline" type="button" onClick={() => { setOpen("email"); setNote(null); }} data-testid="open-email-change">
+          Change email address <span aria-hidden="true">&rarr;</span>
+        </button>
+      )}
+
+      {/* Sessions */}
+      {sessions && sessions.length > 0 && (
+        <div className="settings-sessions" data-testid="settings-sessions">
+          <p className="settings-help">
+            Signed in {sessions.length === 1 ? "here only" : `on ${sessions.length} sessions`}
+            {others > 0 ? ` — ${others} other than this one.` : "."}
+          </p>
+          <ul className="settings-session-list">
+            {sessions.map((row) => (
+              <li key={row.id} data-testid={row.current ? "session-current" : "session-other"}>
+                <b>{row.portal === "admin" ? "Admin console" : "Member application"}</b>
+                {row.current && <span className="settings-session-tag">this device</span>}
+                <small>Last used {new Date(row.last_seen_at).toLocaleString()}{row.remember ? " · stays signed in" : ""}</small>
+              </li>
+            ))}
+          </ul>
+          {others > 0 && (
+            <button className="settings-outline" type="button" disabled={busy === "sessions"} onClick={() => void endOtherSessions()} data-testid="revoke-others">
+              {busy === "sessions" ? "Signing out…" : "Sign out everywhere else"} <span aria-hidden="true">&rarr;</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      <a className="settings-outline" href={exportUrl()} download data-testid="settings-export">Download my data (JSON) <span aria-hidden="true">&rarr;</span></a>
+      {/* The approved destination for a member sign-out is the public site. */}
+      <button className="settings-outline" type="button" onClick={() => void session.signOut("member", "/")}>Sign out <span aria-hidden="true">&rarr;</span></button>
+      {note && <p className={`settings-help settings-note${note.tone === "error" ? " settings-note--error" : ""}`} role="status" data-testid="security-note">{note.text}</p>}
+      <div className="settings-link-row"><Link className="settings-link" href="/privacy">Privacy</Link><Link className="settings-link" href="/terms">Terms</Link></div>
+    </section>
   );
 }

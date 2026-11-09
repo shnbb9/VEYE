@@ -37,6 +37,8 @@ class AccountOut(BaseModel):
     # answers that are not tied to a session (verify-email).
     portal: str | None = None
     email_verified: bool
+    # An address the member has asked to move to, not yet confirmed from that mailbox.
+    pending_email: str | None = None
     is_synthetic: bool
     created_at: datetime
     phone: str | None = None
@@ -125,6 +127,41 @@ class ResetPasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     token: str = Field(min_length=10, max_length=256)
     password: str = Field(min_length=1, max_length=256)
+
+
+class InvitationPreviewOut(BaseModel):
+    """What an unused administrator invitation says about itself."""
+    email: str
+    first_name: str
+    last_name: str
+    invited_by: str | None = None
+
+
+class PasswordChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
+
+
+class EmailChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    new_email: EmailAddress
+    password: str = Field(min_length=1, max_length=256)
+
+
+class SessionRow(BaseModel):
+    id: UUID
+    portal: str
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    remember: bool
+    current: bool
+
+
+class SessionsOut(BaseModel):
+    rows: list[SessionRow]
+    current_session_id: UUID | None = None
 
 
 class OkResponse(BaseModel):

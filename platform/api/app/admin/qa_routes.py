@@ -22,10 +22,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.admin.audit import record_audit
-from app.auth.models import UserAccount
+from app.auth.models import AuthSession, AuthToken, UserAccount
 from app.auth.principal import CurrentPrincipal, require_admin
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
+from app.notifications.models import Notification, NotificationOutbox, NotificationPreference
 from app.care.models import CareContentItem
 from app.content.models import ContentEntry
 from app.members.service import MemberProfileService
@@ -76,7 +77,24 @@ def cleanup_synthetic_members(payload: CleanupIn, principal: CurrentPrincipal = 
             continue
         if not E2E_LOCAL_PART.match(local) or local.split(".", 1)[0] not in prefixes:
             continue
+        if user.admin_access and user.member_id is None and not user.is_synthetic:
+            # A console account the suite invited: stamped address, never a
+            # seeded one (those are in PROTECTED above). Remove it too, or the
+            # Administrators page fills up with every run's test invitations.
+            db.query(AuthToken).filter(AuthToken.user_id == user.id).delete(synchronize_session=False)
+            db.query(AuthSession).filter(AuthSession.user_id == user.id).delete(synchronize_session=False)
+            note_ids = [nid for (nid,) in db.query(Notification.id).filter(Notification.user_id == user.id).all()]
+            if note_ids:
+                # Explicit, so the same code holds on SQLite (no FK cascade) and PostgreSQL.
+                db.query(NotificationOutbox).filter(NotificationOutbox.notification_id.in_(note_ids)).delete(synchronize_session=False)
+            db.query(Notification).filter(Notification.user_id == user.id).delete(synchronize_session=False)
+            db.query(NotificationPreference).filter(NotificationPreference.user_id == user.id).delete(synchronize_session=False)
+            db.delete(user)
+            removed.append(email)
+            continue
         if user.admin_access:
+            # A seeded or member-owning account that also holds the console:
+            # never deleted by housekeeping.
             protected.append(email)
             continue
         service.delete_member_account(user)

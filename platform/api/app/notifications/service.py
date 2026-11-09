@@ -14,9 +14,13 @@ from app.auth.models import UserAccount
 from app.notifications.email import EmailMessage, EmailProvider
 from app.notifications.models import Notification, NotificationOutbox, NotificationPreference
 
-NOTIFICATION_KINDS = ("welcome", "email_verification", "password_reset", "companion_escalation")
-# Security messages are always delivered regardless of preference.
-TRANSACTIONAL_KINDS = frozenset({"email_verification", "password_reset"})
+NOTIFICATION_KINDS = ("welcome", "email_verification", "password_reset", "companion_escalation",
+                      "admin_invitation", "email_change", "account_deactivated")
+# Security messages are always delivered regardless of preference: nobody may
+# switch off the message that activates their console account, confirms a new
+# address, or tells them their account was switched off.
+TRANSACTIONAL_KINDS = frozenset({"email_verification", "password_reset",
+                                 "admin_invitation", "email_change", "account_deactivated"})
 
 
 class NotificationService:
@@ -54,7 +58,11 @@ class NotificationService:
         text: str,
         html: str | None = None,
         context: dict | None = None,
+        to_email: str | None = None,
     ) -> Notification:
+        """`to_email` overrides the account's current address — used only when
+        the message must go somewhere else by design, as the confirmation of a
+        new email address does."""
         if kind not in NOTIFICATION_KINDS:
             raise ValueError(f"Unknown notification kind '{kind}'")
         notification = Notification(
@@ -63,7 +71,8 @@ class NotificationService:
         )
         self.db.add(notification)
         self.db.flush()
-        outbox = NotificationOutbox(notification_id=notification.id, to_email=user.email, provider=self.provider.name)
+        outbox = NotificationOutbox(notification_id=notification.id, to_email=to_email or user.email,
+                                    provider=self.provider.name)
         self.db.add(outbox)
         self.db.flush()
 

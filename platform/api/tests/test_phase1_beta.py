@@ -208,7 +208,10 @@ def test_support_details_are_edited_in_the_console_and_read_publicly(client, adm
 
 # ---------------------------------------------------------------- console views
 def test_member_360_shows_mood_diary_and_requests_for_that_member_only(member_client, admin_client):
-    today = date(2026, 9, 21).isoformat()
+    # Member 360 computes the Balance score against the REAL current date, so
+    # this entry has to be inside the client's 30-day window. A pinned date
+    # made the assertion rot 30 days after it was written.
+    today = date.today().isoformat()
     member_client.put("/api/v1/members/me/mood", params={"today": today}, json={"entry_date": today, "mood": "calm"})
     member_client.post("/api/v1/members/me/food-diary", json={"entry_date": today, "meal_time": "08:00", "description": "Porridge"})
     member_client.post("/api/v1/members/me/requests", json={"kind": "contact_us", "message": "Hello from Aditya"})

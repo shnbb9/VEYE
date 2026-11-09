@@ -17,6 +17,8 @@ export type Account = {
   /** Which portal session produced this answer. */
   portal: Portal | null;
   email_verified: boolean;
+  /** An address the member asked to move to; null unless a change is pending. */
+  pending_email: string | null;
   is_synthetic: boolean;
   created_at: string;
   phone: string | null;
@@ -112,4 +114,53 @@ export function safeNext(next: string | null, portal: Portal): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return home;
   const inside = portal === "admin" ? next.startsWith("/admin") && !next.startsWith("/admin/login") : next.startsWith("/app") || next.startsWith("/onboarding");
   return inside ? next : home;
+}
+
+/* ---- administrator invitations & account security -------------------------
+   Administrator access is provisioned, never self-served: these two calls are
+   the only way an invited person activates a console account. */
+
+export type InvitationPreview = { email: string; first_name: string; last_name: string; invited_by: string | null };
+
+export async function previewAdminInvitation(token: string) {
+  return apiJson<InvitationPreview>(`/api/v1/auth/admin-invitation?token=${encodeURIComponent(token)}`);
+}
+
+export async function acceptAdminInvitation(token: string, password: string) {
+  return postJson<{ ok: boolean; message: string | null }>("/api/v1/auth/admin-invitation/accept", { token, password });
+}
+
+export async function confirmEmailChange(token: string) {
+  return postJson<{ ok: boolean; message: string | null }>("/api/v1/auth/confirm-email-change", { token });
+}
+
+/** The member's own credentials and sessions (member portal session needed). */
+export type MemberSession = {
+  id: string;
+  portal: Portal;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  remember: boolean;
+  current: boolean;
+};
+
+export async function changeMyPassword(current_password: string, new_password: string) {
+  return postJson<{ ok: boolean; message: string | null }>("/api/v1/members/me/password", { current_password, new_password });
+}
+
+export async function listMySessions() {
+  return apiJson<{ rows: MemberSession[]; current_session_id: string | null }>("/api/v1/members/me/sessions");
+}
+
+export async function signOutEverywhereElse() {
+  return postJson<{ ok: boolean; message: string | null }>("/api/v1/members/me/sessions/revoke-others", {});
+}
+
+export async function requestEmailChange(new_email: string, password: string) {
+  return postJson<Delivery>("/api/v1/members/me/email", { new_email, password });
+}
+
+export async function cancelEmailChange() {
+  return postJson<{ ok: boolean; message: string | null }>("/api/v1/members/me/email", {}, "DELETE");
 }
