@@ -56,6 +56,11 @@ def aditya(client, memory_traces):
     client.post("/api/v1/health-number/calculate", json={"answers": _answers()})
     client.post("/api/v1/health-number/calculate", json={"answers": _answers(tired="no", sleepEnough="yes")})
     client.post("/api/v1/blood-markers/calculate", json={"input": {"tg": 95, "hdl": 60, "insulin": 5, "glucose": 85, "aa": 9, "epa": 4, "hba1c": 5.0}})
+    # Sprout reasoning over a member's records is the same disclosure as the
+    # console opening them, so it answers to the same permission. These tests
+    # are about what reaches the prompt once the member has shared; the gate
+    # itself is tested in tests/test_member_context.py.
+    assert client.post("/api/v1/members/me/health-permission/grant").status_code == 200
     return client
 
 
@@ -239,6 +244,7 @@ def test_member_b_cannot_use_member_a_conversation(aditya):
     mine = aditya.post("/api/v1/companion/messages", json={"message": "Explain my Health Number"}).json()
     with TestClient(app) as other:
         sign_up(other, email="maya.demo@demo.veye.test", first_name="Maya")
+        assert other.post("/api/v1/members/me/health-permission/grant").status_code == 200
         stolen = other.post("/api/v1/companion/messages", json={"message": "Hi", "conversation_id": mine["conversation_id"]})
         assert stolen.status_code == 404
         assert other.post(f"/api/v1/companion/messages/{mine['reply_message_id']}/feedback", json={"rating": "helpful"}).status_code == 404

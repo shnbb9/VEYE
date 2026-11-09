@@ -29,9 +29,11 @@ admin_router = APIRouter(prefix="/api/v1/admin/members", tags=["admin-health-per
 EXPLANATION = (
     "Sharing lets the Veye team open your saved results — your Health Number, body "
     "composition, blood markers, questionnaires, moods and food diary — when they are "
-    "helping you. Until you share them, nobody at Veye can see them. Your name, email "
-    "and the messages you send are not covered by this and stay visible to the team so "
-    "they can answer you. You can withdraw sharing at any time, and it stops at once."
+    "helping you, and lets Veye Companion use them to answer you about your own "
+    "progress. Until you share them, nobody at Veye can see them and Sprout answers "
+    "without them. Your name, email and the messages you send are not covered by this "
+    "and stay visible to the team so they can answer you. You can withdraw sharing at "
+    "any time, and it stops at once."
 )
 
 

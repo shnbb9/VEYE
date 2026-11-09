@@ -56,8 +56,9 @@ STATE_LABELS = {
 
 # The version of the words the member was shown when they decided. Bump it
 # whenever that copy changes, so an old decision is never silently credited to
-# new wording.
-POLICY_VERSION = "health-sharing-2026-11-09-v1"
+# new wording. v2 (9 Nov 2026) added Veye Companion: the same records reaching
+# Sprout is the same disclosure, and the member has to have been told that.
+POLICY_VERSION = "health-sharing-2026-11-09-v2"
 
 # Where a decision came from. A permission is never granted by replying to an
 # email: the member has to act in the application, and the source says so.
