@@ -109,6 +109,27 @@ def safety_analytics(days: int = Query(default=30, ge=1, le=365), db: Session = 
     )
 
 
+def _auth_status(runtime: Runtime, settings: Settings) -> dict:
+    """What actually authenticates people, and what still guards them.
+
+    The split matters more than either half: Identity Platform proves who
+    somebody is, and every authorization decision — the member profile, the
+    administrator boolean, the portal cookie, the session revocation — stays
+    in this API whichever provider is in use. The console should be able to
+    show that, not a sentence someone wrote once.
+    """
+    identity = runtime.identity
+    return {
+        "provider": runtime.auth_provider.name if identity is None else identity.name,
+        "sessions": "VEYE server-side, one HttpOnly cookie per portal",
+        "authorization": "VEYE (member_id, admin_access, portal isolation)",
+        "production_provider": "Google Cloud Identity Platform",
+        "identity_verifier": "connected" if identity is not None else "not configured",
+        "admin_mfa_required": settings.admin_mfa_required,
+        "admin_accepted_second_factors": ", ".join(sorted(settings.admin_second_factors)) or "(none)",
+    } | ({} if identity is None else identity.describe())
+
+
 def _email_status(runtime: Runtime, settings: Settings) -> dict:
     """Derived from what is actually configured.
 
@@ -138,7 +159,7 @@ def provider_status(db: Session = Depends(get_db), runtime: Runtime = Depends(ge
     settings = runtime.settings
     return ProviderStatusOut(
         environment=settings.environment,
-        auth_provider={"provider": runtime.auth_provider.name, "production_provider": "undecided (client decision)"},
+        auth_provider=_auth_status(runtime, settings),
         email=_email_status(runtime, settings),
         llm=runtime.llm.describe(), embeddings=runtime.embeddings.describe(),
         object_store=runtime.object_store.describe() | {"production_target": "S3 (not configured)"},

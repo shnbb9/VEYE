@@ -17,6 +17,7 @@ from app.auth.schemas import (
     DeliveryOut,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
+    IdentitySignInRequest,
     InvitationPreviewOut,
     NotificationPreferencesOut,
     NotificationPreferenceUpdate,
@@ -128,6 +129,70 @@ def admin_sign_in(
     """ADMIN portal sign-in (/admin/login). Same password check, then
     administrator access is required. Issues the admin cookie only."""
     return _portal_sign_in(PORTAL_ADMIN, payload, request, response, db, auth, runtime)
+
+
+def _identity_sign_in(portal: str, payload: IdentitySignInRequest, request: Request, response: Response,
+                      db: Session, auth: AuthService, runtime: Runtime) -> SessionResponse:
+    """Identity Platform sign-in for one portal.
+
+    Everything the password route does around the credential check happens
+    here too: the per-address throttle, the portal's own access requirement,
+    the VEYE session cookie, the housekeeping. Only the proof of identity is
+    different.
+
+    The throttle is keyed by client address rather than by an email the caller
+    typed, because the caller supplies a token, not an identity — and a
+    refused token must not become a way to find out whether an address exists.
+    """
+    throttle = SignInThrottle(db, runtime.settings)
+    address = client_address(request)
+    lockout = throttle.locked(None, address)
+    if lockout is not None:
+        minutes = max(1, round(lockout.retry_after / 60))
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many sign-in attempts. Try again in about {minutes} minute{'' if minutes == 1 else 's'}.",
+            headers={"Retry-After": str(lockout.retry_after)},
+        )
+    try:
+        user, issued = auth.sign_in_with_identity(
+            payload.id_token, portal=portal, remember=payload.remember, verifier=runtime.identity,
+            mfa_required=runtime.settings.admin_mfa_required,
+            accepted_factors=runtime.settings.admin_second_factors,
+        )
+    except AuthError as exc:
+        throttle.record(email=None, client_ip=address, portal=portal, succeeded=False)
+        db.commit()
+        _raise(exc)
+    throttle.record(email=user.email, client_ip=address, portal=portal, succeeded=True)
+    after_successful_sign_in(db, user.id, runtime.settings)
+    db.commit()
+    set_session_cookie(response, issued, runtime)
+    return SessionResponse(account=account_out(user, portal))
+
+
+@router.post("/identity/sign-in", response_model=SessionResponse)
+def identity_sign_in(
+    payload: IdentitySignInRequest, request: Request, response: Response, db: Session = Depends(get_db),
+    auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
+) -> SessionResponse:
+    """MEMBER portal sign-in with a Google Identity Platform ID token.
+
+    Returns the same answer and sets the same cookie as the password route:
+    the portal decides the destination, never the account's flags."""
+    return _identity_sign_in(PORTAL_MEMBER, payload, request, response, db, auth, runtime)
+
+
+@router.post("/admin/identity/sign-in", response_model=SessionResponse)
+def admin_identity_sign_in(
+    payload: IdentitySignInRequest, request: Request, response: Response, db: Session = Depends(get_db),
+    auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
+) -> SessionResponse:
+    """ADMIN portal sign-in with an ID token. A second factor is required
+    before the account is even looked up, and administrator access is still
+    VEYE's own fact about the account — no claim in the token can grant it."""
+    return _identity_sign_in(PORTAL_ADMIN, payload, request, response, db, auth, runtime)
 
 
 @router.post("/sign-out", status_code=status.HTTP_204_NO_CONTENT)

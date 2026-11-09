@@ -45,6 +45,13 @@ class UserAccount(Base):
     invitation_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     invited_by_user_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The Google Identity Platform subject this account signs in as, once the
+    # two are linked. Authentication only: member_id and admin_access above
+    # remain the whole of what this account may do, and nothing in a token can
+    # change either of them. Unique, so one Google identity is one VEYE
+    # account and a subject can never be claimed twice.
+    identity_subject: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    identity_linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_synthetic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

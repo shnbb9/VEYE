@@ -65,29 +65,39 @@ class SignInThrottle:
     def _window(self) -> timedelta:
         return timedelta(minutes=self.settings.sign_in_window_minutes)
 
-    def locked(self, email: str, client_ip: str) -> Lockout | None:
+    def locked(self, email: str | None, client_ip: str) -> Lockout | None:
         """The lockout in force for this attempt, if any. Called before the
         password is looked at, so a locked identity costs the attacker a
-        request and tells them nothing."""
+        request and tells them nothing.
+
+        `email` is None when the caller named no identity — a token sign-in
+        presents a credential, not an address. Then there is no identity
+        counter to consult and only the address one applies: counting every
+        failure in the window instead would lock out everybody at once."""
         if self.settings.sign_in_max_failures <= 0:
             return None
         since = datetime.now(timezone.utc) - self._window
-        identity = self._failures(since, email=email)
-        if len(identity) >= self.settings.sign_in_max_failures:
-            return Lockout(scope="identity", retry_after=self._retry_after(identity))
+        if email:
+            identity = self._failures(since, email=email)
+            if len(identity) >= self.settings.sign_in_max_failures:
+                return Lockout(scope="identity", retry_after=self._retry_after(identity))
         if client_ip:
             address = self._failures(since, client_ip=client_ip)
             if len(address) >= self.settings.sign_in_max_failures_per_address:
                 return Lockout(scope="address", retry_after=self._retry_after(address))
         return None
 
-    def record(self, *, email: str, client_ip: str, portal: str, succeeded: bool) -> None:
-        self.db.add(SignInAttempt(email=email.strip().lower(), client_ip=client_ip or "",
+    def record(self, *, email: str | None, client_ip: str, portal: str, succeeded: bool) -> None:
+        # An attempt that named no identity is stored under the empty address:
+        # it still counts against the client address, which is the only counter
+        # that can see it.
+        identity = (email or "").strip().lower()
+        self.db.add(SignInAttempt(email=identity, client_ip=client_ip or "",
                                   portal=portal, succeeded=succeeded))
-        if succeeded:
+        if succeeded and identity:
             # The person proved they know the password: their own failures stop
             # counting. The address counter is left alone on purpose.
-            self._clear_identity(email)
+            self._clear_identity(identity)
         self.db.flush()
 
     # ---- internals ------------------------------------------------------------------

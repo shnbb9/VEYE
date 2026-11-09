@@ -83,6 +83,16 @@ class SignUpResponse(BaseModel):
     health_number_attempt_id: UUID | None = None
 
 
+class IdentitySignInRequest(BaseModel):
+    """A Google Identity Platform ID token, obtained in the browser.
+
+    No email and no password: the token is the whole credential, and which
+    account it belongs to is decided server-side from the subject it carries."""
+
+    id_token: str = Field(min_length=16, max_length=8192)
+    remember: bool = False
+
+
 class SignInRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: EmailAddress

@@ -49,6 +49,25 @@ class Settings(BaseSettings):
     # housekeeping removes it. Live rows are never touched.
     auth_retention_days: int = 7
 
+    # ---- production identity (Google Cloud Identity Platform) --------------------
+    # "development" is the isolated provider VEYE holds itself; "identity-platform"
+    # verifies Google-issued ID tokens and still issues VEYE's own portal session,
+    # because authentication is theirs and authorization stays here.
+    identity_project_id: str | None = None
+    # Identity Platform tenants (one per environment) appear in the token.
+    identity_tenant_id: str | None = None
+    identity_jwks_url: str = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+    identity_clock_leeway_seconds: int = 30
+    # First sign-in links the Google subject to the VEYE account that already
+    # holds that address. A token never creates an account: members sign up
+    # through VEYE and administrator access is provisioned.
+    identity_link_by_verified_email: bool = True
+    # The console is the higher-value portal, so a second factor is required
+    # there. TOTP by default and deliberately not SMS; "phone" has to be added
+    # on purpose by a deployment that accepts it.
+    admin_mfa_required: bool = True
+    admin_accepted_second_factors: str = "totp"
+
     # ---- email -----------------------------------------------------------------
     # "local-smtp" delivers to a plain SMTP endpoint (Mailpit in the optional
     # Compose profile); "smtp" is the authenticated, TLS-protected provider for
@@ -116,6 +135,14 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return "auto" if info.field_name == "smtp_tls_mode" else None
         return value
+
+    @property
+    def admin_second_factors(self) -> frozenset[str]:
+        return frozenset(item.strip().lower() for item in self.admin_accepted_second_factors.split(",") if item.strip())
+
+    @property
+    def uses_identity_platform(self) -> bool:
+        return self.auth_provider == "identity-platform"
 
     @property
     def cors_origin_list(self) -> list[str]:

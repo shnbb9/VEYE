@@ -5,7 +5,7 @@ import { AdvancedPage } from "@/components/admin/advanced-page";
 import { getProviderStatus, type ProviderStatus } from "@/lib/admin-api";
 
 const SECTIONS: { key: keyof ProviderStatus; title: string; note: string }[] = [
-  { key: "auth_provider", title: "Authentication", note: "Development provider: password hashes and server-side sessions held by Veye. Production identity provider is a client decision." },
+  { key: "auth_provider", title: "Authentication", note: "Who someone is, and what they may do, are separate: Google Cloud Identity Platform is the selected production authentication, and every authorization decision — member profile, administrator access, portal isolation, session revocation — stays in the Veye API whichever provider is in use. The development provider holds password hashes here." },
   { key: "email", title: "Email", note: "Which transport is actually in use is below: mode reads development while messages go to the Mailpit mailbox, and production once a real relay is configured. Google Workspace SMTP is the selected production transport. No password is shown here." },
   { key: "llm", title: "Language model", note: "The Companion talks to the model only through the LLMProvider interface. Absence of a provider is reported, never worked around." },
   { key: "embeddings", title: "Embeddings", note: "Deterministic local embeddings for development retrieval. The production embedding provider is a client decision." },

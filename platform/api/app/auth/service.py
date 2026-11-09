@@ -145,6 +145,80 @@ class AuthService:
         issued = self.provider.issue(self.db, user, portal=portal, remember=remember)
         return user, issued
 
+    def sign_in_with_identity(self, id_token: str, *, portal: str, remember: bool,
+                              verifier, mfa_required: bool, accepted_factors) -> tuple[UserAccount, IssuedSession]:
+        """Sign in with a Google Identity Platform ID token.
+
+        Authentication is Google's; everything after it is unchanged. The same
+        portal rules, the same account state checks and the same VEYE session
+        as a password sign-in — a token proves who, never what.
+
+        A token never creates an account. Members sign up through VEYE and
+        administrator access is provisioned, so an identity nobody has an
+        account for is simply refused.
+        """
+        from app.auth.identity import IdentityError, second_factor_accepted
+
+        if portal not in PORTALS:
+            raise AuthError(400, "Unknown sign-in portal.")
+        if verifier is None:
+            raise AuthError(409, "This deployment does not accept identity provider sign-in.")
+        try:
+            identity = verifier.verify(id_token)
+        except IdentityError as exc:
+            # One wording for every verification failure: expiry, a forged
+            # signature, the wrong tenant and the wrong audience must not be
+            # distinguishable from outside.
+            log.info("identity sign-in refused: %s", exc)
+            raise AuthError(401, "That sign-in could not be verified. Please sign in again.") from exc
+
+        # The console is the higher-value portal, so its second-factor rule is
+        # applied before the account is even looked up.
+        if portal == PORTAL_ADMIN and not second_factor_accepted(identity, required=mfa_required,
+                                                                 accepted=accepted_factors):
+            raise AuthError(403, "The Veye console requires a second factor on your account.")
+
+        user = self.db.query(UserAccount).filter(UserAccount.identity_subject == identity.subject).one_or_none()
+        if user is None:
+            user = self._link_identity(identity)
+        if user is None or not user.is_active:
+            raise AuthError(401, "That sign-in could not be verified. Please sign in again.")
+
+        # Exactly the checks a password sign-in makes, in the same order.
+        if portal == PORTAL_MEMBER and not user.member_access:
+            raise AuthError(403, "This account does not have a Veye member profile. Administrators sign in through the admin console.")
+        if portal == PORTAL_ADMIN and not user.admin_access:
+            raise AuthError(403, "This account does not have administrator access to the Veye console.")
+
+        issued = self.provider.issue(self.db, user, portal=portal, remember=remember)
+        return user, issued
+
+    def _link_identity(self, identity) -> UserAccount | None:
+        """First sign-in: attach the Google subject to the account that already
+        holds that address.
+
+        Only a verified address links, and only to an account that is not
+        already linked to someone else. Controlling the mailbox already means
+        controlling the account — that is what the reset link does — so this
+        adds no reach that an attacker did not have. It adds no account and no
+        access: an address VEYE has never seen is refused.
+        """
+        if not self.settings.identity_link_by_verified_email:
+            return None
+        if not identity.email or not identity.email_verified:
+            return None
+        user = self.find_by_email(identity.email)
+        if user is None or user.identity_subject:
+            return None
+        user.identity_subject = identity.subject
+        user.identity_linked_at = datetime.now(timezone.utc)
+        # The address is proven by the provider now, so the account's own
+        # verification is settled too.
+        if user.email_verified_at is None:
+            user.email_verified_at = user.identity_linked_at
+        self.db.flush()
+        return user
+
     def sign_out(self, session_id: UUID | None) -> None:
         if session_id is not None:
             self.provider.revoke(self.db, session_id)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, replace
 
+from app.auth.identity import IdentityVerifier, build_identity_verifier
 from app.auth.provider import DevelopmentSessionAuthProvider
 from app.companion.providers.embeddings import EmbeddingProvider, build_embedding_provider
 from app.companion.providers.llm import LLMProvider, build_llm_provider
@@ -27,6 +28,10 @@ log = logging.getLogger("veye.runtime")
 class Runtime:
     settings: Settings
     auth_provider: DevelopmentSessionAuthProvider
+    # Sessions stay VEYE's whichever way the person authenticated; this is the
+    # verifier for Identity Platform tokens, and None for the development
+    # provider, which has no token to verify.
+    identity: IdentityVerifier | None
     email: EmailProvider
     llm: LLMProvider
     embeddings: EmbeddingProvider
@@ -43,11 +48,10 @@ def build_runtime(config: Settings | None = None) -> Runtime:
     from app.db.session import SessionLocal
 
     config = config or settings
-    if config.auth_provider != "development":
-        raise RuntimeError(
-            f"Auth provider '{config.auth_provider}' is not implemented. Only the isolated development provider exists; "
-            "the production identity provider is a client decision."
-        )
+    # Two authentication providers, one session layer. Identity Platform proves
+    # who the person is; the sessions, the portal cookies and every
+    # authorization decision below stay exactly where they were.
+    identity = build_identity_verifier(config)
     auth_provider = DevelopmentSessionAuthProvider(
         cookie_names={"member": config.member_session_cookie_name, "admin": config.admin_session_cookie_name},
         session_hours=config.session_hours, remember_days=config.session_remember_days,
@@ -80,7 +84,7 @@ def build_runtime(config: Settings | None = None) -> Runtime:
             langfuse_status = "enabled-but-unavailable"
     telemetry = TelemetryRecorder(exporters, pseudonym_key=config.telemetry_pseudonym_key, environment=config.environment,
                                   capture_content=config.ai_telemetry_capture_content)
-    return Runtime(settings=config, auth_provider=auth_provider, email=email, llm=llm, embeddings=embeddings,
+    return Runtime(settings=config, auth_provider=auth_provider, identity=identity, email=email, llm=llm, embeddings=embeddings,
                    object_store=object_store, media_store=media_store, telemetry=telemetry, langfuse_status=langfuse_status)
 
 
