@@ -5,6 +5,9 @@
 .nav-link.is-disabled { color: var(--text-muted); cursor: not-allowed; opacity: .6; }
 .nav-link.is-disabled:hover { background: transparent; }
 .loading-row { padding: var(--s-6); color: var(--text-muted); font-size: var(--fs-support); }
+/* A screen with nothing in it is not a screen that is still loading: the
+   two read the same but must not say the same thing. */
+.empty-row { padding: var(--s-6); color: var(--text-muted); font-size: var(--fs-support); }
 .errorbar { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); border-radius: var(--r-field); background: var(--tint-significant); color: #A8402D; font-size: var(--fs-support); }
 .inline-form { display: grid; gap: var(--s-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .inline-form .field--wide { grid-column: 1 / -1; }

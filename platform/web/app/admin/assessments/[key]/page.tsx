@@ -48,7 +48,7 @@ export default function InstrumentAttemptsPage() {
           </div>
         </div>
         {!page && !error && <p className="loading-row">Loading…</p>}
-        {page && page.rows.length === 0 && <p className="loading-row">No results{q ? " match that search" : " saved yet"}.</p>}
+        {page && page.rows.length === 0 && <p className="empty-row">No results{q ? " match that search" : " saved yet"}.</p>}
         {page && page.rows.length > 0 && (
           <>
             <div className="table-wrap table-wrap--sticky">

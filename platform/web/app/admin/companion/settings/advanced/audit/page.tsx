@@ -19,7 +19,7 @@ export default function AuditPage() {
       <div className="card">
         <div className="card__body card__body--flush">
           {rows === null && <p className="loading-row">Loading…</p>}
-          {rows && rows.length === 0 && <p className="loading-row">No administrator actions recorded yet.</p>}
+          {rows && rows.length === 0 && <p className="empty-row">No administrator actions recorded yet.</p>}
           {rows && rows.length > 0 && (
             <div className="table-wrap">
               <table className="table table--compact">

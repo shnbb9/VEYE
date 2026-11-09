@@ -108,7 +108,7 @@ function CareStudio() {
         <div className="card__head"><div><h2 className="card__title">{CARE_KIND_LABELS[kind]}</h2><p className="t-support">{kind === "fitness" ? "Cara's recommendations as VEYE cards: programs open externally, videos embed privacy-enhanced." : kind === "supplement" ? "Approved educational copy with cautions and references. Dosage is chosen by condition, never inferred from a tracker." : "The four Resources cards stay Coming Soon until their content is supplied."}</p></div></div>
         <div className="card__body card__body--flush">
           {!items && !error && <p className="loading-row">Loading…</p>}
-          {items && items.length === 0 && <p className="loading-row">Nothing here yet.</p>}
+          {items && items.length === 0 && <p className="empty-row">Nothing here yet.</p>}
           {items && items.length > 0 && (
             <div className="table-wrap"><table className="table table--rows" data-testid="care-table">
               <thead><tr><th scope="col">Order</th><th scope="col">Item</th><th scope="col" data-col-priority="medium">Type</th><th scope="col" data-col-priority="low">Updated</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>

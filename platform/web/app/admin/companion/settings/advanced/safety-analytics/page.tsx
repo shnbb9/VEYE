@@ -32,7 +32,7 @@ export default function SafetyAnalyticsPage() {
           <div className="card">
             <div className="card__head"><div><h2 className="card__title">Handed to a person</h2></div></div>
             <div className="card__body card__body--flush">
-              {data.escalations.length === 0 ? <p className="loading-row">No conversation has been handed to a person.</p> : (
+              {data.escalations.length === 0 ? <p className="empty-row">No conversation has been handed to a person.</p> : (
                 <div className="table-wrap">
                   <table className="table table--compact">
                     <thead><tr><th>Member</th><th>Why</th><th>When</th><th>Status</th><th /></tr></thead>

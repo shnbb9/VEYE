@@ -22,7 +22,7 @@ export function Counts({ counts, empty = "None yet" }: { counts: Record<string, 
 }
 
 export function TraceTable({ rows, caption }: { rows: TraceRow[]; caption: string }) {
-  if (!rows.length) return <p className="loading-row">No Sprout turns recorded yet.</p>;
+  if (!rows.length) return <p className="empty-row">No Sprout turns recorded yet.</p>;
   return (
     <div className="table-wrap">
       <table className="table table--compact">

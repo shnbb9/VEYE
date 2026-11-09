@@ -119,7 +119,7 @@ function Content() {
         </div>
         <div className="card__body card__body--flush">
           {!entries && !error && <p className="loading-row">Loading…</p>}
-          {entries && shown.length === 0 && <p className="loading-row">No entries{filter ? " match that search" : " yet"}.</p>}
+          {entries && shown.length === 0 && <p className="empty-row">No entries{filter ? " match that search" : " yet"}.</p>}
           {categories.map((category) => {
             const rows = shown.filter((e) => (e.category ?? "") === category);
             if (!rows.length) return null;

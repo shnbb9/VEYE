@@ -60,7 +60,7 @@ export default function GuidedExperiencesPage() {
                 crumbs={[{ label: "Home", href: "/admin" }, { label: "Companion", href: "/admin/companion/conversations" }, { label: "Settings", href: "/admin/companion/settings" }, { label: "Guided Experiences" }]} />
       {error && <p className="errorbar">{error}</p>}
       {!groups && !error && <p className="loading-row">Loading…</p>}
-      {groups && groups.length === 0 && <p className="loading-row">No guided experiences have been published yet.</p>}
+      {groups && groups.length === 0 && <p className="empty-row">No guided experiences have been published yet.</p>}
 
       <div className="stack gap-5">
         {groups?.map((group) => (

@@ -48,7 +48,7 @@ export default function RetrievalDiagnosticsPage() {
             </div>
             {hits && (
               <div className="card__body card__body--flush">
-                {hits.length === 0 ? <p className="loading-row">No approved passage matched.</p> : (
+                {hits.length === 0 ? <p className="empty-row">No approved passage matched.</p> : (
                   <div className="rows">
                     {hits.map((hit) => (
                       <div key={hit.chunk_id} className="rowitem" style={{ gridTemplateColumns: "minmax(0,1fr) auto" }}>
