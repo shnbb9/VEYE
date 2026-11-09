@@ -3,7 +3,8 @@
 Public: a visitor sends a Contact Us message or a Help question.
 Member: Contact Us / Help question / Join Beta from inside the application,
 plus the member's own list (so a card can say "requested on …").
-Admin: list with filters, one request, status changes. Nothing is emailed."""
+Admin: list with filters, one request, status changes, and the replies
+the console sends back — the only thing here that emails anybody."""
 
 from __future__ import annotations
 
@@ -16,10 +17,21 @@ from sqlalchemy.orm import Session
 from app.admin.audit import record_audit
 from app.auth.models import UserAccount
 from app.auth.principal import CurrentPrincipal, require_admin, require_member
+from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
+from app.product_settings.routes import read_support
 from app.requests.models import KINDS
-from app.requests.schemas import MemberRequestIn, PublicRequestIn, RequestOut, RequestsPage, RequestStatusIn, SubmittedOut
-from app.requests.service import RequestError, RequestService, request_out
+from app.requests.schemas import (
+    MemberRequestIn,
+    MemberRequestOut,
+    PublicRequestIn,
+    RequestOut,
+    RequestReplyIn,
+    RequestsPage,
+    RequestStatusIn,
+    SubmittedOut,
+)
+from app.requests.service import RequestError, RequestService, member_request_out, request_out
 
 public_router = APIRouter(prefix="/api/v1/requests", tags=["requests"])
 member_router = APIRouter(prefix="/api/v1/members/me/requests", tags=["requests"])
@@ -51,10 +63,11 @@ def submit_member(payload: MemberRequestIn, principal: CurrentPrincipal = Depend
     return SubmittedOut(id=row.id, kind=row.kind, status=row.status, created_at=row.created_at, already_open=already_open)
 
 
-@member_router.get("", response_model=list[RequestOut])
-def my_requests(principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db)) -> list[RequestOut]:
+@member_router.get("", response_model=list[MemberRequestOut])
+def my_requests(principal: CurrentPrincipal = Depends(require_member),
+                db: Session = Depends(get_db)) -> list[MemberRequestOut]:
     assert principal.member_id is not None
-    return [request_out(r) for r in RequestService(db).list_for_member(principal.member_id)]
+    return [member_request_out(r) for r in RequestService(db).list_for_member(principal.member_id)]
 
 
 @admin_router.get("", response_model=RequestsPage)
@@ -90,5 +103,28 @@ def set_status(request_id: UUID, payload: RequestStatusIn, principal: CurrentPri
     except RequestError as exc:
         _raise(exc)
     record_audit(db, principal, f"requests.{payload.status}", "member_request", str(row.id), {"kind": row.kind, "status": row.status})
+    db.commit()
+    return request_out(row)
+
+
+@admin_router.post("/{request_id}/reply", response_model=RequestOut)
+def reply_to_request(request_id: UUID, payload: RequestReplyIn, principal: CurrentPrincipal = Depends(require_admin),
+                     db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)) -> RequestOut:
+    """Answer whoever wrote in. The reply is emailed to the address on the
+    request and kept with it, including whether it actually left — a reply
+    that failed must not look like one that arrived.
+
+    The status is deliberately left alone: moving it is a separate, visible
+    decision the administrator makes with the buttons beside this box."""
+    sender = db.get(UserAccount, principal.user_id)
+    support = read_support(db).support_email
+    try:
+        reply = RequestService(db).reply(request_id, payload.body, sender=sender, email=runtime.email,
+                                         support_email=support)
+    except RequestError as exc:
+        _raise(exc)
+    row = RequestService(db).get(request_id)
+    record_audit(db, principal, "requests.replied", "member_request", str(row.id),
+                 {"kind": row.kind, "to": reply.to_email, "delivery": reply.delivery_status})
     db.commit()
     return request_out(row)

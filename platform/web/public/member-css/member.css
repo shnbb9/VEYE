@@ -95,6 +95,31 @@ button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
 .contact-label small { font-weight: 400; color: #7A8A66; }
 .contact-card .fdx-input { box-sizing: border-box; width: 100%; }
 .contact-card .modal-sub a { color: #446514; }
+/* The message box borrows the Mood note's wrapper, whose textarea is sized for
+   a one-line note — 137px inside a 396px row. Here it fills the dialog like
+   the subject field above it. */
+.contact-card .note-input-wrap { width: 100%; }
+.contact-card .note-input-wrap textarea { box-sizing: border-box; width: 100%; }
+
+/* Veye's answers, shown against the message they answer. The reply keeps the
+   line breaks it was typed with, because it is a quotation of what was sent. */
+.contact-thread { margin-top: 22px; border-top: 1px solid #E6ECDC; padding-top: 16px; }
+.contact-thread__head { margin: 0 0 10px; color: #5C7041; font: 600 14px 'Teachers', sans-serif; }
+.cmsg { padding: 12px 0; border-top: 1px solid #F0F3EA; }
+.cmsg:first-of-type { border-top: 0; padding-top: 0; }
+.cmsg__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cmsg__subject { font: 600 14px 'Teachers', sans-serif; color: #2E4A1A; }
+.cmsg__when { flex: 0 0 auto; font-size: 12.5px; color: #7A8A66; }
+.cmsg__waiting { margin: 4px 0 0; font-size: 13px; color: #7A8A66; }
+.cmsg__reply { margin-top: 8px; padding: 10px 12px; border-left: 3px solid #446514; border-radius: 0 10px 10px 0; background: #F7FAF1; }
+.cmsg__from { display: block; font: 600 12.5px 'Teachers', sans-serif; color: #446514; }
+.cmsg__reply p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.5; color: #3C4A30; white-space: pre-wrap; }
+
+/* Contact Us card: a reply is waiting to be read. */
+.mini-card-flag {
+  margin-top: 6px; display: inline-block; padding: 3px 10px; border-radius: 999px;
+  background: #446514; color: #fff; font: 600 12px 'Teachers', sans-serif;
+}
 
 /* ---- Food Diary: persisted entries (no prototype macro placeholders) -------- */
 .fdx-form-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }

@@ -77,6 +77,9 @@ export default function MemberDashboard() {
   }, []);
 
   const betaRequest = requests?.find((r) => r.kind === "join_beta") ?? null;
+  // Veye's answers arrive by email; the card says one is waiting so the member
+  // does not have to open the dialog to find out.
+  const replyCount = (requests ?? []).reduce((total, request) => total + request.replies.length, 0);
   async function joinBeta() {
     setBetaBusy(true);
     try {
@@ -213,6 +216,9 @@ export default function MemberDashboard() {
               </div>
               <div className="mini-card-label">Contact Us</div>
               <div className="mini-card-sub" data-testid="support-email">{support?.support_email ?? "contact@veye.co"}</div>
+              {replyCount > 0 && (
+                <div className="mini-card-flag" data-testid="contact-replies">{replyCount === 1 ? "1 reply from Veye" : `${replyCount} replies from Veye`}</div>
+              )}
             </button>
             <Link className="mini-card mini-card--faq" href="/help">
               <div className="mini-card-icon">
@@ -268,7 +274,7 @@ export default function MemberDashboard() {
         <TrackerGraph blood={blood} body={body} assessment={assessment} quiz={quiz} />
       </section>
 
-      <ContactUsDialog open={contactOpen} supportEmail={support?.support_email ?? "contact@veye.co"} supportPhone={support?.support_phone ?? ""}
+      <ContactUsDialog open={contactOpen} supportEmail={support?.support_email ?? "contact@veye.co"} supportPhone={support?.support_phone ?? ""} requests={requests}
                        onClose={() => setContactOpen(false)} onSent={() => { setContactOpen(false); void myRequests().then(setRequests).catch(() => undefined); toast.flash("Thank you — your message has been sent to Veye"); }} />
     </>
   );

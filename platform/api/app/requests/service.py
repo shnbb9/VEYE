@@ -10,6 +10,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth.models import UserAccount
+from app.notifications import templates
+from app.notifications.email import EmailMessage
 from app.requests.models import (
     KIND_BETA,
     KIND_LABELS,
@@ -22,8 +24,16 @@ from app.requests.models import (
     STATUS_RESOLVED,
     STATUSES,
     MemberRequest,
+    MemberRequestReply,
 )
-from app.requests.schemas import MemberRequestIn, PublicRequestIn, RequestOut
+from app.requests.schemas import (
+    MemberReplyOut,
+    MemberRequestIn,
+    MemberRequestOut,
+    PublicRequestIn,
+    RequestOut,
+    RequestReplyOut,
+)
 
 
 class RequestError(Exception):
@@ -33,6 +43,12 @@ class RequestError(Exception):
         self.detail = detail
 
 
+def _aware(value: datetime) -> datetime:
+    """SQLite returns naive datetimes; a row just added in this session is
+    aware. Sorting the two together needs one scale."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
 def request_out(row: MemberRequest) -> RequestOut:
     return RequestOut(
         id=row.id, kind=row.kind, kind_label=KIND_LABELS.get(row.kind, row.kind), status=row.status,
@@ -40,6 +56,28 @@ def request_out(row: MemberRequest) -> RequestOut:
         name=row.name, email=row.email, subject=row.subject, message=row.message, page=row.page,
         created_at=row.created_at, updated_at=row.updated_at, handled_by=row.handled_by, handled_at=row.handled_at,
         resolution_note=row.resolution_note or "",
+        replies=[reply_out(r) for r in sorted(row.replies, key=lambda r: _aware(r.created_at))],
+    )
+
+
+def reply_out(row: MemberRequestReply) -> RequestReplyOut:
+    return RequestReplyOut(
+        id=row.id, body=row.body, to_email=row.to_email, sent_by_name=row.sent_by_name,
+        delivery_status=row.delivery_status, delivery_detail=row.delivery_detail, created_at=row.created_at,
+    )
+
+
+def member_request_out(row: MemberRequest) -> MemberRequestOut:
+    """The member's own view. The reply rows are trimmed on the way out
+    rather than filtered in the screen: what the browser never receives
+    cannot be shown by accident."""
+    return MemberRequestOut(
+        id=row.id, kind=row.kind, kind_label=KIND_LABELS.get(row.kind, row.kind), status=row.status,
+        status_label=STATUS_LABELS.get(row.status, row.status), source=row.source,
+        name=row.name, email=row.email, subject=row.subject, message=row.message,
+        created_at=row.created_at, updated_at=row.updated_at,
+        replies=[MemberReplyOut(id=r.id, body=r.body, created_at=r.created_at)
+                 for r in sorted(row.replies, key=lambda r: _aware(r.created_at))],
     )
 
 
@@ -143,3 +181,39 @@ class RequestService:
             row.handled_at = None
         self.db.flush()
         return row
+
+    # ---- replying ------------------------------------------------------------
+    def reply(self, request_id: UUID, body: str, *, sender: UserAccount, email, support_email: str) -> MemberRequestReply:
+        """Send an administrator's answer to whoever wrote in, and keep it.
+
+        The administrator's words go out as written; the template only frames
+        them. The address is the one on the request — what the person typed,
+        or the account they wrote from — captured on the reply row, because an
+        account address can change afterwards and the record must stay true to
+        what was actually sent."""
+        text = (body or "").strip()
+        if len(text) < 2:
+            raise RequestError(422, "Write a reply before sending it.")
+        if len(text) > 4000:
+            raise RequestError(422, "That reply is too long to send.")
+        row = self.get(request_id)
+        to_email = (row.email or "").strip()
+        if not to_email and row.member_id is not None:
+            account = (self.db.query(UserAccount)
+                       .filter(UserAccount.member_id == row.member_id).one_or_none())
+            to_email = (account.email if account else "").strip()
+        if not to_email:
+            raise RequestError(409, "This request has no email address to reply to.")
+
+        rendered = templates.request_reply(row.subject, text, support_email)
+        result = email.send(EmailMessage(to=to_email, subject=rendered.subject, text=rendered.text, html=rendered.html))
+        reply = MemberRequestReply(
+            request_id=row.id, body=text, to_email=to_email,
+            sent_by_user_id=sender.id, sent_by_name=sender.display_name or sender.email,
+            delivery_status="sent" if result.accepted else "failed",
+            delivery_detail=None if result.accepted else result.error,
+        )
+        self.db.add(reply)
+        row.updated_at = datetime.now(timezone.utc)
+        self.db.flush()
+        return reply

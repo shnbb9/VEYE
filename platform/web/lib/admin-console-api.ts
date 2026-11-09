@@ -160,10 +160,17 @@ export type RequestKind = "contact_us" | "help_question" | "join_beta";
 export type RequestStatus = "new" | "in_progress" | "resolved";
 export const REQUEST_KIND_LABELS: Record<RequestKind, string> = { contact_us: "Contact Us", help_question: "Help question", join_beta: "Join Beta" };
 export const REQUEST_STATUS_LABELS: Record<RequestStatus, string> = { new: "New", in_progress: "In progress", resolved: "Resolved" };
+/* An answer the console sent. `delivery_status` is carried so a reply that
+   never left the building is shown as such instead of being assumed delivered. */
+export type RequestReply = {
+  id: string; body: string; to_email: string; sent_by_name: string;
+  delivery_status: "sent" | "failed"; delivery_detail: string | null; created_at: string;
+};
 export type ConsoleRequest = {
   id: string; kind: RequestKind; kind_label: string; status: RequestStatus; status_label: string; source: "public" | "member";
   member_id: string | null; name: string; email: string; subject: string; message: string; page: string | null;
   created_at: string; updated_at: string; handled_by: string | null; handled_at: string | null; resolution_note: string;
+  replies: RequestReply[];
 };
 export type RequestsPage = { rows: ConsoleRequest[]; total: number; page: number; page_size: number; counts: Record<string, number> };
 export type RequestsView = "open" | "all" | "resolved" | "new" | "in_progress";
@@ -173,6 +180,10 @@ export const listRequests = (params: { view?: RequestsView; kind?: RequestKind |
 export const getRequest = (id: string) => apiJson<ConsoleRequest>(`${CONSOLE}/requests/${id}`);
 export const setRequestStatus = (id: string, status: RequestStatus, resolution_note = "") =>
   postJson<ConsoleRequest>(`${CONSOLE}/requests/${id}/status`, { status, resolution_note });
+/* Emails the answer to the address on the request and keeps it there. The
+   status is not touched: moving the request on is a separate decision. */
+export const replyToRequest = (id: string, body: string) =>
+  postJson<ConsoleRequest>(`${CONSOLE}/requests/${id}/reply`, { body });
 
 /* ---- Settings ------------------------------------------------------------ */
 

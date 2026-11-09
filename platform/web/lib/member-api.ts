@@ -86,9 +86,14 @@ export const copySampleDay = (key: string, option: number) => postJson<PlanDays>
 
 export type RequestKind = "contact_us" | "help_question" | "join_beta";
 export type RequestStatus = "new" | "in_progress" | "resolved";
+/* Veye's answer as the member sees it: the words and when they were sent. The
+   console's own record — who typed it, where it went, whether the send
+   succeeded — is not on this wire at all. */
+export type MemberReply = { id: string; body: string; created_at: string };
 export type MemberRequest = {
   id: string; kind: RequestKind; kind_label: string; status: RequestStatus; status_label: string; source: string;
-  subject: string; message: string; created_at: string; updated_at: string; handled_at: string | null; resolution_note: string;
+  name: string; email: string; subject: string; message: string; created_at: string; updated_at: string;
+  replies: MemberReply[];
 };
 export type Submitted = { id: string; kind: RequestKind; status: RequestStatus; created_at: string; already_open: boolean };
 

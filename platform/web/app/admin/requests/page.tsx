@@ -7,6 +7,7 @@ import { Chip, EmptyState, Icon, PageHead, fmtDate } from "@/components/admin/ad
 import {
   REQUEST_KIND_LABELS,
   listRequests,
+  replyToRequest,
   setRequestStatus,
   type ConsoleRequest,
   type RequestKind,
@@ -19,7 +20,9 @@ import {
    Contact Us messages, Help questions and Join Beta submissions — a list with
    Open / All / Resolved, the selected request on the right, and three plain
    status moves. Every row is a real submission from the public site or the
-   member application; nothing is emailed from this screen. */
+   member application. Answering is done here too: the reply is emailed to the
+   address on the request and kept against it, so the next person to open it
+   can see what was already said. */
 
 const VIEWS: { key: RequestsView; label: string }[] = [{ key: "open", label: "Open" }, { key: "all", label: "All" }, { key: "resolved", label: "Resolved" }];
 const KINDS = Object.keys(REQUEST_KIND_LABELS) as RequestKind[];
@@ -39,6 +42,8 @@ function Requests() {
   const [pageNo, setPageNo] = useState(1);
   const [selected, setSelected] = useState<string | null>(initial);
   const [note, setNote] = useState("");
+  const [reply, setReply] = useState("");
+  const [sent, setSent] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -54,20 +59,46 @@ function Requests() {
 
   const item = page?.rows.find((r) => r.id === selected) ?? null;
   useEffect(() => { setNote(item?.resolution_note ?? ""); }, [item?.id, item?.resolution_note]);
+  // A half-typed reply belongs to the request it was typed on, not to whatever
+  // is selected next.
+  useEffect(() => { setReply(""); setSent(""); }, [item?.id]);
+
+  /* Keep the request just handled on screen even when the current filter no
+     longer includes it, and refresh the counts around it. */
+  async function refreshAround(updated: ConsoleRequest) {
+    const fresh = await listRequests({ view, kind, q, page: pageNo, page_size: 25 });
+    const rows = fresh.rows.some((r) => r.id === updated.id)
+      ? fresh.rows.map((r) => (r.id === updated.id ? updated : r))
+      : [updated, ...fresh.rows];
+    setPage({ ...fresh, rows });
+    setSelected(updated.id);
+  }
 
   async function move(status: RequestStatus) {
     if (!item) return;
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setSent("");
     try {
-      const updated = await setRequestStatus(item.id, status, note);
-      // Refresh counts and rows, but keep the request just handled on screen
-      // even if the current filter no longer includes it.
-      const fresh = await listRequests({ view, kind, q, page: pageNo, page_size: 25 });
-      const rows = fresh.rows.some((r) => r.id === updated.id) ? fresh.rows.map((r) => (r.id === updated.id ? updated : r)) : [updated, ...fresh.rows];
-      setPage({ ...fresh, rows });
-      setSelected(updated.id);
+      await refreshAround(await setRequestStatus(item.id, status, note));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That change could not be saved.");
+    } finally { setBusy(false); }
+  }
+
+  async function send() {
+    if (!item || reply.trim().length < 2) { setError("Write a reply before sending it."); return; }
+    setBusy(true); setError(""); setSent("");
+    try {
+      const updated = await replyToRequest(item.id, reply.trim());
+      const latest = updated.replies[updated.replies.length - 1];
+      setReply("");
+      // Say what actually happened. A send that failed must not be reported as
+      // a reply that arrived.
+      setSent(latest && latest.delivery_status === "failed"
+        ? `That reply could not be delivered to ${latest.to_email}. It is kept below so you can try again.`
+        : `Sent to ${latest?.to_email ?? "the address on this request"}.`);
+      await refreshAround(updated);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "That reply could not be sent.");
     } finally { setBusy(false); }
   }
 
@@ -80,7 +111,7 @@ function Requests() {
       {error && <p className="errorbar">{error}</p>}
 
       <section className="lead">
-        <div><h2>Member requests</h2><p>Start with the newest messages, mark what you are handling, resolve when done. Replies go out from your own mailbox; this screen sends nothing.</p></div>
+        <div><h2>Member requests</h2><p>Start with the newest messages, answer from the request itself, mark what you are handling and resolve when done. Every reply you send is emailed to the person and kept here.</p></div>
         <div className="minirow" style={{ minWidth: 330 }} data-testid="requests-counts">
           <div className="mini"><span className="mini__n">{counts?.new ?? "—"}</span><span className="mini__l">New</span></div>
           <div className="mini"><span className="mini__n">{counts?.in_progress ?? "—"}</span><span className="mini__l">In progress</span></div>
@@ -112,7 +143,14 @@ function Requests() {
             {page && page.rows.length === 0 && <div className="card__body"><EmptyState icon="inbox" title="No requests here" msg="Choose another filter, or wait for the next message." /></div>}
             {page?.rows.map((r) => (
               <button key={r.id} className={`flag${r.id === selected ? " is-active" : ""}`} type="button" data-rq={r.id} onClick={() => setSelected(r.id)}>
-                <span className="flag__top"><span className="flag__who">{r.name || "Visitor"}</span>{r.status === "new" && <span className="chip chip--attention chip--sm">New</span>}</span>
+                <span className="flag__top">
+                  <span className="flag__who">{r.name || "Visitor"}</span>
+                  {r.status === "new" && <span className="chip chip--attention chip--sm">New</span>}
+                  {/* Answering does not move the status, so the row has to say
+                      it — otherwise a New request that was already answered
+                      looks untouched and gets answered twice. */}
+                  {r.replies.length > 0 && <span className="chip chip--live chip--sm">Answered</span>}
+                </span>
                 <span className="flag__why">{r.subject || r.message.slice(0, 80)}</span>
                 <span className="t-support">{r.kind_label} · {fmtDate(r.created_at)}</span>
               </button>
@@ -140,15 +178,57 @@ function Requests() {
                 <div><div className="t-eyebrow">Message</div><p style={{ whiteSpace: "pre-wrap" }}>{item.message || <span className="t-support">No message — a Join Beta request carries only the member&rsquo;s identity.</span>}</p></div>
                 {item.member_id && <div><div className="t-eyebrow">Member</div><p><Link href={`/admin/members/${item.member_id}`}>Open Member 360</Link></p></div>}
                 {(item.handled_by || item.handled_at) && <div><div className="t-eyebrow">Handling</div><p className="t-support">{item.handled_by ?? "—"} · {fmtDate(item.handled_at)}</p></div>}
+
+                {item.replies.length > 0 && (
+                  <div data-testid="request-replies">
+                    <div className="t-eyebrow">{item.replies.length === 1 ? "Reply sent" : `${item.replies.length} replies sent`}</div>
+                    <div className="replies">
+                      {item.replies.map((r) => (
+                        <div className={`reply${r.delivery_status === "failed" ? " reply--failed" : ""}`} key={r.id} data-reply={r.id}>
+                          <div className="reply__meta">
+                            {r.sent_by_name} · {fmtDate(r.created_at)} · to {r.to_email}
+                            {r.delivery_status === "failed" && <Chip label="Not delivered" tone="error" />}
+                          </div>
+                          <p className="reply__body">{r.body}</p>
+                          {r.delivery_status === "failed" && (
+                            <p className="reply__warn">This one never left the server{r.delivery_detail ? `: ${r.delivery_detail}` : ""}. Nobody received it — send it again.</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="t-eyebrow" htmlFor="rqReply">Reply{item.email ? ` to ${item.email}` : ""}</label>
+                  {item.email ? (
+                    <>
+                      <textarea className="textarea" id="rqReply" rows={4} value={reply} onChange={(e) => { setReply(e.target.value); setSent(""); }}
+                                placeholder="Write the answer in your own words. It is sent exactly as typed." data-testid="request-reply" />
+                      <p className="t-support" style={{ marginTop: 6 }}>
+                        Sent as written, over Veye&rsquo;s wording, and kept on this request. The person is asked to write back to the
+                        support address in Settings, not to this message. Sending does not change the status.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="t-support">
+                      Nobody left an email address on this request, so there is nothing to reply to. Record what you know in the
+                      internal note below.
+                    </p>
+                  )}
+                  {sent && <p className="t-support" role="status" data-testid="request-reply-result">{sent}</p>}
+                </div>
+
                 <div>
                   <label className="t-eyebrow" htmlFor="rqNote">Internal note</label>
-                  <textarea className="textarea" id="rqNote" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What was done, or what the reply said." data-testid="request-note" />
+                  <textarea className="textarea" id="rqNote" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything the next person needs to know. The member never sees this." data-testid="request-note" />
                 </div>
-                <div className="notice notice--quiet"><Icon name="info" size={18} /><div>Nothing is emailed from this screen. Reply from your mailbox, then record the outcome here.</div></div>
+                <div className="notice notice--quiet"><Icon name="info" size={18} /><div>The reply above is emailed to the person; the internal note is not — it stays in the console for whoever opens this request next.</div></div>
               </div>
               <div className="card__foot">
+                {item.email && <button className="btn btn--primary btn--sm" type="button" disabled={busy || reply.trim().length < 2} onClick={() => void send()} data-testid="request-send-reply">{busy ? "Sending…" : "Send reply"}</button>}
                 {item.status !== "in_progress" && item.status !== "resolved" && <button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => move("in_progress")} data-testid="request-progress">Mark in progress</button>}
-                {item.status !== "resolved" && <button className="btn btn--primary btn--sm" type="button" disabled={busy} onClick={() => move("resolved")} data-testid="request-resolve">Resolve</button>}
+                {item.status !== "resolved" && <button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => move("resolved")} data-testid="request-resolve">Resolve</button>}
                 {item.status === "resolved" && <button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => move("new")} data-testid="request-reopen">Reopen</button>}
                 {item.status === "in_progress" && <button className="btn btn--ghost btn--sm" type="button" disabled={busy} onClick={() => move("in_progress")}>Save note</button>}
               </div>

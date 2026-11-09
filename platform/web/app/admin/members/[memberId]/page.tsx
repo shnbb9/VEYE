@@ -227,9 +227,13 @@ function Member360View() {
           <div className="card__body card__body--flush">
             {member.requests.length ? (
               <div className="table-wrap"><table className="table table--compact">
-                <thead><tr><th scope="col">Received</th><th scope="col">Kind</th><th scope="col">Subject</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Open</span></th></tr></thead>
+                <thead><tr><th scope="col">Received</th><th scope="col">Kind</th><th scope="col">Subject</th><th scope="col">Answered</th><th scope="col">Status</th><th scope="col"><span className="sr-only">Open</span></th></tr></thead>
                 <tbody>{member.requests.map((r) => (
-                  <tr key={r.id}><td>{fmtDate(r.created_at)}</td><td>{r.kind_label}</td><td>{r.subject || r.message.slice(0, 60)}</td><td><Chip label={REQUEST_STATUS_LABELS[r.status]} tone={r.status === "resolved" ? "live" : r.status === "new" ? "attention" : "info"} /></td><td style={{ textAlign: "right" }}><Link className="btn btn--secondary btn--sm" href={`/admin/requests?view=all&id=${r.id}`}>Open</Link></td></tr>
+                  <tr key={r.id}><td>{fmtDate(r.created_at)}</td><td>{r.kind_label}</td><td>{r.subject || r.message.slice(0, 60)}</td>
+                    {/* Whether this person was actually written back to, not only
+                        whether somebody marked the request resolved. */}
+                    <td>{r.replies.length === 0 ? <span className="t-support">Not yet</span> : fmtDate(r.replies[r.replies.length - 1].created_at)}</td>
+                    <td><Chip label={REQUEST_STATUS_LABELS[r.status]} tone={r.status === "resolved" ? "live" : r.status === "new" ? "attention" : "info"} /></td><td style={{ textAlign: "right" }}><Link className="btn btn--secondary btn--sm" href={`/admin/requests?view=all&id=${r.id}`}>Open</Link></td></tr>
                 ))}</tbody>
               </table></div>
             ) : <p className="t-support" style={{ padding: 20 }}>No request from this member.</p>}

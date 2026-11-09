@@ -84,6 +84,10 @@ service-account*.json
 
 # ---- databases and generated material -----------------------------------------
 *.db
+# SQLite leaves these beside the file while a test run is in flight.
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 platform/api/var/

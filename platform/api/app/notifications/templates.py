@@ -157,6 +157,33 @@ def account_deactivated(first_name: str) -> Rendered:
     )
 
 
+def request_reply(subject: str, body: str, support_email: str) -> Rendered:
+    """An administrator's answer to a Contact Us message, Help question or
+    Join Beta request.
+
+    The administrator's words are sent as written and nothing is added to
+    them. The framing only says what the message is and where to go next: it
+    does not promise that replying to this address reaches anybody, because
+    the sender is a no-reply address until the client says otherwise.
+
+    There is deliberately no "Hi <name>," line: the administrator writes the
+    whole answer, their own salutation included if they want one, and a
+    template greeting stacked on a typed one reads like two people talking."""
+    about = f" about \u201c{subject}\u201d" if subject else ""
+    about_html = f" about &ldquo;{escape(subject)}&rdquo;" if subject else ""
+    where = f"If you need anything more, write to {support_email}."
+    return Rendered(
+        subject=f"Veye replied to your message{(': ' + subject) if subject else ''}"[:180],
+        text=f"Thank you for writing to Veye{about}. Here is our reply:\n\n{body}\n\n{where}\n",
+        html=_wrap(
+            "Veye replied to your message",
+            [f"Thank you for writing to Veye{about_html}. Here is our reply:",
+             escape(body).replace("\n", "<br />"),
+             escape(where)],
+        ),
+    )
+
+
 def companion_escalation(first_name: str, category: str, admin_link: str) -> Rendered:
     """Placeholder escalation for the team. Deliberately carries no member
     identity and no message content — minimum necessary."""

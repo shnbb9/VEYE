@@ -1,10 +1,11 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ADMIN, ADMIN_TWO, ADITYA, freshMember } from "../fixtures/accounts";
-import { adminSignIn, expectAdminHome, expectMemberDashboard, memberSignIn, open, portalSessions, signUpMember } from "../fixtures/helpers";
+import { adminSignIn, expectAdminHome, expectMemberDashboard, memberSignIn, open, portalSessions, signUpMember, waitForMail } from "../fixtures/helpers";
 
 /* Admin ↔ member propagation, both directions:
    - a member's Contact Us / Join Beta and a visitor's Help question land in
-     Requests & Inbox, move through the statuses, and show on Member 360;
+     Requests & Inbox, are answered from the request itself, move through the
+     statuses, and show on Member 360;
    - the console's support details, a published daily tip and an edited FAQ
      reach the member dashboard and the public Help page;
    - two administrator accounts have the same plain capability. */
@@ -20,7 +21,7 @@ async function memberBrowser(browser: Browser, email: string, password: string):
 }
 
 test.describe.serial("Requests & Inbox and content propagation", () => {
-  test("member Contact Us and Join Beta reach the inbox; status moves show back to the member and on Member 360", async ({ browser, page }) => {
+  test("member Contact Us and Join Beta reach the inbox; the answer reaches the member; status moves show back to the member and on Member 360", async ({ browser, page }) => {
     const member = freshMember("e2e");
     const mayaContext = await browser.newContext();
     const maya = await mayaContext.newPage();
@@ -53,7 +54,31 @@ test.describe.serial("Requests & Inbox and content propagation", () => {
     await expect(detail).toContainText(member.email);
     await page.getByTestId("request-progress").click();
     await expect(detail.locator(".chip").first()).toHaveText("In progress");
-    await page.getByTestId("request-note").fill("Replied by email: yes, every result is kept.");
+
+    /* Answer from the request itself: the reply is emailed to the address on
+       the request, kept against it, and leaves the status where it was. */
+    const answer = `Yes — every result you save is kept (E2E ${stamp}).`;
+    await page.getByTestId("request-reply").fill(answer);
+    await page.getByTestId("request-send-reply").click();
+    await expect(page.getByTestId("request-reply-result")).toContainText(`Sent to ${member.email}`);
+    await expect(page.getByTestId("request-replies")).toContainText(answer);
+    await expect(page.getByTestId("request-replies")).toContainText(member.email); // who it went to
+    await expect(page.getByTestId("request-reply")).toHaveValue("");
+    await expect(detail.locator(".chip").first()).toHaveText("In progress"); // replying is not resolving
+    // …so the row has to carry it, or an answered request looks untouched.
+    await expect(page.getByTestId("requests-list").locator(".flag").first()).toContainText("Answered");
+    const delivered = await waitForMail(member.email, "Veye replied to your message");
+    expect(delivered.text).toContain(answer);
+
+    // The member sees it against their own message, without the internal note.
+    await open(maya, "/app");
+    await expect(maya.getByTestId("contact-replies")).toHaveText("1 reply from Veye");
+    await maya.getByTestId("contact-us").click();
+    await expect(maya.getByTestId("contact-history")).toContainText(answer);
+    await expect(maya.getByTestId("contact-history")).toContainText(`E2E contact ${stamp}`);
+    await maya.getByTestId("contact-dialog").getByRole("button", { name: "Cancel" }).click();
+
+    await page.getByTestId("request-note").fill("Answered in the console; nothing outstanding.");
     await page.getByTestId("request-resolve").click();
     await expect(detail.locator(".chip").first()).toHaveText("Resolved");
     // it moved out of Open and into Resolved
@@ -66,8 +91,12 @@ test.describe.serial("Requests & Inbox and content propagation", () => {
     await page.getByRole("link", { name: "Requests", exact: true }).click();
     await expect(page.getByTestId("m360-requests")).toContainText(`E2E contact ${stamp}`);
     await expect(page.getByTestId("m360-requests")).toContainText("Resolved");
-    const mine = await maya.evaluate(async (api) => (await fetch(`${api}/api/v1/members/me/requests`, { credentials: "include" })).json(), process.env.E2E_API_URL ?? "http://localhost:8001") as { subject: string; status: string }[];
-    expect(mine.find((r) => r.subject === `E2E contact ${stamp}`)?.status).toBe("resolved");
+    const mine = await maya.evaluate(async (api) => (await fetch(`${api}/api/v1/members/me/requests`, { credentials: "include" })).json(), process.env.E2E_API_URL ?? "http://localhost:8001") as Record<string, unknown>[];
+    const thread = mine.find((r) => r.subject === `E2E contact ${stamp}`)!;
+    expect(thread.status).toBe("resolved");
+    expect((thread.replies as { body: string }[])[0].body).toBe(answer);
+    // The console's own record is not on the member's wire at all.
+    for (const internal of ["resolution_note", "handled_by", "handled_at"]) expect(thread).not.toHaveProperty(internal);
     // the Join Beta request is still open
     await page.getByRole("link", { name: "Open Requests & Inbox" }).click();
     await page.getByLabel("Kind").selectOption("join_beta");

@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { sendMemberRequest } from "@/lib/member-api";
+import { sendMemberRequest, type MemberRequest } from "@/lib/member-api";
 
 /* Contact Us from inside the member application: a short message that lands
    in the console's Requests & Inbox under the member's own name and email.
-   The support address the console maintains is shown as the alternative. */
-export function ContactUsDialog({ open, supportEmail, supportPhone, onClose, onSent }: {
-  open: boolean; supportEmail: string; supportPhone: string; onClose: () => void; onSent: () => void;
+   The support address the console maintains is shown as the alternative.
+
+   Veye's answers are emailed, and they are also shown here against the
+   message they answer — an emailed reply that exists nowhere in the
+   application leaves the member with no record of the conversation. */
+export function ContactUsDialog({ open, supportEmail, supportPhone, requests, onClose, onSent }: {
+  open: boolean; supportEmail: string; supportPhone: string; requests: MemberRequest[] | null;
+  onClose: () => void; onSent: () => void;
 }) {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -36,6 +41,10 @@ export function ContactUsDialog({ open, supportEmail, supportPhone, onClose, onS
     } finally { setBusy(false); }
   }
 
+  // What the member wrote in with, plus anything Veye has answered — a Join
+  // Beta application is not a message, but its answer must not be hidden.
+  const threads = (requests ?? []).filter((r) => r.kind !== "join_beta" || r.replies.length > 0);
+
   return (
     <div className={`modal-overlay${open ? " open" : ""}`} id="contactUsModal" aria-hidden={!open} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       {open && (
@@ -55,8 +64,35 @@ export function ContactUsDialog({ open, supportEmail, supportPhone, onClose, onS
             <button className="btn-ghost" type="button" onClick={onClose}>Cancel</button>
             <button className="btn-primary" type="submit" disabled={busy} data-testid="contact-send">{busy ? "Sending…" : "Send message"}</button>
           </div>
+          {threads.length > 0 && (
+            <div className="contact-thread" data-testid="contact-history">
+              <h4 className="contact-thread__head">Your messages</h4>
+              {threads.map((thread) => (
+                <div className="cmsg" key={thread.id} data-thread={thread.id}>
+                  <div className="cmsg__top">
+                    <span className="cmsg__subject">{thread.subject || thread.kind_label}</span>
+                    <span className="cmsg__when">{shortDate(thread.created_at)}</span>
+                  </div>
+                  {thread.replies.length === 0 ? (
+                    <p className="cmsg__waiting">
+                      {thread.status === "resolved"
+                        ? "Veye has closed this one. Nothing was written back here."
+                        : "With Veye. The answer comes to the email on your account, and appears here too."}
+                    </p>
+                  ) : thread.replies.map((reply) => (
+                    <div className="cmsg__reply" key={reply.id} data-reply={reply.id}>
+                      <span className="cmsg__from">Veye replied &middot; {shortDate(reply.created_at)}</span>
+                      <p>{reply.body}</p>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </form>
       )}
     </div>
   );
 }
+
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
