@@ -100,6 +100,11 @@ test.describe.serial("Administrators", () => {
     const accepted = page.getByTestId("admins-table").locator("tr", { hasText: invited.email });
     await expect(accepted).toContainText("Accepted");
     await expect(accepted).toContainText("signed in now");
+    // The audit entry the invitation wrote is readable beside the control.
+    const activity = page.getByTestId("admins-activity");
+    await expect(activity).toContainText("Invited to the console");
+    await expect(activity).toContainText(invited.email);
+    await expect(activity).toContainText(`by ${ADMIN.firstName}`);
   });
 
   test("the link works once, a resend replaces it, and withdrawing kills it", async ({ page, browser }) => {

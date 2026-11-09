@@ -15,11 +15,13 @@ import {
   getFeatureStates,
   getSupportSettings,
   inviteAdministrator,
+  listAccountActivity,
   listAdministrators,
   listMyConsoleSessions,
   saveSupportSettings,
   signOutMyOtherConsoleSessions,
   type AdminAction,
+  type AccountActivity,
   type AdministratorRow,
   type AdministratorsPage,
   type ConsoleSession,
@@ -290,7 +292,12 @@ function AdministratorsSection() {
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "" });
   const [formError, setFormError] = useState("");
 
-  const load = () => listAdministrators().then(setPage)
+  const [activity, setActivity] = useState<AccountActivity[] | null>(null);
+
+  const load = () => Promise.all([
+    listAdministrators().then(setPage),
+    listAccountActivity(8).then(setActivity).catch(() => setActivity(null)),
+  ]).then(() => undefined)
     .catch((reason) => setError(reason instanceof Error ? reason.message : "Administrators could not be loaded."));
   useEffect(() => { void load(); }, []);
 
@@ -427,10 +434,28 @@ function AdministratorsSection() {
           </>
         )}
       </div>
+      {activity && activity.length > 0 && (
+        <div className="card__body card__body--flush" data-testid="admins-activity">
+          <div className="t-eyebrow" style={{ padding: "16px 20px 0" }}>Recent access changes</div>
+          <div className="rows">
+            {activity.map((row) => (
+              <div className="rowitem" key={row.id}>
+                <span className="rowitem__icon"><Icon name="shield" size={18} /></span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="rowitem__title">{row.label}</div>
+                  <div className="rowitem__meta">{row.email ?? "an account"} · by {row.actor_name}</div>
+                </div>
+                <span className="t-support" style={{ whiteSpace: "nowrap" }}>{fmtDate(row.at)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="card__foot">
         <span className="t-support">
           An invitation link works once and expires in 72 hours. Nobody can deactivate their own account, and the last
-          active administrator cannot be deactivated — the console can never be left without a way in.
+          active administrator cannot be deactivated — the console can never be left without a way in. Every action
+          here is recorded above and in the full audit log.
         </span>
       </div>
 

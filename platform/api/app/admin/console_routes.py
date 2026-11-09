@@ -19,7 +19,7 @@ from app.assessments.models import HealthNumberAttempt
 from app.assessments.routes import history_item as health_number_item
 from app.assessments.schemas import HealthNumberHistoryItem
 from app.assessments.service import CALCULATION_VERSION as HEALTH_NUMBER_VERSION
-from app.admin.audit import record_audit
+from app.admin.audit import AccountActivityRow, account_activity, record_audit
 from app.auth.dependencies import get_auth_service
 from app.auth.models import AuthSession, UserAccount
 from app.auth.principal import PORTAL_MEMBER, CurrentPrincipal, require_admin
@@ -207,6 +207,7 @@ class Member360Out(BaseModel):
     requests: list[RequestOut]
     not_connected: list[str]
     account: MemberAccountOut
+    account_activity: list[AccountActivityRow]
 
 
 class InstrumentOut(BaseModel):
@@ -548,6 +549,7 @@ def member_360(member_id: UUID, db: Session = Depends(get_db),
         requests=[request_out(r) for r in requests],
         not_connected=["Food Choices", "Mindfulness", "Activity Tracker (Exercise, Meditation)"],
         account=_account_out(db, user, runtime),
+        account_activity=account_activity(db, user_id=user.id, limit=10),
     )
 
 

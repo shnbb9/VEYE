@@ -456,3 +456,30 @@ def test_signing_out_everywhere_counts_only_sessions_somebody_could_use(admin_cl
     assert ended.status_code == 200
     assert "1 other session was signed out" in ended.json()["message"]
     assert live.get("/api/v1/admin/members").status_code == 401
+
+
+# ---------------------------------------------------------------- account history
+def test_account_actions_are_readable_beside_the_controls_that_caused_them(admin_client, member_client, mailbox):
+    """Every access change is already audited; these two surfaces make it
+    visible where an administrator is actually looking."""
+    member_id = member_client.account["member_id"]
+    assert _invite(admin_client).status_code == 201
+    assert admin_client.post(f"/api/v1/admin/members/{member_id}/deactivate").status_code == 200
+    assert admin_client.post(f"/api/v1/admin/members/{member_id}/reactivate").status_code == 200
+
+    recent = admin_client.get("/api/v1/admin/administrators/activity")
+    assert recent.status_code == 200, recent.text
+    rows = recent.json()
+    assert [r["action"] for r in rows][:3] == ["member_account.reactivated", "member_account.deactivated",
+                                               "administrator.invited"]
+    assert rows[0]["label"] == "Account reactivated" and rows[0]["actor_name"] == "Cara Hogue"
+    assert rows[2]["email"] == NEW_ADMIN
+
+    # Member 360 carries only that member's own history.
+    history = admin_client.get(f"/api/v1/admin/members/{member_id}").json()["account_activity"]
+    assert [r["label"] for r in history] == ["Account reactivated", "Account deactivated"]
+    assert all(r["email"] == "aditya.demo@demo.veye.test" for r in history)
+
+    # It is a read: nothing here writes, and a member session cannot see it.
+    assert len(admin_client.get("/api/v1/admin/administrators/activity").json()) == len(rows)
+    assert member_client.get("/api/v1/admin/administrators/activity").status_code == 401

@@ -97,6 +97,7 @@ export type Member360 = {
   requests: ConsoleRequest[];
   not_connected: string[];
   account: MemberAccount;
+  account_activity: AccountActivity[];
 };
 
 /** The member's profile photo as the console sees it (same bytes the member sees). */
@@ -333,3 +334,20 @@ export const listMyConsoleSessions = () =>
   apiJson<{ rows: ConsoleSession[]; current_session_id: string | null }>(`${CONSOLE}/account/sessions`);
 export const signOutMyOtherConsoleSessions = () =>
   postJson<{ ok: boolean; message: string | null }>(`${CONSOLE}/account/sessions/revoke-others`, {});
+
+/* ---- account history -----------------------------------------------------
+   The audit entries the access controls already write, read back beside the
+   controls themselves. Read-only: no screen writes an audit row. */
+
+export type AccountActivity = {
+  id: string;
+  at: string;
+  actor_name: string;
+  action: string;
+  label: string;
+  user_id: string | null;
+  email: string | null;
+};
+
+export const listAccountActivity = (limit = 20) =>
+  apiJson<AccountActivity[]>(`${CONSOLE}/administrators/activity?limit=${limit}`);

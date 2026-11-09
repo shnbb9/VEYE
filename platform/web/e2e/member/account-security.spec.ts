@@ -197,6 +197,11 @@ test.describe("Admin actions on a member account", () => {
 
     await page.getByTestId("account-reactivate").click();
     await expect(page.getByTestId("account-action-notice")).toContainText(/active again/i);
+    // Member 360 shows who did what to this account, and when.
+    const history = page.getByTestId("account-history");
+    await expect(history).toContainText("Account deactivated");
+    await expect(history).toContainText("Account reactivated");
+    await expect(history).toContainText(`by ${ADMIN.firstName}`);
     await memberSignIn(theirs, member.email, member.password);
     await expectMemberDashboard(theirs);
     await memberContext.close();

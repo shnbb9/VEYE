@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.admin.audit import record_audit
+from app.admin.audit import AccountActivityRow, account_activity, record_audit
 from app.auth.dependencies import get_auth_service
 from app.auth.models import AuthToken, UserAccount
 from app.auth.principal import CurrentPrincipal, require_admin
@@ -235,3 +235,11 @@ def reactivate_administrator(user_id: UUID, principal: CurrentPrincipal = Depend
     record_audit(db, principal, "administrator.reactivated", "user_account", str(user.id), {"email": user.email})
     db.commit()
     return ActionResult(row=_row(db, user, principal, runtime))
+
+
+@router.get("/activity", response_model=list[AccountActivityRow])
+def recent_access_changes(limit: int = 20, principal: CurrentPrincipal = Depends(require_admin),
+                          db: Session = Depends(get_db)) -> list[AccountActivityRow]:
+    """Who granted or withdrew access recently. Reading only — the entries
+    themselves are written by the actions, never by this route."""
+    return account_activity(db, limit=limit)

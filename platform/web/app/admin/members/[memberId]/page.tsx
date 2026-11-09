@@ -403,6 +403,23 @@ function AccountActions({ member, onChanged }: { member: Member360; onChanged: (
           </div>
         </div>
       </div>
+      {member.account_activity.length > 0 && (
+        <div className="card__body card__body--flush" data-testid="account-history">
+          <div className="t-eyebrow" style={{ padding: "16px 20px 0" }}>Account history</div>
+          <div className="rows">
+            {member.account_activity.map((row) => (
+              <div className="rowitem" key={row.id}>
+                <span className="rowitem__icon"><Icon name="clipboard" size={18} /></span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="rowitem__title">{row.label}</div>
+                  <div className="rowitem__meta">by {row.actor_name}</div>
+                </div>
+                <span className="t-support" style={{ whiteSpace: "nowrap" }}>{fmtDate(row.at)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="card__foot"><span className="t-support">Every action here is written to the admin audit log.</span></div>
     </div>
   );
