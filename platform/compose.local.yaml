@@ -129,8 +129,8 @@ services:
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
     ports:
-      - "127.0.0.1:${VEYE_MAIL_WEB_HOST_PORT}:8025"
-      - "127.0.0.1:${VEYE_MAIL_SMTP_HOST_PORT}:1025"
+      - "127.0.0.1:${VEYE_MAIL_WEB_HOST_PORT:-8026}:8025"
+      - "127.0.0.1:${VEYE_MAIL_SMTP_HOST_PORT:-1026}:1025"
 
 volumes:
   pgdata:
