@@ -160,9 +160,19 @@ class UnconfiguredLLMProvider:
         return {"provider": self.name, "model": None, "configured": False, "external": False, "reason": self.reason}
 
 
-def build_llm_provider(kind: str, *, groq_api_key: str | None, groq_model: str, timeout_seconds: float) -> LLMProvider:
+def build_llm_provider(kind: str, *, groq_api_key: str | None, groq_model: str, timeout_seconds: float,
+                       gemini: dict | None = None) -> LLMProvider:
     if kind == "mock":
         return MockLLMProvider()
+    if kind == "gemini":
+        from app.companion.providers.gemini import GeminiLLMProvider
+
+        try:
+            return GeminiLLMProvider(timeout_seconds=timeout_seconds, **(gemini or {}))
+        except ProviderNotConfigured as exc:
+            # The API still boots and the Companion reports the absence rather
+            # than a misconfigured deployment answering members anyway.
+            return UnconfiguredLLMProvider(str(exc))
     if kind == "groq":
         try:
             return GroqLLMProvider(groq_api_key or "", groq_model, timeout_seconds)
