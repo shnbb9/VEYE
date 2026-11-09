@@ -1,9 +1,13 @@
 """KnowledgeObjectStore: where original source files live.
 
-Production target: S3 for the original file, PostgreSQL for metadata,
-pgvector for approved chunk text and embeddings. The local implementation
-keeps files on disk under the API's `var/` folder so no AWS account or
-emulator is needed. Chunks never carry the original binary."""
+Production target: Google Cloud Storage for the original file, PostgreSQL for
+metadata, pgvector for approved chunk text and embeddings. The local
+implementation keeps files on disk under the API's `var/` folder so no cloud
+account or emulator is needed. Chunks never carry the original binary.
+
+The source files live in their own bucket, separate from member media: they
+have different lifecycles, audiences and retention, and sharing one bucket
+would mean a single IAM grant covers both."""
 
 from __future__ import annotations
 
@@ -79,49 +83,103 @@ class LocalFileKnowledgeObjectStore:
         return {"provider": self.name, "root": str(self.root), "external": False}
 
 
-class S3KnowledgeObjectStore:
-    """Boundary for the production object store. It is intentionally thin and
-    imports boto3 lazily; it has not been exercised against a live bucket
-    (bucket ownership, region and credentials are client decisions)."""
+class GcsKnowledgeObjectStore:
+    """Google Cloud Storage for the original source files.
 
-    name = "s3"
+    Its own bucket, not the one holding member photos. They have different
+    lifecycles, different audiences and different retention: approved source
+    documents are long-lived reference material the whole team may read, and a
+    member's photo is theirs. Sharing a bucket would mean one IAM grant covers
+    both, which is the wrong default even when it is convenient.
 
-    def __init__(self, bucket: str, prefix: str = "knowledge/") -> None:
+    Application Default Credentials, so a Cloud Run service uses its own
+    identity. Imported lazily; nothing here runs until a bucket exists.
+    """
+
+    name = "gcs"
+
+    def __init__(self, bucket: str, *, prefix: str = "knowledge/", client=None) -> None:
         if not bucket:
-            raise ValueError("VEYE_S3_KNOWLEDGE_BUCKET is not set.")
-        try:
-            import boto3  # type: ignore[import-not-found]
-        except ImportError as exc:  # pragma: no cover - optional dependency
-            raise RuntimeError("boto3 is not installed; the S3 object store is not available in this environment.") from exc
-        self.bucket = bucket
-        self.prefix = prefix
-        self._client = boto3.client("s3")
+            raise ValueError("VEYE_KNOWLEDGE_BUCKET is required for the gcs knowledge store.")
+        self.bucket_name = bucket
+        self.prefix = prefix.strip("/") + "/" if prefix.strip("/") else ""
+        self._client = client
+        self._bucket = None
 
-    def _key(self, key: str) -> str:
+    def _ensure_bucket(self):
+        if self._bucket is not None:
+            return self._bucket
+        if self._client is None:
+            try:  # pragma: no cover - depends on the optional extra
+                from google.cloud import storage
+            except ImportError as exc:  # pragma: no cover
+                raise RuntimeError(
+                    "The 'google-cloud-storage' package is not installed (pip install 'veye-api[gcs]').") from exc
+            self._client = storage.Client()
+        self._bucket = self._client.bucket(self.bucket_name)
+        return self._bucket
+
+    def _blob_name(self, key: str) -> str:
         return self.prefix + _validate_key(key)
 
-    def put(self, key: str, data: bytes, content_type: str) -> StoredObject:  # pragma: no cover - needs AWS
-        self._client.put_object(Bucket=self.bucket, Key=self._key(key), Body=data, ContentType=content_type)
-        return StoredObject(key=key, byte_size=len(data), sha256=hashlib.sha256(data).hexdigest(), content_type=content_type)
+    def put(self, key: str, data: bytes, content_type: str) -> StoredObject:
+        blob = self._ensure_bucket().blob(self._blob_name(key))
+        blob.upload_from_string(data, content_type=content_type)
+        return StoredObject(key=key, byte_size=len(data), sha256=hashlib.sha256(data).hexdigest(),
+                            content_type=content_type)
 
-    def get(self, key: str) -> bytes:  # pragma: no cover - needs AWS
-        response = self._client.get_object(Bucket=self.bucket, Key=self._key(key))
-        return response["Body"].read()
+    def get(self, key: str) -> bytes:
+        blob = self._ensure_bucket().blob(self._blob_name(key))
+        if not blob.exists():
+            raise ObjectNotFound(key)
+        return blob.download_as_bytes()
 
-    def exists(self, key: str) -> bool:  # pragma: no cover - needs AWS
-        try:
-            self._client.head_object(Bucket=self.bucket, Key=self._key(key))
-            return True
-        except Exception:
-            return False
+    def exists(self, key: str) -> bool:
+        return bool(self._ensure_bucket().blob(self._blob_name(key)).exists())
 
     def describe(self) -> dict[str, object]:
-        return {"provider": self.name, "bucket": self.bucket, "external": True}
+        return {"provider": self.name, "bucket": self.bucket_name, "prefix": self.prefix or "(none)",
+                "auth": "application default credentials", "external": True, "configured": True}
 
 
-def build_object_store(kind: str, *, local_root: str, s3_bucket: str | None) -> KnowledgeObjectStore:
+class UnconfiguredKnowledgeObjectStore:
+    """Named but not usable. The API still boots and says so, rather than
+    starting with a store that fails on the first ingestion."""
+
+    def __init__(self, name: str, reason: str) -> None:
+        self.name = name
+        self.reason = reason
+
+    def _refuse(self) -> RuntimeError:
+        return RuntimeError(f"The '{self.name}' knowledge object store is not connected: {self.reason}")
+
+    def put(self, key: str, data: bytes, content_type: str) -> StoredObject:
+        raise self._refuse()
+
+    def get(self, key: str) -> bytes:
+        raise self._refuse()
+
+    def exists(self, key: str) -> bool:
+        raise self._refuse()
+
+    def describe(self) -> dict[str, object]:
+        return {"provider": self.name, "external": True, "configured": False, "reason": self.reason}
+
+
+def build_object_store(kind: str, *, local_root: str, bucket: str | None = None,
+                       prefix: str = "knowledge/") -> KnowledgeObjectStore:
     if kind == "local":
         return LocalFileKnowledgeObjectStore(local_root)
+    if kind == "gcs":
+        try:
+            return GcsKnowledgeObjectStore(bucket or "", prefix=prefix)
+        except ValueError as exc:
+            return UnconfiguredKnowledgeObjectStore("gcs", str(exc))
     if kind == "s3":
-        return S3KnowledgeObjectStore(s3_bucket or "")
+        # Google Cloud is the architecture (9 Nov 2026) and the production
+        # image does not install boto3. The value is still accepted so an old
+        # deployment setting does not take the API down on start-up, but there
+        # is no S3 implementation behind it any more.
+        return UnconfiguredKnowledgeObjectStore(
+            "s3", "Google Cloud Storage is the production target; set VEYE_KNOWLEDGE_OBJECT_STORE=gcs.")
     raise ValueError(f"Unknown knowledge object store '{kind}'.")

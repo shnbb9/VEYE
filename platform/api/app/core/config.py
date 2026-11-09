@@ -129,9 +129,13 @@ class Settings(BaseSettings):
     # development retrieval; no external embedding provider is connected.
     embedding_provider: str = "hashing"
     embedding_dimensions: int = 256
+    # "local" (development) or "gcs". Source documents live in their own
+    # bucket, separate from member media: different lifecycle, different
+    # audience, and one IAM grant should not cover both.
     knowledge_object_store: str = "local"
     knowledge_object_root: str = "var/knowledge-objects"
-    s3_knowledge_bucket: str | None = None
+    knowledge_bucket: str | None = None
+    knowledge_object_prefix: str = "knowledge/"
     retrieval_limit: int = 4
 
     # ---- member media (profile photos) -------------------------------------------
@@ -161,7 +165,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VEYE_", extra="ignore")
 
     @field_validator("smtp_username", "smtp_password", "smtp_tls_mode", "email_reply_to",
-                     "gcp_project", "gemini_api_key", "media_bucket", mode="before")
+                     "gcp_project", "gemini_api_key", "media_bucket", "knowledge_bucket", mode="before")
     @classmethod
     def _blank_smtp_value_is_unset(cls, value, info):
         # Env files list these names with empty values; empty means "not set".

@@ -71,7 +71,7 @@ def build_runtime(config: Settings | None = None) -> Runtime:
                                      "production": config.is_production})
     embeddings = build_embedding_provider(config.embedding_provider, dimensions=config.embedding_dimensions)
     object_store = build_object_store(config.knowledge_object_store, local_root=config.knowledge_object_root,
-                                      s3_bucket=config.s3_knowledge_bucket)
+                                      bucket=config.knowledge_bucket, prefix=config.knowledge_object_prefix)
     media_store = build_media_storage(config.media_object_store, local_root=config.media_object_root,
                                       bucket=config.media_bucket, prefix=config.media_object_prefix)
 

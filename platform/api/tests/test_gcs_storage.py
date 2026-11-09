@@ -112,3 +112,65 @@ def test_an_old_s3_value_reports_itself_instead_of_crashing():
     take the API down on start-up."""
     store = build_media_storage("s3", local_root="var/x")
     assert store.describe()["connected"] is False
+
+
+# ---- the knowledge store: the same shape, its own bucket --------------------
+
+def test_the_knowledge_store_behaves_the_same_locally_and_in_a_bucket(tmp_path):
+    from app.knowledge.object_store import (
+        GcsKnowledgeObjectStore,
+        LocalFileKnowledgeObjectStore,
+        ObjectNotFound,
+    )
+
+    local = LocalFileKnowledgeObjectStore(tmp_path)
+    cloud = GcsKnowledgeObjectStore("veye-knowledge", client=FakeClient())
+    key = "sources/abc/health-number.md"
+    for store in (local, cloud):
+        assert store.exists(key) is False
+        stored = store.put(key, b"# Health Number", "text/markdown")
+        assert stored.byte_size == len(b"# Health Number")
+        assert stored.sha256
+        assert store.get(key) == b"# Health Number"
+        assert store.exists(key) is True
+        with pytest.raises(ObjectNotFound):
+            store.get("sources/abc/missing.md")
+
+
+def test_source_documents_do_not_share_the_bucket_that_holds_member_photos():
+    """Different lifecycle, different audience, different retention. Sharing a
+    bucket would mean one IAM grant covers both."""
+    from app.core.config import Settings
+    from app.knowledge.object_store import GcsKnowledgeObjectStore
+
+    defaults = Settings(database_url="sqlite:///unused")
+    assert defaults.knowledge_bucket is None and defaults.media_bucket is None
+    # They are separate settings, so a deployment cannot accidentally point
+    # both at one bucket without saying so twice.
+    assert "knowledge_bucket" in Settings.model_fields and "media_bucket" in Settings.model_fields
+
+    client = FakeClient()
+    GcsKnowledgeObjectStore("veye-knowledge", client=client).put("sources/a/one.md", b"x", "text/markdown")
+    assert "knowledge/sources/a/one.md" in client.store
+
+
+def test_naming_the_knowledge_bucket_store_without_a_bucket_still_boots():
+    from app.knowledge.object_store import build_object_store
+
+    store = build_object_store("gcs", local_root="var/x", bucket=None)
+    assert store.describe()["configured"] is False
+    with pytest.raises(RuntimeError):
+        store.put("sources/a/one.md", b"x", "text/markdown")
+
+
+def test_s3_is_no_longer_a_knowledge_target_but_does_not_crash_a_deployment():
+    """Google Cloud is the architecture and the production image does not
+    install boto3. An old setting must not take the API down on start-up."""
+    import app.knowledge.object_store as store_module
+    from app.knowledge.object_store import build_object_store
+
+    assert not hasattr(store_module, "S3KnowledgeObjectStore")
+    store = build_object_store("s3", local_root="var/x")
+    described = store.describe()
+    assert described["configured"] is False
+    assert "Google Cloud Storage" in described["reason"]

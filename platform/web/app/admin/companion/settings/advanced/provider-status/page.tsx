@@ -9,7 +9,7 @@ const SECTIONS: { key: keyof ProviderStatus; title: string; note: string }[] = [
   { key: "email", title: "Email", note: "Which transport is actually in use is below: mode reads development while messages go to the Mailpit mailbox, and production once a real relay is configured. Google Workspace SMTP is the selected production transport. No password is shown here." },
   { key: "llm", title: "Language model", note: "The Companion talks to the model only through the LLMProvider interface. Absence of a provider is reported, never worked around." },
   { key: "embeddings", title: "Embeddings", note: "Deterministic local embeddings for development retrieval. The production embedding provider is a client decision." },
-  { key: "object_store", title: "Object store", note: "Original source files. Local files in development; S3 is the production target and is not configured." },
+  { key: "object_store", title: "Object store", note: "The original source documents behind approved knowledge. Local files in development; Google Cloud Storage is the production target, in its own bucket rather than the one holding member photos. Not connected until that bucket exists." },
   { key: "telemetry", title: "Telemetry", note: "All records are masked before export. The database exporter feeds these screens." },
   { key: "langfuse", title: "Langfuse", note: "Optional development observability. Keys are never displayed; only whether they are present." },
   { key: "database", title: "Database", note: "PostgreSQL with the pgvector extension in the local stack." },

@@ -162,7 +162,7 @@ def provider_status(db: Session = Depends(get_db), runtime: Runtime = Depends(ge
         auth_provider=_auth_status(runtime, settings),
         email=_email_status(runtime, settings),
         llm=runtime.llm.describe(), embeddings=runtime.embeddings.describe(),
-        object_store=runtime.object_store.describe() | {"production_target": "S3 (not configured)"},
+        object_store=runtime.object_store.describe() | {"production_target": "Google Cloud Storage"},
         telemetry=runtime.telemetry.describe(),
         langfuse={"status": runtime.langfuse_status, "enabled": settings.langfuse_enabled, "base_url": settings.langfuse_base_url if settings.langfuse_enabled else None,
                   "keys_present": bool(settings.langfuse_public_key and settings.langfuse_secret_key)},
