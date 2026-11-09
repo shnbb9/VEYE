@@ -94,8 +94,26 @@ export class ApiError extends Error {
 
 /** Every request carries the HttpOnly session cookie (same-site in local
  *  development, same-origin behind Nginx in production). */
+/** The CSRF token the API set for this browser. Readable on purpose: a page
+ *  on another origin can make the browser send the cookie but cannot read it,
+ *  so echoing it back in a header is what proves the request came from here. */
+export function csrfToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)veye_csrf=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/** The header a hand-rolled fetch must add; empty when there is no token. */
+export function csrfHeaders(): Record<string, string> {
+  const token = csrfToken();
+  return token ? { "X-Veye-Csrf": token } : {};
+}
+
 export async function apiJson<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(apiPath(path), { credentials: "include", ...options });
+  const method = (options?.method ?? "GET").toUpperCase();
+  const token = method === "GET" || method === "HEAD" ? null : csrfToken();
+  const headers = token ? { ...(options?.headers ?? {}), "X-Veye-Csrf": token } : options?.headers;
+  const response = await fetch(apiPath(path), { credentials: "include", ...options, headers });
   if (!response.ok) {
     const detail = await response.json().catch(() => null) as { detail?: unknown } | null;
     throw new ApiError(response.status, describeDetail(detail?.detail) ?? "This Veye result is not available right now.");

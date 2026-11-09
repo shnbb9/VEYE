@@ -1,4 +1,4 @@
-import { apiJson, postJson } from "@/lib/api";
+import { apiJson, csrfHeaders, postJson } from "@/lib/api";
 import { apiPath } from "@/lib/api-base";
 import type { Message } from "@/lib/companion-api";
 
@@ -232,7 +232,8 @@ export const transitionKnowledgeSource = (id: string, action: "activate" | "deac
 export async function attachKnowledgeDocument(id: string, file: File): Promise<KnowledgeSource> {
   const body = new FormData();
   body.append("file", file);
-  const response = await fetch(apiPath(`${BASE}/knowledge-sources/${id}/document`), { method: "POST", body, credentials: "include" });
+  const response = await fetch(apiPath(`${BASE}/knowledge-sources/${id}/document`),
+    { method: "POST", body, credentials: "include", headers: csrfHeaders() });
   if (!response.ok) {
     const detail = await response.json().catch(() => null) as { detail?: unknown } | null;
     throw new Error(typeof detail?.detail === "string" ? detail.detail : "The document could not be attached.");

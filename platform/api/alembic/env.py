@@ -13,6 +13,7 @@ from app.progress.health_assessment import models as health_assessment_models  #
 from app.progress.simple_quiz import models as simple_quiz_models  # noqa: F401
 from app.guided_flows import models as guided_flow_models  # noqa: F401
 from app.auth import models as auth_models  # noqa: F401
+from app.auth import throttle as auth_throttle  # noqa: F401
 from app.notifications import models as notification_models  # noqa: F401
 from app.observability import models as observability_models  # noqa: F401
 from app.knowledge import models as knowledge_models  # noqa: F401

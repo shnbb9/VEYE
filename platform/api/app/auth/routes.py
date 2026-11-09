@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.assessments.repository import record_health_number_attempt
@@ -30,6 +30,8 @@ from app.auth.schemas import (
     TokenRequest,
 )
 from app.auth.service import AuthError, AuthService, SignUpInput
+from app.auth.housekeeping import after_successful_sign_in
+from app.auth.throttle import SignInThrottle, client_address
 from app.members.service import photo_version
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
@@ -78,12 +80,31 @@ def sign_up(
                           health_number_attempt_id=attempt_id)
 
 
-def _portal_sign_in(portal: str, payload: SignInRequest, response: Response, db: Session, auth: AuthService,
-                    runtime: Runtime) -> SessionResponse:
+def _portal_sign_in(portal: str, payload: SignInRequest, request: Request, response: Response, db: Session,
+                    auth: AuthService, runtime: Runtime) -> SessionResponse:
+    # Brute-force protection comes first: a locked attempt never reaches the
+    # password check, and says the same thing whoever it is.
+    throttle = SignInThrottle(db, runtime.settings)
+    address = client_address(request)
+    lockout = throttle.locked(payload.email, address)
+    if lockout is not None:
+        minutes = max(1, round(lockout.retry_after / 60))
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many sign-in attempts. Try again in about {minutes} minute{'' if minutes == 1 else 's'}.",
+            headers={"Retry-After": str(lockout.retry_after)},
+        )
     try:
         user, issued = auth.sign_in(payload.email, payload.password, portal=portal, remember=payload.remember)
     except AuthError as exc:
+        # A wrong password and an account that may not use this portal are both
+        # failures worth counting: each is an attempt on that identity.
+        throttle.record(email=payload.email, client_ip=address, portal=portal, succeeded=False)
+        db.commit()
         _raise(exc)
+    throttle.record(email=payload.email, client_ip=address, portal=portal, succeeded=True)
+    after_successful_sign_in(db, user.id, runtime.settings)
     db.commit()
     set_session_cookie(response, issued, runtime)
     return SessionResponse(account=account_out(user, portal))
@@ -91,22 +112,22 @@ def _portal_sign_in(portal: str, payload: SignInRequest, response: Response, db:
 
 @router.post("/sign-in", response_model=SessionResponse)
 def sign_in(
-    payload: SignInRequest, response: Response, db: Session = Depends(get_db),
+    payload: SignInRequest, request: Request, response: Response, db: Session = Depends(get_db),
     auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
 ) -> SessionResponse:
     """MEMBER portal sign-in (/login). The account must own a member profile;
     administrator access neither helps nor redirects here."""
-    return _portal_sign_in(PORTAL_MEMBER, payload, response, db, auth, runtime)
+    return _portal_sign_in(PORTAL_MEMBER, payload, request, response, db, auth, runtime)
 
 
 @router.post("/admin/sign-in", response_model=SessionResponse)
 def admin_sign_in(
-    payload: SignInRequest, response: Response, db: Session = Depends(get_db),
+    payload: SignInRequest, request: Request, response: Response, db: Session = Depends(get_db),
     auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
 ) -> SessionResponse:
     """ADMIN portal sign-in (/admin/login). Same password check, then
     administrator access is required. Issues the admin cookie only."""
-    return _portal_sign_in(PORTAL_ADMIN, payload, response, db, auth, runtime)
+    return _portal_sign_in(PORTAL_ADMIN, payload, request, response, db, auth, runtime)
 
 
 @router.post("/sign-out", status_code=status.HTTP_204_NO_CONTENT)

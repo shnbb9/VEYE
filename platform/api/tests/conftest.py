@@ -17,6 +17,28 @@ from app.db.base import Base
 from app.db.session import engine
 from app.main import app
 
+# ---- the test client behaves like the browser client -------------------------
+# lib/api.ts adds the CSRF token to every state-changing call automatically, so
+# a TestClient that did not would be testing a client nobody ships. Patching
+# the class covers the suite's many direct TestClient(app) constructions; a
+# test that wants to prove enforcement passes its own X-Veye-Csrf header and
+# this leaves it alone (see test_csrf_and_headers.py).
+from app.auth.csrf import CSRF_COOKIE, CSRF_HEADER, SAFE_METHODS  # noqa: E402
+
+_request_without_csrf = TestClient.request
+
+
+def _request_with_csrf(self, method, url, *args, headers=None, **kwargs):
+    if str(method).upper() not in SAFE_METHODS:
+        explicit = headers is not None and any(key.lower() == CSRF_HEADER for key in headers)
+        token = self.cookies.get(CSRF_COOKIE)
+        if token and not explicit:
+            headers = {**(headers or {}), "X-Veye-Csrf": token}
+    return _request_without_csrf(self, method, url, *args, headers=headers, **kwargs)
+
+
+TestClient.request = _request_with_csrf
+
 MEMBER_PASSWORD = "correct-horse-battery"
 
 

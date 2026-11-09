@@ -78,7 +78,11 @@ test.describe("Multiple members stay isolated", () => {
       const today = await A.page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; });
       const aMeal = (await memberApi<{ meals: { id: string }[] }>(A.page, `/api/v1/members/me/food-diary?date=${today}`)).meals[0];
       const forbidden = await B.page.evaluate(async ({ api, id }) => {
-        const response = await fetch(`${api}/api/v1/members/me/food-diary/${id}`, { method: "DELETE", credentials: "include" });
+        // With the token, as the application sends it: the refusal has to be
+        // the ownership 404, not a generic CSRF 403 standing in front of it.
+        const csrf = decodeURIComponent(document.cookie.match(/veye_csrf=([^;]*)/)?.[1] ?? "");
+        const response = await fetch(`${api}/api/v1/members/me/food-diary/${id}`,
+          { method: "DELETE", credentials: "include", headers: { "X-Veye-Csrf": csrf } });
         return response.status;
       }, { api: process.env.E2E_API_URL ?? "http://localhost:8001", id: aMeal.id });
       expect(forbidden).toBe(404);

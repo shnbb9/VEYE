@@ -49,6 +49,16 @@ export async function portalSessions(page: Page): Promise<{ member: { email: str
   }, API_URL);
 }
 
+/** The CSRF token this API context has been given. The application's own
+ *  client reads the cookie and echoes it on every state-changing call
+ *  (lib/api.ts); a test driving the API directly has to do the same, or it is
+ *  testing a client nobody ships. */
+export async function csrfHeaders(api: APIRequestContext): Promise<Record<string, string>> {
+  const state = await api.storageState();
+  const token = state.cookies.find((cookie) => cookie.name === "veye_csrf")?.value;
+  return token ? { "X-Veye-Csrf": decodeURIComponent(token) } : {};
+}
+
 export async function apiContext(): Promise<APIRequestContext> {
   return request.newContext({ baseURL: API_URL });
 }

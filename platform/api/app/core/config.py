@@ -1,4 +1,5 @@
 from pydantic import SecretStr, field_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +24,9 @@ class Settings(BaseSettings):
     # the admin console can be open in the same browser at the same time.
     member_session_cookie_name: str = "veye_member_session"
     admin_session_cookie_name: str = "veye_admin_session"
+    # Left False so the local http stack works; a production environment
+    # turns it on by itself below, rather than relying on somebody remembering
+    # to set it. Session cookies must never travel in clear text.
     session_cookie_secure: bool = False
     session_hours: int = 12
     session_remember_days: int = 30
@@ -34,6 +38,16 @@ class Settings(BaseSettings):
     admin_invitation_hours: int = 72
     # Confirming a new email address: the link goes to the NEW address.
     email_change_hours: int = 24
+    # Brute-force protection for sign-in. Counted over one rolling window: per
+    # address typed (cleared by a correct password) and, higher, per client
+    # address (never cleared, so spraying cannot reset itself). Set the first
+    # to 0 to switch the limit off entirely.
+    sign_in_window_minutes: int = 15
+    sign_in_max_failures: int = 10
+    sign_in_max_failures_per_address: int = 50
+    # How long a dead session, spent token or counted attempt is kept before
+    # housekeeping removes it. Live rows are never touched.
+    auth_retention_days: int = 7
 
     # ---- email -----------------------------------------------------------------
     # "local-smtp" delivers to a plain SMTP endpoint (Mailpit in the optional
@@ -105,6 +119,14 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment.lower() in {"production", "prod"}
+
+    @model_validator(mode="after")
+    def _secure_cookies_in_production(self) -> "Settings":
+        # A production deployment serves TLS, so the session cookies are
+        # marked Secure whatever the env file says; HSTS follows the same flag.
+        if self.is_production and not self.session_cookie_secure:
+            object.__setattr__(self, "session_cookie_secure", True)
+        return self
 
 
 settings = Settings()

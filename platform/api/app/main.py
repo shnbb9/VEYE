@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.admin.account_routes import router as admin_account_router
@@ -14,6 +15,7 @@ from app.auth.routes import router as auth_router
 from app.care.routes import admin_router as admin_care_router, member_router as care_router
 from app.companion.routes import router as companion_router
 from app.content.routes import admin_router as admin_content_router, public_router as content_router
+from app.auth.csrf import enforce as enforce_csrf, issue as issue_csrf
 from app.core.config import settings
 from app.core.runtime import get_runtime
 from app.admin.qa_routes import router as admin_qa_router
@@ -56,12 +58,39 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def csrf_and_headers(request: Request, call_next):
+    """Two things every answer needs, in one pass.
+
+    A state-changing request that carries a session cookie must also carry the
+    token that only a same-origin page can read, and every response says it
+    must not be sniffed, framed, or leaked through a referrer. The API serves
+    JSON to one application, so these are safe to apply everywhere."""
+    session_cookies = (settings.member_session_cookie_name, settings.admin_session_cookie_name)
+    try:
+        enforce_csrf(request, session_cookies)
+    except HTTPException as exc:
+        response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    else:
+        response = await call_next(request)
+    issue_csrf(response, request, secure=settings.session_cookie_secure)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Cache-Control", "no-store")
+    if settings.session_cookie_secure:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Veye-Csrf"],
 )
 app.include_router(auth_router)
 app.include_router(health_number_router)

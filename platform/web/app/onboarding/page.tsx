@@ -8,7 +8,7 @@ import {
   initialAnswers, isAnswered, questionReached, toApiAnswers,
 } from "@/lib/health-number";
 import { apiPath } from "@/lib/api-base";
-import { describeDetail } from "@/lib/api";
+import { csrfHeaders, describeDetail } from "@/lib/api";
 import { PENDING_ANSWERS_KEY, PREFILL_EMAIL_KEY } from "@/lib/auth-keys";
 import { useSession } from "@/components/session";
 
@@ -63,7 +63,9 @@ export default function Onboarding() {
     setBusy(true); setError("");
     try {
       const response = await fetch(apiPath(store ? "/api/v1/health-number/calculate" : "/api/v1/health-number/preview"), {
-        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        // A signed-in member storing a result carries their session, so this
+        // hand-rolled call needs the same CSRF token apiJson adds.
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify({ answers: toApiAnswers(answers) }),
       });
       if (!response.ok) {

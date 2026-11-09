@@ -1,6 +1,6 @@
 import { expect, request, test, type Browser, type Page } from "@playwright/test";
 import { ADITYA, ADMIN, API_URL, freshMember } from "./fixtures/accounts";
-import { adminSignIn, expectAdminHome, expectMemberDashboard, memberSignIn, open, signUpMember } from "./fixtures/helpers";
+import { adminSignIn, csrfHeaders, expectAdminHome, expectMemberDashboard, memberSignIn, open, signUpMember } from "./fixtures/helpers";
 
 /* Runtime and navigation acceptance (22 Sep 2026). The journey specs prove
    SPA navigation; this file proves what a person does by hand on the durable
@@ -331,7 +331,8 @@ test.describe("Admin navigation crawl", () => {
     try {
       const signIn = await api.post("/api/v1/auth/admin/sign-in", { data: { email: ADMIN.email, password: ADMIN.password, remember: false } });
       expect(signIn.ok()).toBe(true);
-      const cleaned = await api.post("/api/v1/admin/qa/cleanup-synthetic-members", { data: { prefixes: ["gone"] } });
+      const cleaned = await api.post("/api/v1/admin/qa/cleanup-synthetic-members",
+        { data: { prefixes: ["gone"] }, headers: await csrfHeaders(api) });
       expect(cleaned.ok()).toBe(true);
       expect(((await cleaned.json()) as { removed: string[] }).removed).toContain(gone.email);
     } finally {
