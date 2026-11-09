@@ -7,6 +7,8 @@ screen that hides a field it was given has not protected anything.
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 from app.health_permission.models import POLICY_VERSION
@@ -284,3 +286,100 @@ def test_a_members_export_carries_what_they_were_given_as_well_as_what_they_ente
     # The export is still the member's own data and nothing else.
     assert "password_hash" not in str(export)
     assert "token" not in str(export).lower()
+
+
+# ---- the gate across every admin analytics surface --------------------------
+# Member 360 and the members list were gated first. An independent review found
+# the aggregate surfaces were not, and the Home feed was the worst of them: it
+# pairs a member's name with their health result outright.
+
+def _overview(admin_client):
+    return admin_client.get("/api/v1/admin/overview").json()
+
+
+def _insights(admin_client):
+    return admin_client.get("/api/v1/admin/insights").json()
+
+
+def test_a_member_who_has_not_shared_is_absent_from_every_admin_health_surface(member_client, admin_client):
+    _save_a_health_number(member_client)
+    today = date.today().isoformat()
+    member_client.put("/api/v1/members/me/mood", params={"today": today},
+                      json={"entry_date": today, "mood": "calm"})
+    member_client.post("/api/v1/members/me/food-diary",
+                       json={"entry_date": today, "meal_time": "08:00", "description": "Porridge"})
+
+    overview = _overview(admin_client)
+    # 1. Not named beside a health result in the Home feed.
+    health_kinds = {"health_number", "body_composition", "blood_markers", "health_assessment", "simple_quiz"}
+    named = [row for row in overview["recent_activity"] if row["kind"] in health_kinds]
+    assert named == [], "a member who has not shared appeared in the named health feed"
+    # 2. Not counted in protected totals.
+    assert overview["completions"]["health_number"] == 0
+    assert overview["members_completed"]["health_number"] == 0
+    assert overview["mood_entries_total"] == 0
+    assert overview["food_diary_entries_total"] == 0
+
+    insights = _insights(admin_client)
+    assert insights["attempts"]["health_number"] == 0
+    assert insights["members_completed"]["health_number"] == 0
+    # _by_month returns zero-filled buckets rather than an empty list, so the
+    # claim is that every bucket is empty, not that the series is.
+    assert all(bucket["count"] == 0 for bucket in insights["attempts_by_month"]["health_number"])
+    assert insights["mood_entries"] == 0 and insights["mood_members"] == 0
+    assert insights["food_diary_entries"] == 0 and insights["food_diary_members"] == 0
+
+    # 3. Not counted on the Assessments index.
+    instruments = {i["key"]: i for i in admin_client.get("/api/v1/admin/assessments").json()}
+    assert instruments["health_number"]["attempts_total"] == 0
+    assert instruments["health_number"]["members_scored"] == 0
+    assert instruments["health_number"]["last_completed_at"] is None
+
+    # 4. Non-health figures are untouched — they carry no health content.
+    assert insights["members_total"] >= 1
+    assert overview["members_total"] >= 1
+
+
+def test_granting_includes_them_at_once_and_revoking_removes_them_again(member_client, admin_client):
+    _save_a_health_number(member_client)
+    today = date.today().isoformat()
+    member_client.put("/api/v1/members/me/mood", params={"today": today},
+                      json={"entry_date": today, "mood": "calm"})
+
+    assert _overview(admin_client)["completions"]["health_number"] == 0
+    assert member_client.post(GRANT).status_code == 200
+
+    after = _overview(admin_client)
+    assert after["completions"]["health_number"] >= 1
+    assert any(row["kind"] == "health_number" for row in after["recent_activity"])
+    assert _insights(admin_client)["mood_entries"] >= 1
+    assert {i["key"]: i for i in admin_client.get("/api/v1/admin/assessments").json()}["health_number"]["attempts_total"] >= 1
+
+    assert member_client.post(REVOKE).status_code == 200
+    back = _overview(admin_client)
+    assert back["completions"]["health_number"] == 0
+    assert not any(row["kind"] == "health_number" for row in back["recent_activity"])
+    assert _insights(admin_client)["mood_entries"] == 0
+
+
+def test_one_member_sharing_does_not_expose_another_in_the_aggregates(member_client, admin_client):
+    """An aggregate is not a safe harbour: a total over a population of two
+    tells you about the one who did not share."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from tests.conftest import sign_up
+
+    _save_a_health_number(member_client)
+    assert member_client.post(GRANT).status_code == 200
+
+    quiet = TestClient(app)
+    assert sign_up(quiet, email="quiet@demo.veye.test", first_name="Quiet").status_code == 201
+    _save_a_health_number(quiet)
+
+    insights = _insights(admin_client)
+    # Exactly one member's results are counted, not two.
+    assert insights["members_completed"]["health_number"] == 1
+    quiet_id = _member_id(admin_client, "quiet@demo.veye.test")
+    assert all(row["member_id"] != quiet_id for row in _overview(admin_client)["recent_activity"]
+               if row["kind"] == "health_number")

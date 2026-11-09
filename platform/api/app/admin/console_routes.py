@@ -31,7 +31,12 @@ from app.db.session import get_db
 from app.food.models import FoodDiaryEntry
 from app.food.routes import MealOut, meal_out
 from app.guided_flows.models import GuidedFlow, MemberGuidedFlowSession
-from app.health_permission.models import STATE_GRANTED, STATE_LABELS as PERMISSION_LABELS, STATE_NOT_REQUESTED
+from app.health_permission.models import (
+    STATE_GRANTED,
+    STATE_LABELS as PERMISSION_LABELS,
+    STATE_NOT_REQUESTED,
+    MemberHealthPermission,
+)
 from app.health_permission.service import HealthPermissionService
 from app.members.models import Member
 from app.members.service import MemberProfileService, ProfileError, photo_version
@@ -300,20 +305,43 @@ def _aware(value: datetime | None) -> datetime | None:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
-def _count(db: Session, model) -> int:
-    return db.query(func.count(model.id)).scalar() or 0
+def sharing_member_ids(db: Session) -> set[UUID]:
+    """The members whose health data may appear in this console at all.
+
+    Phase 1 rule, deliberately conservative: a health, mood or food figure
+    belongs in an admin total only while that member has granted sharing. An
+    aggregate is not a safe harbour — "3 members scored" over a population of
+    four tells you about the fourth, and the Home feed was pairing a member's
+    name with their result outright.
+
+    There is no de-identified analytics exception here. If one is wanted, it is
+    a client and legal decision, not something to assume.
+    """
+    rows = (db.query(MemberHealthPermission.member_id)
+            .filter(MemberHealthPermission.state == STATE_GRANTED).all())
+    return {row[0] for row in rows}
 
 
-def _distinct_members(db: Session, model) -> int:
-    return db.query(func.count(func.distinct(model.member_id))).scalar() or 0
+def _count(db: Session, model, allowed: set[UUID] | None = None) -> int:
+    query = db.query(func.count(model.id))
+    if allowed is not None:
+        query = query.filter(model.member_id.in_(allowed)) if allowed else query.filter(False)
+    return query.scalar() or 0
 
 
-def _tracker_counts(db: Session, distinct: bool) -> TrackerCounts:
+def _distinct_members(db: Session, model, allowed: set[UUID] | None = None) -> int:
+    query = db.query(func.count(func.distinct(model.member_id)))
+    if allowed is not None:
+        query = query.filter(model.member_id.in_(allowed)) if allowed else query.filter(False)
+    return query.scalar() or 0
+
+
+def _tracker_counts(db: Session, distinct: bool, allowed: set[UUID] | None = None) -> TrackerCounts:
     fn = _distinct_members if distinct else _count
     return TrackerCounts(
-        health_number=fn(db, HealthNumberAttempt), body_composition=fn(db, BodyCompositionAttempt),
-        blood_markers=fn(db, BloodMarkerAttempt), health_assessment=fn(db, HealthAssessmentAttempt),
-        simple_quiz=fn(db, SimpleQuizAttempt),
+        health_number=fn(db, HealthNumberAttempt, allowed), body_composition=fn(db, BodyCompositionAttempt, allowed),
+        blood_markers=fn(db, BloodMarkerAttempt, allowed), health_assessment=fn(db, HealthAssessmentAttempt, allowed),
+        simple_quiz=fn(db, SimpleQuizAttempt, allowed),
     )
 
 
@@ -428,12 +456,17 @@ def overview(db: Session = Depends(get_db)) -> OverviewOut:
     month = now - timedelta(days=30)
     rows = _member_rows(db)
     names = {row.member_id: row.name for row in rows}
+    # A row here is a member's name beside their health result, which is the
+    # plainest disclosure in the console. Nothing enters this feed, or the
+    # totals below it, for a member who has not shared.
+    allowed = sharing_member_ids(db)
 
     activity: list[ActivityRow] = []
     for kind, model in (("health_number", HealthNumberAttempt), ("body_composition", BodyCompositionAttempt),
                         ("blood_markers", BloodMarkerAttempt), ("health_assessment", HealthAssessmentAttempt),
                         ("simple_quiz", SimpleQuizAttempt)):
-        for attempt in db.query(model).order_by(model.completed_at.desc()).limit(12).all():
+        recent = db.query(model).filter(model.member_id.in_(allowed)) if allowed else None
+        for attempt in (recent.order_by(model.completed_at.desc()).limit(12).all() if recent is not None else []):
             result, _ = _attempt_result(kind, attempt)
             activity.append(ActivityRow(at=_aware(attempt.completed_at), member_id=attempt.member_id,
                                         member_name=names.get(attempt.member_id, "Member"), kind=kind, summary=result))
@@ -457,7 +490,8 @@ def overview(db: Session = Depends(get_db)) -> OverviewOut:
         members_new_last_7_days=sum(1 for r in rows if r.joined_at >= week),
         members_new_last_30_days=sum(1 for r in rows if r.joined_at >= month),
         members_active_last_7_days=sum(1 for r in rows if r.last_active_at and r.last_active_at >= week),
-        completions=_tracker_counts(db, distinct=False), members_completed=_tracker_counts(db, distinct=True),
+        completions=_tracker_counts(db, distinct=False, allowed=allowed),
+        members_completed=_tracker_counts(db, distinct=True, allowed=allowed),
         guided_sessions_total=_count(db, MemberGuidedFlowSession),
         guided_sessions_in_progress=db.query(func.count(MemberGuidedFlowSession.id)).filter(MemberGuidedFlowSession.status.in_(("in_progress", "paused"))).scalar() or 0,
         guided_sessions_completed=db.query(func.count(MemberGuidedFlowSession.id)).filter(MemberGuidedFlowSession.status == "completed").scalar() or 0,
@@ -467,7 +501,8 @@ def overview(db: Session = Depends(get_db)) -> OverviewOut:
         requests_open=db.query(func.count(MemberRequest.id)).filter(MemberRequest.status.in_((STATUS_NEW, STATUS_IN_PROGRESS))).scalar() or 0,
         requests_new=db.query(func.count(MemberRequest.id)).filter(MemberRequest.status == STATUS_NEW).scalar() or 0,
         requests_in_progress=db.query(func.count(MemberRequest.id)).filter(MemberRequest.status == STATUS_IN_PROGRESS).scalar() or 0,
-        mood_entries_total=_count(db, MoodEntry), food_diary_entries_total=_count(db, FoodDiaryEntry),
+        mood_entries_total=_count(db, MoodEntry, allowed),
+        food_diary_entries_total=_count(db, FoodDiaryEntry, allowed),
         recent_members=[RecentMember(member_id=r.member_id, name=r.name, email=r.email, joined_at=r.joined_at,
                                      email_verified=r.email_verified, is_synthetic=r.is_synthetic) for r in rows[:6]],
         recent_activity=activity[:15], generated_at=now,
@@ -623,17 +658,20 @@ def member_photo(member_id: UUID, db: Session = Depends(get_db), runtime: Runtim
     return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=0, must-revalidate"})
 
 
-def _instrument_out(db: Session, key: str) -> InstrumentOut:
+def _instrument_out(db: Session, key: str, allowed: set[UUID] | None = None) -> InstrumentOut:
     name, model, version, description = INSTRUMENTS[key]
-    last = db.query(func.max(model.completed_at)).scalar()
+    allowed = sharing_member_ids(db) if allowed is None else allowed
+    last_query = db.query(func.max(model.completed_at))
+    last = (last_query.filter(model.member_id.in_(allowed)).scalar() if allowed else None)
     return InstrumentOut(key=key, name=name, description=description, calculation_version=version,
-                         calculation_owner="System managed", attempts_total=_count(db, model),
-                         members_scored=_distinct_members(db, model), last_completed_at=_aware(last))
+                         calculation_owner="System managed", attempts_total=_count(db, model, allowed),
+                         members_scored=_distinct_members(db, model, allowed), last_completed_at=_aware(last))
 
 
 @router.get("/assessments", response_model=list[InstrumentOut])
 def assessments(db: Session = Depends(get_db)) -> list[InstrumentOut]:
-    return [_instrument_out(db, key) for key in INSTRUMENTS]
+    allowed = sharing_member_ids(db)
+    return [_instrument_out(db, key, allowed) for key in INSTRUMENTS]
 
 
 @router.get("/assessments/{key}/attempts", response_model=AttemptsPage)
@@ -648,9 +686,8 @@ def assessment_attempts(
     # One result per row is still that member's health record. A screen that
     # lists every attempt is the easiest way to read around Member 360, so it
     # asks the same question Member 360 asks.
-    sharing = HealthPermissionService(db).states_for(sorted({a.member_id for a in attempts}))
-    db.commit()
-    attempts = [a for a in attempts if sharing.get(a.member_id) == STATE_GRANTED]
+    allowed = sharing_member_ids(db)
+    attempts = [a for a in attempts if a.member_id in allowed]
     needle = q.strip().lower()
     rows: list[AttemptRow] = []
     for attempt in attempts:
@@ -665,15 +702,22 @@ def assessment_attempts(
                                result=result, detail=detail))
     total = len(rows)
     start = (page - 1) * page_size
-    return AttemptsPage(instrument=_instrument_out(db, key), rows=rows[start:start + page_size], total=total, page=page, page_size=page_size)
+    return AttemptsPage(instrument=_instrument_out(db, key, allowed), rows=rows[start:start + page_size],
+                        total=total, page=page, page_size=page_size)
 
 
 @router.get("/insights", response_model=InsightsOut)
 def insights(db: Session = Depends(get_db)) -> InsightsOut:
     members = db.query(Member.created_at).all()
+    # Sign-ups, requests and Companion usage carry no health content and stay.
+    # Everything derived from a health, mood or food record is counted only for
+    # members who have shared.
+    allowed = sharing_member_ids(db)
     attempts_by_month = {}
     for key, (_, model, _, _) in INSTRUMENTS.items():
-        attempts_by_month[key] = _by_month([at for (at,) in db.query(model.completed_at).all()])
+        dates = ([at for (at,) in db.query(model.completed_at).filter(model.member_id.in_(allowed)).all()]
+                 if allowed else [])
+        attempts_by_month[key] = _by_month(dates)
     titles = {flow.key: flow.title for flow in db.query(GuidedFlow).all()}
     sessions = db.query(MemberGuidedFlowSession).all()
     flows = []
@@ -686,7 +730,8 @@ def insights(db: Session = Depends(get_db)) -> InsightsOut:
         ))
     return InsightsOut(
         members_total=len(members), members_by_month=_by_month([at for (at,) in members]),
-        attempts=_tracker_counts(db, distinct=False), members_completed=_tracker_counts(db, distinct=True),
+        attempts=_tracker_counts(db, distinct=False, allowed=allowed),
+        members_completed=_tracker_counts(db, distinct=True, allowed=allowed),
         attempts_by_month=attempts_by_month, guided_flows=flows,
         companion_conversations=_count(db, CompanionConversation), companion_messages=_count(db, CompanionMessage),
         companion_feedback_helpful=db.query(func.count(CompanionFeedback.id)).filter(CompanionFeedback.rating == "helpful").scalar() or 0,
@@ -694,8 +739,9 @@ def insights(db: Session = Depends(get_db)) -> InsightsOut:
         requests_by_kind={kind: count for kind, count in db.query(MemberRequest.kind, func.count(MemberRequest.id)).group_by(MemberRequest.kind).all()},
         requests_by_status={status: count for status, count in db.query(MemberRequest.status, func.count(MemberRequest.id)).group_by(MemberRequest.status).all()},
         requests_by_month=_by_month([at for (at,) in db.query(MemberRequest.created_at).all()]),
-        mood_entries=_count(db, MoodEntry), mood_members=_distinct_members(db, MoodEntry),
-        food_diary_entries=_count(db, FoodDiaryEntry), food_diary_members=_distinct_members(db, FoodDiaryEntry),
+        mood_entries=_count(db, MoodEntry, allowed), mood_members=_distinct_members(db, MoodEntry, allowed),
+        food_diary_entries=_count(db, FoodDiaryEntry, allowed),
+        food_diary_members=_distinct_members(db, FoodDiaryEntry, allowed),
         generated_at=_now(),
     )
 
