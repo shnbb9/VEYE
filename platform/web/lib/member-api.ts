@@ -134,5 +134,15 @@ export const grantHealthPermission = () => postJson<HealthPermission>(`${PERMISS
 export const declineHealthPermission = () => postJson<HealthPermission>(`${PERMISSION}/decline`, {});
 export const revokeHealthPermission = () => postJson<HealthPermission>(`${PERMISSION}/revoke`, {});
 
+/* The dashboard's Personal tip: written by Sprout from the member's own
+   summaries, cached per member, and regenerated only when their data moves.
+   `generated` is false when this is the honest fallback, so the screen can
+   say which it is rather than passing a placeholder off as personalisation. */
+export type PersonalTip = {
+  text: string; generated: boolean; generated_at: string | null;
+  source: "companion" | "fallback"; tip_version: string;
+};
+export const getPersonalTip = () => apiJson<PersonalTip>("/api/v1/companion/personal-tip");
+
 export type SupportDetails = { support_email: string; support_phone: string };
 export const getSupportDetails = () => apiJson<SupportDetails>("/api/v1/settings/support");

@@ -17,6 +17,11 @@ from app.companion.schemas import (
     QuickPromptOut,
     SourceOut,
 )
+from datetime import datetime
+
+from pydantic import BaseModel
+
+from app.companion.personal_tip import PersonalTipService
 from app.companion.service import CompanionError, CompanionService
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
@@ -105,3 +110,26 @@ def clear(principal: CurrentPrincipal = Depends(require_member), db: Session = D
     db.commit()
     db.refresh(conversation)
     return conversation_out(conversation)
+
+
+class PersonalTipOut(BaseModel):
+    """The dashboard's Personal tip. `generated` is false when this is the
+    honest fallback rather than something Sprout wrote, so the screen can say
+    which it is instead of passing a placeholder off as personalisation."""
+
+    text: str
+    generated: bool
+    generated_at: datetime | None
+    source: str
+    tip_version: str
+
+
+@router.get("/personal-tip", response_model=PersonalTipOut)
+def personal_tip(principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+                 runtime: Runtime = Depends(get_runtime)) -> PersonalTipOut:
+    """Cached per member and regenerated only when their own summaries move or
+    the tip gets old — a dashboard refresh never costs a model call."""
+    tip = PersonalTipService(db, runtime.llm).get(principal)
+    db.commit()
+    return PersonalTipOut(text=tip.text, generated=tip.generated, generated_at=tip.generated_at,
+                          source=tip.source, tip_version=tip.context_version)

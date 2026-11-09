@@ -8,7 +8,7 @@ import {
   type BloodMarkersHistory, type BodyCompositionHistory, type HealthAssessmentHistory, type HealthNumberHistoryItem, type SimpleQuizHistory,
 } from "@/lib/api";
 import { FIRST_TIME_FLOW, PROGRESS_GUIDE_FLOW, getGuidedOverview, skipFlow, type GuidedOverview } from "@/lib/guided-flows-api";
-import { getMood, getPublishedContent, getSupportDetails, myRequests, sendMemberRequest, type MemberRequest, type MoodOverview, type SupportDetails } from "@/lib/member-api";
+import { getMood, getPersonalTip, getPublishedContent, getSupportDetails, myRequests, sendMemberRequest, type MemberRequest, type MoodOverview, type PersonalTip, type SupportDetails } from "@/lib/member-api";
 import { displayHealthNumber, prefersReducedMotion } from "@/lib/member-format";
 import { useToast } from "@/components/member/member-chrome";
 import { ContactUsDialog } from "@/components/member/contact-us-dialog";
@@ -39,6 +39,9 @@ export default function MemberDashboard() {
   const [guided, setGuided] = useState<GuidedOverview | null>(null);
   const [mood, setMood] = useState<MoodOverview | null>(null);
   const [dailyTip, setDailyTip] = useState<string | null | undefined>(undefined); // undefined = loading, null = none published
+  // The Personal tip is the Companion's, the Daily tip is the console's. They
+  // are never merged. undefined = loading, null = could not be loaded.
+  const [personalTip, setPersonalTip] = useState<PersonalTip | null | undefined>(undefined);
   const [support, setSupport] = useState<SupportDetails | null>(null);
   const [requests, setRequests] = useState<MemberRequest[] | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
@@ -72,6 +75,7 @@ export default function MemberDashboard() {
       if (!cancelled) setDailyTip(entries.find((entry) => entry.key === "daily_health_tip")?.body ?? null);
     }).catch(() => { if (!cancelled) setDailyTip(null); });
     getSupportDetails().then((data) => { if (!cancelled) setSupport(data); }).catch(() => { /* the card keeps its approved address */ });
+    getPersonalTip().then((tip) => { if (!cancelled) setPersonalTip(tip); }).catch(() => { if (!cancelled) setPersonalTip(null); });
     myRequests().then((rows) => { if (!cancelled) setRequests(rows); }).catch(() => { if (!cancelled) setRequests([]); });
     return () => { cancelled = true; };
   }, []);
@@ -205,8 +209,11 @@ export default function MemberDashboard() {
           <div className="card tip-card fade-in d4" data-testid="personal-tip">
             <div className="tip-icon-wrap"><img src="/assets/web/img/ic-personal.png" alt="" /></div>
             <h3>Personal tip</h3>
-            <p className="tip-muted">Personal tips arrive with the Veye Companion release, once the client has defined how they are derived from your trackers. Nothing here is generated yet.</p>
-            <span className="tip-proto">Not connected yet</span>
+            {personalTip === undefined && <p>&nbsp;</p>}
+            {personalTip?.generated && <TypedTip index={1}>{personalTip.text}</TypedTip>}
+            {personalTip && !personalTip.generated && <p className="tip-muted">{personalTip.text}</p>}
+            {personalTip === null && <p className="tip-muted">Your Personal tip could not be loaded just now.</p>}
+            {personalTip?.generated && <span className="tip-proto">Written by Sprout from your own history</span>}
           </div>
 
           <div className="help-pair fade-in d5">

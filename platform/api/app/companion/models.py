@@ -134,3 +134,26 @@ class CompanionFeedback(Base):
     reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     message = relationship("CompanionMessage", back_populates="feedback")
+
+
+class MemberPersonalTip(Base):
+    """The dashboard's Personal tip, cached per member.
+
+    One row, rewritten in place: the tip is a current observation, not a
+    history, and keeping every version would be one more copy of the member's
+    patterns for no one to read. `context_fingerprint` is a hash of the
+    summaries the tip was written from, so it is regenerated when the member's
+    own data moves rather than on every page render.
+    """
+
+    __tablename__ = "member_personal_tips"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    member_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"),
+                                                 unique=True, index=True, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    context_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    tip_version: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

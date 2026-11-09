@@ -135,3 +135,31 @@ test.describe("Settings profile identity", () => {
     expect(clipped).toBe(false);
   });
 });
+
+/* The dashboard's Personal tip is written by Sprout from the member's own
+   summaries, and is not the Daily Health tip beside it. What it must never do
+   is present a chat reply as personalisation — the offline provider returns a
+   greeting, an unresolved {{MEMBER_FIRST_NAME}} token and a question, which is
+   a fine chat answer and a nonsense tip. */
+test("the Personal tip never shows a raw token or a chat reply dressed as a tip", async ({ page }) => {
+  await memberSignIn(page, ADITYA.email, ADITYA.password);
+  await expectMemberDashboard(page);
+
+  const card = page.getByTestId("personal-tip");
+  await expect(card).toBeVisible();
+  const text = (await card.textContent()) ?? "";
+
+  expect(text).not.toContain("{{");
+  expect(text).not.toContain("}}");
+  expect(text).not.toContain("MEMBER_FIRST_NAME");
+  expect(text).not.toContain("approved Veye source");
+
+  // It is also still its own card, not merged into the Daily Health tip.
+  await expect(page.getByTestId("daily-tip")).toBeVisible();
+  expect(await page.getByTestId("daily-tip").textContent()).not.toBe(text);
+
+  // The "written by Sprout" badge only appears when Sprout actually wrote it.
+  const badge = card.getByText("Written by Sprout from your own history");
+  const claimsGenerated = await badge.count();
+  if (claimsGenerated) expect(text).not.toContain("Sprout has not written you a note yet");
+});
