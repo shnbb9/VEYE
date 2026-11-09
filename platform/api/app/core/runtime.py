@@ -64,11 +64,16 @@ def build_runtime(config: Settings | None = None) -> Runtime:
     # from, and whether replying reaches anybody.
     templates.configure(environment=config.environment, reply_to=config.email_reply_to)
     llm = build_llm_provider(config.llm_provider, groq_api_key=config.groq_api_key, groq_model=config.groq_model,
-                             timeout_seconds=config.llm_timeout_seconds)
+                             timeout_seconds=config.llm_timeout_seconds,
+                             gemini={"project": config.gcp_project or "", "location": config.gcp_location,
+                                     "model": config.gemini_model, "api_key": config.gemini_api_key,
+                                     "member_data_cleared": config.gemini_member_data_cleared,
+                                     "production": config.is_production})
     embeddings = build_embedding_provider(config.embedding_provider, dimensions=config.embedding_dimensions)
     object_store = build_object_store(config.knowledge_object_store, local_root=config.knowledge_object_root,
                                       s3_bucket=config.s3_knowledge_bucket)
-    media_store = build_media_storage(config.media_object_store, local_root=config.media_object_root)
+    media_store = build_media_storage(config.media_object_store, local_root=config.media_object_root,
+                                      bucket=config.media_bucket, prefix=config.media_object_prefix)
 
     exporters: list[TelemetryExporter] = [DatabaseTraceExporter(SessionLocal)]
     langfuse_status = "disabled"

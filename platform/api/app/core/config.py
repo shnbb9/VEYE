@@ -95,6 +95,21 @@ class Settings(BaseSettings):
     # LLMProvider: "mock" (deterministic, offline) or "groq" (development only,
     # needs VEYE_GROQ_API_KEY). Provider absence never stops the API booting.
     llm_provider: str = "mock"
+    # Gemini on Google Cloud is the selected production provider (9 Nov 2026).
+    # Vertex AI with the service's own identity, not a personal API key: a key
+    # belongs to a person, is covered by no agreement, and cannot be rotated or
+    # audited like a service identity.
+    gemini_model: str = "gemini-2.0-flash"
+    gcp_project: str | None = None
+    gcp_location: str = "us-central1"
+    # Local experimentation only. Refused in production, and never permitted to
+    # carry member data.
+    gemini_api_key: str | None = None
+    # Sending a member's health summaries to an external model is a disclosure,
+    # and whether it is a permitted one is a BAA/covered-service question
+    # nobody has answered. Until a deployment says otherwise, a prompt carrying
+    # member context is refused rather than quietly emptied.
+    gemini_member_data_cleared: bool = False
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
     llm_timeout_seconds: float = 30.0
@@ -111,8 +126,13 @@ class Settings(BaseSettings):
     # ObjectStorage: "local" keeps bytes under var/ (a Docker volume locally);
     # "gcs" names the probable production target but stays unconnected until
     # the client's cloud project exists. Only the object key lives in PostgreSQL.
+    # "local" (development) or "gcs" (Google Cloud Storage, the chosen target).
     media_object_store: str = "local"
     media_object_root: str = "var/media-objects"
+    media_bucket: str | None = None
+    # Lets a staging deployment share a bucket without sharing objects. They
+    # should not share one; this is for when they must.
+    media_object_prefix: str = ""
     profile_photo_max_bytes: int = 2_000_000
 
     # ---- observability -------------------------------------------------------------
@@ -128,7 +148,8 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VEYE_", extra="ignore")
 
-    @field_validator("smtp_username", "smtp_password", "smtp_tls_mode", "email_reply_to", mode="before")
+    @field_validator("smtp_username", "smtp_password", "smtp_tls_mode", "email_reply_to",
+                     "gcp_project", "gemini_api_key", "media_bucket", mode="before")
     @classmethod
     def _blank_smtp_value_is_unset(cls, value, info):
         # Env files list these names with empty values; empty means "not set".

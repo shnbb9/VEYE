@@ -65,6 +65,11 @@ const nextConfig: NextConfig = {
      leaves the running 3012 development server entirely alone — the same rule
      that keeps it off port 3012. */
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  /* The production image builds standalone: a self-contained server plus only
+     the dependencies it imports, rather than the whole node_modules tree. Read
+     from the environment so the local build, `next dev` and the acceptance
+     suite are completely unaffected by it. */
+  ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // The Docker preview is intentionally reachable on the local loopback host
   // as well as localhost; permit its development client to hydrate there.
   allowedDevOrigins: ["127.0.0.1"],

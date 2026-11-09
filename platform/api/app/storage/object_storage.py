@@ -3,8 +3,9 @@
 The application stores only an object key (plus size, hash and content type)
 in PostgreSQL and hands the bytes to this boundary. Development keeps files
 on disk under the API's `var/` folder (a Docker volume locally); production
-will point the same interface at a bucket — GCS is the client's probable
-choice, but nothing is wired until the cloud project and its access exist.
+will point the same interface at a bucket. Google Cloud Storage is the chosen
+target (9 Nov 2026) and `app/storage/gcs.py` implements it; nothing is wired
+until the cloud project and its bucket exist, so the default stays local.
 Keys are validated so a caller can never escape the store's root."""
 
 from __future__ import annotations
@@ -120,9 +121,21 @@ class UnconfiguredCloudObjectStorage:
         return {"provider": self.name, "external": True, "connected": False}
 
 
-def build_media_storage(kind: str, *, local_root: str) -> ObjectStorage:
+def build_media_storage(kind: str, *, local_root: str, bucket: str | None = None,
+                        prefix: str = "") -> ObjectStorage:
     if kind == "local":
         return LocalFileObjectStorage(local_root)
-    if kind in {"gcs", "s3"}:
-        return UnconfiguredCloudObjectStorage(kind)
+    if kind == "gcs":
+        from app.storage.gcs import GcsObjectStorage, ObjectStorageNotConfigured
+
+        try:
+            return GcsObjectStorage(bucket or "", prefix=prefix)
+        except ObjectStorageNotConfigured:
+            # Named but not configured: the API still boots and says so, rather
+            # than starting with a store that fails on the first upload.
+            return UnconfiguredCloudObjectStorage("gcs")
+    if kind == "s3":
+        # Google Cloud is the chosen platform (9 Nov 2026). S3 stays only so an
+        # old deployment value does not crash the API on start-up.
+        return UnconfiguredCloudObjectStorage("s3")
     raise ValueError(f"Unknown media object storage '{kind}'.")

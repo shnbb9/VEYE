@@ -25,6 +25,15 @@ ai = [
   "groq>=1.0,<2",
   "langfuse>=4.0,<5",
 ]
+# Gemini on Google Cloud, the selected production provider. Optional because
+# nothing in the default deployment reaches it: VEYE_LLM_PROVIDER is "mock".
+gemini = [
+  "google-genai>=1.0,<2",
+]
+# Member media in Google Cloud Storage. Optional: the default store is local.
+gcs = [
+  "google-cloud-storage>=2.18,<4",
+]
 test = [
   "aiosmtpd>=1.4,<2",
   "httpx>=0.28,<1",
