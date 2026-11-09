@@ -12,7 +12,13 @@ from app.companion.context import MemberContext, MemberContextService, Unavailab
 from app.companion.personalization import MEMBER_FIRST_NAME_TOKEN, substitute
 from app.companion.policy import OUTCOME_ALLOW, PolicyEngine, default_policy
 from app.companion.privacy import OutboundPrivacyFilter, PrivacyViolation, known_identifiers_for
-from app.companion.providers.llm import LLMMessage, LLMRequest, MockLLMProvider, UnconfiguredLLMProvider
+from app.companion.providers.llm import (
+    DataClassification,
+    LLMMessage,
+    LLMRequest,
+    MockLLMProvider,
+    UnconfiguredLLMProvider,
+)
 from app.companion.safety import OutputSafety
 from app.core.runtime import configure_runtime, get_runtime
 from app.db.session import SessionLocal
@@ -125,7 +131,8 @@ def test_outbound_filter_strips_direct_identifiers_from_free_text():
                              ids=("6f1c0e2a-1111-4222-8333-444455556666",))
     request = LLMRequest(system="## MEMBER CONTEXT\n- health_number: 4.5", messages=(
         LLMMessage("user", "Hi, I am Aditya Demo, my email is aditya.demo@demo.veye.test and my id is "
-                           "6f1c0e2a-1111-4222-8333-444455556666, call me on (555) 123-4567 about my meal plan"),))
+                           "6f1c0e2a-1111-4222-8333-444455556666, call me on (555) 123-4567 about my meal plan"),),
+        classification=DataClassification.REAL_MEMBER)
     filtered, report = OutboundPrivacyFilter(known).filter_request(request)
     content = filtered.messages[0].content
     assert "Aditya" not in content and "demo.veye.test" not in content and "6f1c0e2a" not in content and "123-4567" not in content
@@ -370,5 +377,6 @@ def test_groq_provider_smoke_synthetic_only():
 
     provider = GroqLLMProvider(os.environ["VEYE_GROQ_API_KEY"], os.environ.get("VEYE_GROQ_MODEL", "llama-3.3-70b-versatile"))
     response = provider.complete(LLMRequest(system="You are Sprout, a concise assistant for a synthetic test. Reply in one sentence.",
-                                            messages=(LLMMessage("user", "Say hello to {{MEMBER_FIRST_NAME}} and mention that a lower Health Number is better."),)))
+                                            messages=(LLMMessage("user", "Say hello to {{MEMBER_FIRST_NAME}} and mention that a lower Health Number is better."),),
+                                            classification=DataClassification.SYNTHETIC_MEMBER))
     assert response.text and response.provider == "groq" and response.latency_ms >= 0

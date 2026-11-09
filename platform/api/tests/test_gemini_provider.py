@@ -16,6 +16,7 @@ from app.companion.providers.gemini import (
     carries_member_data,
 )
 from app.companion.providers.llm import (
+    DataClassification,
     LLMMessage,
     LLMRequest,
     MockLLMProvider,
@@ -38,8 +39,10 @@ class FakeVertex:
         return type("R", (), {"text": self.text, "usage_metadata": None, "candidates": []})()
 
 
-def _request(system: str) -> LLMRequest:
-    return LLMRequest(system=system, messages=(LLMMessage(role="user", content="How am I doing?"),))
+def _request(system: str, classification: DataClassification = DataClassification.REAL_MEMBER,
+             *, message: str = "How am I doing?") -> LLMRequest:
+    return LLMRequest(system=system, messages=(LLMMessage(role="user", content=message),),
+                      classification=classification)
 
 
 WITH_CONTEXT = (
@@ -58,17 +61,18 @@ EMPTY_CONTEXT = (
 
 def test_a_prompt_is_phi_bearing_only_when_the_context_actually_says_something():
     assert carries_member_data(_request(WITH_CONTEXT)) is True
-    assert carries_member_data(_request(WITHOUT_CONTEXT)) is False
+    assert carries_member_data(_request(WITHOUT_CONTEXT, DataClassification.GENERAL)) is False
     # The section exists but every line is "not available" — that is a statement
     # about absence, not about the member.
-    assert carries_member_data(_request(EMPTY_CONTEXT)) is False
+    assert carries_member_data(_request(EMPTY_CONTEXT, DataClassification.REAL_MEMBER)) is False
 
 
 def test_the_check_reads_the_prompt_rather_than_trusting_a_caller_flag():
     """A new caller that forgets a flag would otherwise get the permissive
     answer, which is the wrong way round for this decision."""
     sneaky = LLMRequest(system=WITH_CONTEXT, messages=(LLMMessage(role="user", content="hi"),),
-                        metadata={"contains_member_data": "false"})
+                        metadata={"contains_member_data": "false"},
+                        classification=DataClassification.REAL_MEMBER)
     assert carries_member_data(sneaky) is True
 
 
@@ -99,7 +103,7 @@ def test_a_prompt_without_member_context_goes_through_uncleared():
     vertex = FakeVertex()
     provider = GeminiLLMProvider(project="veye-dev", location="us-central1", model="gemini-2.0-flash",
                                  member_data_cleared=False, client=vertex)
-    answer = provider.complete(_request(WITHOUT_CONTEXT))
+    answer = provider.complete(_request(WITHOUT_CONTEXT, DataClassification.GENERAL))
     assert answer.text == "A short answer."
     assert answer.provider == "gemini"
     assert len(vertex.sent) == 1
@@ -152,7 +156,7 @@ def test_sprout_never_reaches_the_open_web():
     """Approved Veye knowledge and the member's own summaries, nothing else."""
     vertex = FakeVertex()
     GeminiLLMProvider(project="veye-dev", location="us-central1", model="m", client=vertex).complete(
-        _request(WITHOUT_CONTEXT))
+        _request(WITHOUT_CONTEXT, DataClassification.GENERAL))
     assert vertex.sent[0]["config"]["tools"] == []
 
 
@@ -171,7 +175,7 @@ def test_a_misconfigured_gemini_deployment_boots_and_reports_itself():
     assert isinstance(provider, UnconfiguredLLMProvider)
     assert provider.describe()["configured"] is False
     with pytest.raises(ProviderNotConfigured):
-        provider.complete(_request(WITHOUT_CONTEXT))
+        provider.complete(_request(WITHOUT_CONTEXT, DataClassification.GENERAL))
 
 
 def test_the_settings_default_to_nothing_connected_and_nothing_cleared():
@@ -182,3 +186,118 @@ def test_the_settings_default_to_nothing_connected_and_nothing_cleared():
     assert defaults.gcp_project is None
     assert defaults.gemini_api_key is None
     assert defaults.gemini_member_data_cleared is False
+
+
+# ---- the trust boundary, by classification ---------------------------------
+# A heading in a prompt describes the prompt. The classification states whose
+# data it is, decided from server state when the request was built. These are
+# the cases the heading check could not see.
+
+def test_a_personal_tip_for_a_real_member_cannot_leave_through_an_api_key():
+    """The Personal Tip puts a member's summaries in the USER message under no
+    heading at all, so nothing in the prompt's text marks it as theirs."""
+    vertex = FakeVertex()
+    developer = GeminiLLMProvider(project="", location="us-central1", model="m",
+                                  api_key="dev-key", client=vertex)
+    tip_like = LLMRequest(
+        system="You are Sprout, writing one short personal note.",
+        messages=(LLMMessage(role="user", content="Summary of this member:\n- mood: 21 day(s) logged, balance 74/100"),),
+        classification=DataClassification.REAL_MEMBER,
+    )
+    assert carries_member_data(tip_like) is False, "the heading check cannot see this, which is the point"
+    with pytest.raises(MemberDataNotCleared):
+        developer.complete(tip_like)
+    assert vertex.sent == []
+
+
+def test_ordinary_real_member_chat_cannot_use_an_api_key_even_with_an_empty_context():
+    """A member typing their own health information is a disclosure whatever
+    the context block says."""
+    vertex = FakeVertex()
+    developer = GeminiLLMProvider(project="", location="us-central1", model="m",
+                                  api_key="dev-key", client=vertex)
+    typed = _request(EMPTY_CONTEXT, DataClassification.REAL_MEMBER,
+                     message="My fasting glucose was 6.2 this morning, should I worry?")
+    assert carries_member_data(typed) is False
+    with pytest.raises(MemberDataNotCleared) as refused:
+        developer.complete(typed)
+    assert "developer API key" in str(refused.value)
+    assert vertex.sent == []
+
+
+def test_a_synthetic_member_may_use_an_api_key():
+    """Seeded demo accounts and disposable E2E identities are what a developer
+    key is for."""
+    vertex = FakeVertex()
+    developer = GeminiLLMProvider(project="", location="us-central1", model="m",
+                                  api_key="dev-key", client=vertex)
+    answer = developer.complete(_request(WITH_CONTEXT, DataClassification.SYNTHETIC_MEMBER))
+    assert answer.text == "A short answer."
+    assert len(vertex.sent) == 1
+
+
+def test_general_evaluation_with_no_member_may_use_an_api_key():
+    vertex = FakeVertex()
+    developer = GeminiLLMProvider(project="", location="us-central1", model="m",
+                                  api_key="dev-key", client=vertex)
+    developer.complete(_request(WITHOUT_CONTEXT, DataClassification.GENERAL))
+    assert len(vertex.sent) == 1
+
+
+def test_production_still_refuses_a_real_member_until_the_gate_is_cleared():
+    vertex = FakeVertex()
+    uncleared = GeminiLLMProvider(project="veye-prod", location="us", model="m",
+                                  member_data_cleared=False, client=vertex)
+    with pytest.raises(MemberDataNotCleared):
+        uncleared.complete(_request(WITH_CONTEXT, DataClassification.REAL_MEMBER))
+    assert vertex.sent == []
+
+    cleared = GeminiLLMProvider(project="veye-prod", location="us", model="m",
+                                member_data_cleared=True, client=vertex)
+    cleared.complete(_request(WITH_CONTEXT, DataClassification.REAL_MEMBER))
+    assert len(vertex.sent) == 1
+    # Synthetic and general never needed the gate.
+    cleared_none = GeminiLLMProvider(project="veye-prod", location="us", model="m", client=vertex)
+    cleared_none.complete(_request(WITH_CONTEXT, DataClassification.SYNTHETIC_MEMBER))
+    assert len(vertex.sent) == 2
+
+
+def test_nothing_a_browser_sends_can_downgrade_the_classification():
+    """It comes from the principal, and the principal comes from the session.
+    Sign-up forbids unknown fields, so `is_synthetic` is unreachable from
+    outside; and a request that claims general while visibly carrying member
+    context is refused rather than believed."""
+    from app.auth.schemas import SignUpRequest
+
+    assert SignUpRequest.model_config.get("extra") == "forbid"
+    assert "is_synthetic" not in SignUpRequest.model_fields
+
+    vertex = FakeVertex()
+    provider = GeminiLLMProvider(project="veye-prod", location="us", model="m",
+                                 member_data_cleared=True, client=vertex)
+    lying = LLMRequest(system=WITH_CONTEXT, messages=(LLMMessage(role="user", content="hi"),),
+                       metadata={"classification": "general"},
+                       classification=DataClassification.GENERAL)
+    with pytest.raises(MemberDataNotCleared) as refused:
+        provider.complete(lying)
+    assert "classified as general" in str(refused.value)
+    assert vertex.sent == []
+
+
+def test_the_classification_survives_the_privacy_filter():
+    """Scrubbing identifiers out does not make a real member's prompt general."""
+    from app.companion.privacy import KnownIdentifiers, OutboundPrivacyFilter
+
+    known = KnownIdentifiers(names=("Aditya",), emails=("aditya.demo@demo.veye.test",), ids=())
+    before = LLMRequest(system=WITH_CONTEXT,
+                        messages=(LLMMessage(role="user", content="I am Aditya"),),
+                        classification=DataClassification.REAL_MEMBER)
+    after, _ = OutboundPrivacyFilter(known).filter_request(before)
+    assert after.classification is DataClassification.REAL_MEMBER
+
+
+def test_every_request_must_choose_a_classification():
+    """No default, so a new caller is a decision rather than an omission that
+    silently inherits the permissive answer."""
+    with pytest.raises(TypeError):
+        LLMRequest(system="x", messages=())  # type: ignore[call-arg]

@@ -38,7 +38,7 @@ from app.auth.principal import CurrentPrincipal
 from app.companion.context import MemberContext, MemberContextService
 from app.companion.models import MemberPersonalTip
 from app.companion.policy import POLICY_VERSION, PolicyDecision
-from app.companion.providers.llm import LLMMessage, LLMRequest
+from app.companion.providers.llm import DataClassification, LLMMessage, LLMRequest, classify_for
 from app.health_permission.service import HealthPermissionService
 
 log = logging.getLogger("veye.companion.tip")
@@ -176,7 +176,7 @@ class PersonalTipService:
             return PersonalTip(text=row.text, generated=True, generated_at=row.generated_at,
                                context_version=row.tip_version, source="companion")
 
-        text = self._write(context)
+        text = self._write(context, classify_for(principal))
         if text is None:
             # Keep the previous tip rather than replacing a good one with a
             # fallback because today's attempt did not work — but only if it
@@ -234,13 +234,17 @@ class PersonalTipService:
             generated = generated.replace(tzinfo=timezone.utc)
         return datetime.now(timezone.utc) - generated > MAX_AGE
 
-    def _write(self, context: MemberContext) -> str | None:
+    def _write(self, context: MemberContext, classification: DataClassification) -> str | None:
         lines = "\n".join(context.lines())
         request = LLMRequest(
             system=SYSTEM,
+            # The member's summaries travel in the user message, under no
+            # heading. Nothing in this prompt's text says whose data it is,
+            # which is exactly why the classification is carried separately.
             messages=(LLMMessage(role="user", content=f"Summary of this member:\n{lines}"),),
             max_tokens=120, temperature=0.4,
             metadata={"topic": "personal_tip", "tip_version": TIP_VERSION},
+            classification=classification,
         )
         try:
             response = self.llm.complete(request)

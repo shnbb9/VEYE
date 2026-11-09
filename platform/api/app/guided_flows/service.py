@@ -27,6 +27,7 @@ from app.guided_flows.engine import (
     AI_TASK, CHECK_MEMBER_STATE, CHOICE, COMPLETE, INTERACTIVE, KNOWLEDGE, MESSAGE, NAVIGATION, QUESTION,
     FlowDefinitionError, GuidedFlowDefinition,
 )
+from app.companion.providers.llm import classify_for
 from app.guided_flows.interpreter import interpret
 from app.guided_flows.member_state import MemberStateService
 from app.guided_flows.models import (
@@ -192,7 +193,8 @@ class GuidedFlowService:
                 if choice not in keys:
                     raise GuidedFlowError(422, "That is not one of the options for this step.")
             elif text is not None:
-                result = interpret(text, node.get("choices", []), provider=self.runtime.llm)
+                result = interpret(text, node.get("choices", []), provider=self.runtime.llm,
+                                   classification=classify_for(principal))
                 if result.choice_key is None:
                     step = self._render(session)
                     step.clarification = CLARIFICATION

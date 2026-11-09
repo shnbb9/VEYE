@@ -121,8 +121,11 @@ class OutboundPrivacyFilter:
         report = PrivacyReport()
         system = self.scrub(request.system, report)
         messages = tuple(LLMMessage(role=m.role, content=self.scrub(m.content, report)) for m in request.messages)
+        # Scrubbing identifiers out does not make a real member's prompt
+        # general; the classification is about whose data it is.
         filtered = LLMRequest(system=system, messages=messages, max_tokens=request.max_tokens,
-                              temperature=request.temperature, metadata=dict(request.metadata))
+                              temperature=request.temperature, metadata=dict(request.metadata),
+                              classification=request.classification)
         for value in (filtered.system, *(m.content for m in filtered.messages), *filtered.metadata.values()):
             if contains_identifier(value, self.known):
                 raise PrivacyViolation("A direct identifier survived the outbound privacy filter; the request was not sent.")

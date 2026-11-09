@@ -7,7 +7,7 @@ from __future__ import annotations
 from app.companion.context import MemberContext
 from app.companion.personalization import MEMBER_FIRST_NAME_TOKEN
 from app.companion.policy import PolicyDecision
-from app.companion.providers.llm import LLMMessage, LLMRequest
+from app.companion.providers.llm import DataClassification, LLMMessage, LLMRequest
 from app.knowledge.service import RetrievedChunk
 
 ROLE = (
@@ -31,7 +31,11 @@ class PromptBuilder:
         self.max_history = max_history
 
     def build(self, *, decision: PolicyDecision, passages: list[RetrievedChunk], context: MemberContext,
-              history: list[tuple[str, str]], message: str) -> LLMRequest:
+              history: list[tuple[str, str]], message: str, classification: DataClassification) -> LLMRequest:
+        """`classification` is required: a member's own message can carry
+        health information whatever the context block says, so the prompt is
+        classified by whose conversation it is, not by what it happens to
+        contain."""
         knowledge_lines: list[str] = []
         for index, chunk in enumerate(passages, start=1):
             heading = f" — {chunk.heading}" if chunk.heading else ""
@@ -52,5 +56,6 @@ class PromptBuilder:
         for role, content in history[-self.max_history:]:
             messages.append(LLMMessage(role="assistant" if role == "sprout" else "user", content=content))
         messages.append(LLMMessage(role="user", content=message))
-        return LLMRequest(system=system, messages=tuple(messages), metadata={"topic": decision.category or "general",
-                                                                            "policy_version": decision.policy_version})
+        return LLMRequest(system=system, messages=tuple(messages), classification=classification,
+                          metadata={"topic": decision.category or "general",
+                                    "policy_version": decision.policy_version})

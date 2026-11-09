@@ -33,7 +33,7 @@ from app.companion.personalization import MEMBER_FIRST_NAME_TOKEN, substitute
 from app.companion.policy import OUTCOME_ALLOW, OUTCOME_ESCALATE, OUTCOME_OFF_TOPIC, OUTCOME_PROHIBIT, PolicyDecision, PolicyEngine
 from app.companion.privacy import OutboundPrivacyFilter, PrivacyViolation, known_identifiers_for
 from app.companion.prompt import PromptBuilder
-from app.companion.providers.llm import LLMProvider, ProviderNotConfigured
+from app.companion.providers.llm import LLMProvider, ProviderNotConfigured, classify_for
 from app.companion.safety import OutputSafety
 from app.companion.settings import get_or_create_settings
 from app.core.runtime import Runtime
@@ -185,6 +185,10 @@ class CompanionService:
         history = [(m.role, m.content) for m in earlier if m.role in ("member", "sprout")]
         request = PromptBuilder(companion_name=self.settings.name).build(
             decision=decision, passages=passages, context=context, history=history, message=text,
+            # Whose conversation this is, from the session rather than from
+            # anything the browser sent. A member's own message can carry health
+            # information no context block mentions.
+            classification=classify_for(principal),
         )
         # 5. Minimum-necessary / PII-PHI filter on everything that would leave the boundary.
         try:

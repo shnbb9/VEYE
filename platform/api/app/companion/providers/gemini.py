@@ -28,7 +28,12 @@ from __future__ import annotations
 import logging
 import time
 
-from app.companion.providers.llm import LLMRequest, LLMResponse, ProviderNotConfigured
+from app.companion.providers.llm import (
+    DataClassification,
+    LLMRequest,
+    LLMResponse,
+    ProviderNotConfigured,
+)
 
 log = logging.getLogger("veye.companion.gemini")
 
@@ -85,6 +90,10 @@ class GeminiLLMProvider:
         if not self._api_key and not project:
             raise ProviderNotConfigured("VEYE_GCP_PROJECT is required for the Gemini provider on Vertex AI.")
         if self._api_key and self.member_data_cleared:
+            # Refused at construction as well as per request: a deployment that
+            # has configured both has misunderstood what the clearance means,
+            # and should find that out at start-up rather than at the first
+            # member's message.
             raise ProviderNotConfigured(
                 "Member data is never sent through a personal API key. Use Vertex AI with a service "
                 "identity, or leave VEYE_GEMINI_MEMBER_DATA_CLEARED off.")
@@ -108,14 +117,36 @@ class GeminiLLMProvider:
 
     # ---- completion -----------------------------------------------------------
     def complete(self, request: LLMRequest) -> LLMResponse:
-        if carries_member_data(request) and not self.member_data_cleared:
+        # 1. Whose data is this? Decided when the request was built, from
+        #    server state. Not inferred from the prompt's text, because the
+        #    Personal Tip carries a member's summaries in the user message
+        #    under no heading and a member's own question can carry health
+        #    information a context block never mentions.
+        real_member = request.carries_real_member_data
+
+        if real_member and self._api_key:
+            # A developer credential never carries a real person's data, no
+            # matter what else is configured.
+            raise MemberDataNotCleared(
+                "This prompt carries a real member's data and this deployment is using a developer API key. "
+                "Real member data goes only through Vertex AI with the service's own identity.")
+
+        if real_member and not self.member_data_cleared:
             # A hard failure, never a quiet strip. An answer confidently built
             # from a prompt whose context was silently removed is worse than no
             # answer at all.
             raise MemberDataNotCleared(
-                "This prompt carries member health context and this deployment has not been cleared to send it "
+                "This prompt carries a real member's data and this deployment has not been cleared to send it "
                 "to Gemini. Confirm the BAA and the covered-service configuration, then set "
                 "VEYE_GEMINI_MEMBER_DATA_CLEARED=true.")
+
+        # 2. Belt and braces. If the prompt visibly contains member context but
+        #    the caller classified it as general, something is wrong with the
+        #    caller, and the safe reading of a contradiction is the strict one.
+        if carries_member_data(request) and request.classification is DataClassification.GENERAL:
+            raise MemberDataNotCleared(
+                "This prompt contains member context but was classified as general. "
+                "Classify it from the principal that built it.")
 
         client = self._ensure_client()
         started = time.perf_counter()
@@ -151,6 +182,7 @@ class GeminiLLMProvider:
             "project": self.project or "(api key)",
             "location": self.location,
             "member_data_cleared": self.member_data_cleared,
+            "accepts": "general, synthetic_member" + (", real_member" if self.member_data_cleared else ""),
             "web_grounding": "off",
         }
 

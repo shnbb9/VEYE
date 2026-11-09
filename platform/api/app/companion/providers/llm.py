@@ -15,7 +15,48 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Protocol
+
+
+class DataClassification(str, Enum):
+    """What kind of person's data this prompt carries.
+
+    This exists because inspecting the prompt is not good enough. The first
+    version of the Gemini guard looked for a `## MEMBER CONTEXT` heading in
+    the system prompt, which missed two real paths: the Personal Tip puts a
+    member's summaries in the *user* message under no heading at all, and a
+    member typing "my fasting glucose was 6.2, should I worry?" has put health
+    information into a prompt whose context block reads "not available".
+
+    A heading is a description of a prompt. This is a statement about whose
+    data it is, decided from server state at the point the request is built,
+    and it is what the providers enforce on.
+    """
+
+    #: No member is involved — an administrator evaluating wording, a
+    #: self-test, a prompt built from approved knowledge alone.
+    GENERAL = "general"
+    #: A member, but a synthetic one: seeded demo accounts and disposable E2E
+    #: identities. Safe to send to a development endpoint.
+    SYNTHETIC_MEMBER = "synthetic_member"
+    #: A real person's data. Never leaves through a developer credential, and
+    #: reaches a production model only behind the explicit clearance gate.
+    REAL_MEMBER = "real_member"
+
+
+def classify_for(principal) -> DataClassification:
+    """Derive the classification from trusted server state.
+
+    `is_synthetic` is a column the seed sets; sign-up forbids unknown fields,
+    so nothing a browser sends can reach it. A principal with no member is
+    still treated as a real member when one is present at all — the
+    conservative answer is the right default here.
+    """
+    if principal is None:
+        return DataClassification.GENERAL
+    return (DataClassification.SYNTHETIC_MEMBER if getattr(principal, "is_synthetic", False)
+            else DataClassification.REAL_MEMBER)
 
 
 @dataclass(frozen=True)
@@ -31,6 +72,10 @@ class LLMRequest:
     max_tokens: int = 400
     temperature: float = 0.3
     metadata: dict[str, str] = field(default_factory=dict)
+    # Required and keyword-only: there is deliberately no default, so adding a
+    # new caller is a decision about whose data it carries rather than an
+    # omission that silently inherits the permissive answer.
+    classification: DataClassification = field(kw_only=True)
 
     def as_payload(self) -> dict:
         """The exact material that would leave the trust boundary."""
@@ -40,7 +85,12 @@ class LLMRequest:
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
             "metadata": dict(self.metadata),
+            "classification": self.classification.value,
         }
+
+    @property
+    def carries_real_member_data(self) -> bool:
+        return self.classification is DataClassification.REAL_MEMBER
 
 
 @dataclass(frozen=True)

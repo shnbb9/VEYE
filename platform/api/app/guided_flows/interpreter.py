@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.companion.providers.llm import LLMMessage, LLMProvider, LLMRequest
+from app.companion.providers.llm import DataClassification, LLMMessage, LLMProvider, LLMRequest
 
 YES_WORDS = {
     "yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay", "continue", "go on", "ready", "lets go", "let's go", "please",
@@ -43,7 +43,11 @@ def _normalise(text: str) -> str:
     return text
 
 
-def interpret(text: str, choices: list[dict], provider: LLMProvider | None = None) -> Interpretation:
+def interpret(text: str, choices: list[dict], provider: LLMProvider | None = None, *,
+              classification: DataClassification = DataClassification.REAL_MEMBER) -> Interpretation:
+    """`classification` defaults to the conservative answer: this maps a
+    member's own typed reply, and a caller that forgets to say whose it is
+    should get the restrictive treatment, not the permissive one."""
     keys = [c["key"] for c in choices]
     if not keys:
         return Interpretation(None, "unclear")
@@ -82,8 +86,10 @@ def interpret(text: str, choices: list[dict], provider: LLMProvider | None = Non
             system=("You map a member's short reply to exactly one option key from a fixed list. "
                     "Reply with the key only. If the reply does not clearly pick one option, reply UNCLEAR. Never invent an option.\n"
                     f"Options:\n{options}"),
+            # The member's own words, so the member's own classification.
             messages=(LLMMessage(role="user", content=text.strip()[:300]),), max_tokens=12, temperature=0.0,
             metadata={"purpose": "guided_flow_choice"},
+            classification=classification,
         )
         try:
             raw = provider.complete(request).text.strip()
