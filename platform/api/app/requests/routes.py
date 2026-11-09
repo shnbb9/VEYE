@@ -11,13 +11,14 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.admin.audit import record_audit
 from app.auth.models import UserAccount
 from app.auth.principal import CurrentPrincipal, require_admin, require_member
 from app.core.runtime import Runtime, get_runtime
+from app.core.rate_limit import RateLimiter, client_address
 from app.db.session import get_db
 from app.product_settings.routes import read_support
 from app.requests.models import KINDS
@@ -43,7 +44,9 @@ def _raise(exc: RequestError) -> None:
 
 
 @public_router.post("", response_model=SubmittedOut, status_code=status.HTTP_201_CREATED)
-def submit_public(payload: PublicRequestIn, db: Session = Depends(get_db)) -> SubmittedOut:
+def submit_public(payload: PublicRequestIn, request: Request, db: Session = Depends(get_db)) -> SubmittedOut:
+    # Anyone at all can write here, so anyone at all is limited.
+    RateLimiter(db).enforce("public_request", subject=f"ip:{client_address(request)}")
     row = RequestService(db).create_public(payload)
     db.commit()
     return SubmittedOut(id=row.id, kind=row.kind, status=row.status, created_at=row.created_at)

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.assessments.repository import record_health_number_attempt
 from app.auth.dependencies import clear_session_cookie, get_auth_service, get_notification_service, set_session_cookie
 from app.auth.models import UserAccount
+from app.core.rate_limit import RateLimiter, client_address
 from app.auth.principal import (
     PORTAL_ADMIN,
     PORTAL_MEMBER,
@@ -57,9 +58,11 @@ def _raise(exc: AuthError) -> None:
 
 @router.post("/sign-up", response_model=SignUpResponse, status_code=status.HTTP_201_CREATED)
 def sign_up(
-    payload: SignUpRequest, response: Response, db: Session = Depends(get_db),
+    payload: SignUpRequest, request: Request, response: Response, db: Session = Depends(get_db),
     auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
 ) -> SignUpResponse:
+    # Unlimited, this endpoint is a way to post mail to strangers.
+    RateLimiter(db).enforce("signup", subject=f"ip:{client_address(request)}")
     if payload.confirm_password is not None and payload.confirm_password != payload.password:
         raise HTTPException(status_code=422, detail="The two passwords do not match.")
     try:
@@ -255,9 +258,11 @@ def verify_email(payload: TokenRequest, db: Session = Depends(get_db), auth: Aut
 
 @router.post("/resend-verification", response_model=DeliveryOut)
 def resend_verification(
-    principal: CurrentPrincipal = Depends(get_current_principal), db: Session = Depends(get_db),
+    request: Request, principal: CurrentPrincipal = Depends(get_current_principal), db: Session = Depends(get_db),
     auth: AuthService = Depends(get_auth_service),
 ) -> DeliveryOut:
+    RateLimiter(db).enforce("resend_verification", subject=str(principal.user_id),
+                            address=client_address(request))
     user = db.get(UserAccount, principal.user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="Please sign in to continue.")
@@ -270,9 +275,12 @@ def resend_verification(
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse, status_code=status.HTTP_202_ACCEPTED)
 def forgot_password(
-    payload: ForgotPasswordRequest, db: Session = Depends(get_db), auth: AuthService = Depends(get_auth_service),
-    runtime: Runtime = Depends(get_runtime),
+    payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db),
+    auth: AuthService = Depends(get_auth_service), runtime: Runtime = Depends(get_runtime),
 ) -> ForgotPasswordResponse:
+    # Keyed on the caller, never on the address they typed: a table of probed
+    # addresses is exactly what this must not become.
+    RateLimiter(db).enforce("forgot_password", subject=f"ip:{client_address(request)}")
     delivery = auth.request_password_reset(payload.email, portal=payload.portal)
     db.commit()
     message = "If an account exists for that address, a password-reset link has been sent."

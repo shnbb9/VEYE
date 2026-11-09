@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_notification_service
@@ -21,6 +21,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.core.rate_limit import RateLimiter, client_address
 from app.companion.personal_tip import PersonalTipService
 from app.companion.service import CompanionError, CompanionService
 from app.core.runtime import Runtime, get_runtime
@@ -75,8 +76,15 @@ def session(principal: CurrentPrincipal = Depends(require_member), db: Session =
 
 
 @router.post("/messages", response_model=AskResponse, status_code=201)
-def ask(payload: AskRequest, principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+def ask(payload: AskRequest, request: Request, principal: CurrentPrincipal = Depends(require_member),
+        db: Session = Depends(get_db),
         service: CompanionService = Depends(get_companion_service)) -> AskResponse:
+    # Enforced before the service is touched, so a refused message costs no
+    # retrieval, no prompt assembly and no model call. Keyed on the member
+    # rather than the conversation: a new conversation is not a new allowance.
+    RateLimiter(db).enforce("companion_message", subject=str(principal.member_id or principal.user_id),
+                            address=client_address(request))
+    db.commit()
     try:
         reply = service.ask(principal, payload.message, conversation_id=payload.conversation_id)
     except CompanionError as exc:
@@ -129,7 +137,10 @@ def personal_tip(principal: CurrentPrincipal = Depends(require_member), db: Sess
                  runtime: Runtime = Depends(get_runtime)) -> PersonalTipOut:
     """Cached per member and regenerated only when their own summaries move or
     the tip gets old — a dashboard refresh never costs a model call."""
-    tip = PersonalTipService(db, runtime.llm).get(principal)
+    # A cached tip is free, so the limit is only spent when one would be
+    # written: this guards the regeneration path, not the read.
+    tip = PersonalTipService(db, runtime.llm, limiter=RateLimiter(db),
+                             subject=str(principal.member_id or principal.user_id)).get(principal)
     db.commit()
     return PersonalTipOut(text=tip.text, generated=tip.generated, generated_at=tip.generated_at,
                           source=tip.source, tip_version=tip.context_version)

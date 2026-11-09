@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     # address typed (cleared by a correct password) and, higher, per client
     # address (never cleared, so spraying cannot reset itself). Set the first
     # to 0 to switch the limit off entirely.
+    # Rate limits on the costly and mail-sending endpoints are multiplied by
+    # this. Production runs at 1. A development stack and the acceptance suite
+    # raise it, because twenty-five sign-ups from one address in one run is a
+    # test fixture rather than an attack — the limits still apply, they are
+    # just scaled to the traffic the environment legitimately produces. It is
+    # deliberately a multiplier and not a switch: there is no "off".
+    rate_limit_scale: float = 1.0
+
     sign_in_window_minutes: int = 15
     sign_in_max_failures: int = 10
     sign_in_max_failures_per_address: int = 50

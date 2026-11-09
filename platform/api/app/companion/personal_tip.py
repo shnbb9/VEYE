@@ -143,9 +143,13 @@ def is_safe(text: str) -> bool:
 
 
 class PersonalTipService:
-    def __init__(self, db: Session, llm) -> None:
+    def __init__(self, db: Session, llm, *, limiter=None, subject: str = "") -> None:
         self.db = db
         self.llm = llm
+        # Optional: a cached tip costs nothing, so the limit is spent only when
+        # one would actually be written.
+        self.limiter = limiter
+        self.subject = subject
 
     def get(self, principal: CurrentPrincipal, *, force: bool = False) -> PersonalTip:
         """The member's current tip, generating one only when it is missing,
@@ -175,6 +179,17 @@ class PersonalTipService:
         elif row is not None and not force and row.context_fingerprint == stamp and not self._stale(row):
             return PersonalTip(text=row.text, generated=True, generated_at=row.generated_at,
                                context_version=row.tip_version, source="companion")
+
+        if self.limiter is not None and self.subject:
+            refusal = self.limiter.check("personal_tip", subject=self.subject)
+            if refusal is not None:
+                # Keep whatever they have rather than failing the dashboard
+                # over a nicety.
+                if row is not None and self._acceptable(row.text):
+                    return PersonalTip(text=row.text, generated=True, generated_at=row.generated_at,
+                                       context_version=row.tip_version, source="companion")
+                return self._fallback(FALLBACK_NO_TIP)
+            self.limiter.record("personal_tip", subject=self.subject)
 
         text = self._write(context, classify_for(principal))
         if text is None:

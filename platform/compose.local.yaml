@@ -59,6 +59,11 @@ services:
       # Companion providers. Defaults are the offline mock and deterministic
       # local embeddings; a Groq development key is only ever read from the
       # ignored env file, never from this compose file.
+      # Production runs the limits at 1. A development stack and the
+      # acceptance suite produce far more traffic from one address than a
+      # person would — twenty-five sign-ups per run — so the same limits
+      # are scaled rather than switched off.
+      VEYE_RATE_LIMIT_SCALE: ${VEYE_RATE_LIMIT_SCALE:-50}
       VEYE_LLM_PROVIDER: ${VEYE_LLM_PROVIDER:-mock}
       VEYE_GROQ_API_KEY: ${VEYE_GROQ_API_KEY:-}
       VEYE_GROQ_MODEL: ${VEYE_GROQ_MODEL:-llama-3.3-70b-versatile}
