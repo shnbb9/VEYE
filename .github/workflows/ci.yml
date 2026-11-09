@@ -1,20 +1,28 @@
 name: CI
 
-# Every green result in this repository used to be hand-run on one developer's
-# machine, which is how a date-pinned test went on passing until the day it
-# silently rotted. This runs the same suites the README documents, on every
-# push and pull request, in the same versions the Docker images use.
-
+# The same suites the README documents, in the same versions the Docker images
+# use, so a green result does not depend on one developer's machine.
+#
+# MANUAL ONLY while the project is pre-release (9 Nov 2026, user instruction):
+# the hosted minutes are not worth spending on every push when the suites are
+# run locally before each one. The automatic triggers are commented out rather
+# than deleted — put them back and the workflow runs on push and PR again, and
+# `concurrency` with them, which only matters when runs start by themselves.
+#
+# Running it by hand:  gh workflow run CI --ref main
+#
+# Keep this file current with the suites even while it is switched off: the
+# whole point of turning it back on later is that it passes when we do.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
+  # push:
+  #   branches: [main]
+  # pull_request:
 
-concurrency:
-  # A newer push supersedes an in-flight run on the same branch.
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+# concurrency:
+#   # A newer push supersedes an in-flight run on the same branch.
+#   group: ci-${{ github.ref }}
+#   cancel-in-progress: true
 
 env:
   # Mirrors platform/docker/*.Dockerfile, so CI cannot pass on a version the
