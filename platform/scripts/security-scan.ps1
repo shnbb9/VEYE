@@ -72,7 +72,10 @@ try {
               '-----BEGIN [A-Z ]*PRIVATE KEY-----', '"private_key"\s*:', 'client_secret'
   $hits = 0
   foreach ($pattern in $patterns) {
-    $found = git grep -nIE $pattern -- ':!*.lock' ':!package-lock.json' 2>$null
+    # This script lists the patterns it looks for, so it matches itself on
+    # every run. A scanner that reports a finding it cannot ever clear is one
+    # people learn to ignore, which is worse than not running it.
+    $found = git grep -nIE $pattern -- ':!*.lock' ':!package-lock.json' ':!platform/scripts/security-scan.ps1' 2>$null
     if ($found) { $hits++; Write-Host "MATCH $pattern"; $found }
   }
   if ($hits -eq 0) { Write-Host 'No credential patterns in tracked files.' } else { $problems++ }
