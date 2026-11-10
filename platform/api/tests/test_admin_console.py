@@ -188,3 +188,28 @@ def test_seed_backfills_a_tracker_an_older_seed_never_created(admin_client):
     assert again[ADITYA.email] == "backfilled health_assessment"
     assert admin_client.get("/api/v1/admin/overview").json()["completions"]["health_assessment"] == 2
     assert seed_users()[ADITYA.email] == "exists"
+
+
+def test_the_feature_list_reports_phase_2_modules_as_phase_2(admin_client):
+    """Supplements, Fitness and Resources are Phase 2 by binding product scope.
+    Reporting them as "available" told the console they were production
+    modules, which is how the claim drifted from the scope in the first place.
+
+    This pins the states so a future edit has to be deliberate."""
+    _seed_everything()
+    features = {f["key"]: f for f in admin_client.get("/api/v1/admin/settings/features").json()}
+
+    for key in ("supplements", "fitness", "resources"):
+        assert features[key]["state"] == "phase_2", f"{key} is {features[key]['state']}, not phase_2"
+        assert features[key]["state_label"] == "Phase 2"
+        assert "Phase 2" in features[key]["note"]
+
+    # Still honestly blocked on the client, and not confused with Phase 2.
+    assert features["mindfulness"]["state"] == "client_input"
+    assert features["activity_tracker"]["state"] == "client_input"
+
+    # Neither of the two selected providers is presented as an open decision
+    # any more, and neither is claimed to be live.
+    for key in ("production_email", "production_ai"):
+        assert features[key]["state"] == "holding"
+        assert features[key]["state"] != "available"

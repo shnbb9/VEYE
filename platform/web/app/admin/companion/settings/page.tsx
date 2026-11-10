@@ -145,7 +145,7 @@ export default function SettingsPage() {
                   <span className="switch__track" /><span className="check__text">{scope.replace(/_/g, " ")}</span>
                 </label>
               ))}
-              <p className="t-support">Mood and food-pattern summaries report “not available” until those trackers are connected in the application.</p>
+              <p className="t-support">Mood and food-pattern summaries are built from the member’s own entries as counts and trends — never a note or a meal description. A member who has not shared their health records gets a Sprout that answers without them.</p>
             </div>
           </div>
 

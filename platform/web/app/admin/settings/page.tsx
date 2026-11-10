@@ -188,7 +188,7 @@ function AccountSection() {
             ) : <span />}
           </div>
 
-          <div className="rowitem"><span className="rowitem__icon rowitem__icon--off"><Icon name="shield" size={18} /></span><div><div className="rowitem__title">Two-step verification</div><div className="rowitem__meta">Not built. A production identity decision (provider, enforcement) belongs to the client.</div></div><Chip label="Client input" tone="attention" /></div>
+          <div className="rowitem"><span className="rowitem__icon rowitem__icon--off"><Icon name="shield" size={18} /></span><div><div className="rowitem__title">Two-step verification</div><div className="rowitem__meta">Built, not live. Google Cloud Identity Platform token verification and the TOTP requirement for this console are implemented and tested; SMS is deliberately not accepted. What remains is the cloud project, the tenant and the browser sign-in half.</div></div><Chip label="Ready, not live" tone="info" /></div>
           <div className="rowitem"><span className="rowitem__icon"><Icon name="log-out" size={18} /></span><div><div className="rowitem__title">Sign out</div><div className="rowitem__meta">Ends this console session only; a member session in the same browser stays.</div></div><button className="btn btn--ghost btn--sm" type="button" onClick={() => void session.signOut("admin", "/admin/login?flash=signed-out")}>Sign out</button></div>
         </div></div>
         {note && <div className="card__foot"><p className="t-support" role="status" data-testid="admin-security-note">{note}</p></div>}
