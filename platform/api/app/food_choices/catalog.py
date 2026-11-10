@@ -43,6 +43,15 @@ CARBOHYDRATE = "carbohydrate"
 FAT = "fat"
 GROUPS = (PROTEIN, CARBOHYDRATE, FAT)
 
+# The source states every portion as "<amount> woman, <amount> man", so those
+# are the keys. They live here and nowhere else: the prototype's scoring once
+# returned 0 because two screens spelled an option differently, and a third
+# spelling of this one ("female"/"male") was in this package until the lists
+# were checked against `body_composition`, which already says Woman and Man.
+WOMAN = "woman"
+MAN = "man"
+SEXES = (WOMAN, MAN)
+
 # ---- tiers, in the source's own order and wording --------------------------
 # Protein (p0495, p0509, p0526)
 PROTEIN_BEST = "best"
@@ -145,7 +154,7 @@ class FoodItem:
         return self.tier in FAVORABLE_CARB_TIERS
 
     def portion(self, sex: str) -> str | None:
-        return self.portion_woman if sex == "female" else self.portion_man
+        return self.portion_woman if sex == WOMAN else self.portion_man
 
 
 def _p(name, tier, woman=None, man=None, ref="", is_cheese=False):

@@ -66,8 +66,8 @@ def test_a_food_the_source_gives_no_amount_for_reports_none():
     for name in ("Lemon", "Lime"):
         item = catalog.find(name)
         assert item is not None and item.tier == CARB_FAVORABLE_FRUIT
-        assert item.portion("female") is None
-        assert rules.portion_for(item, "female", rules.MEAL)[0] is None
+        assert item.portion("woman") is None
+        assert rules.portion_for(item, "woman", rules.MEAL)[0] is None
 
 
 def test_no_whole_grain_or_quinoa_is_favourable(): # p0241, p0257, p0334
@@ -81,8 +81,8 @@ def test_no_whole_grain_or_quinoa_is_favourable(): # p0241, p0257, p0334
 def test_the_only_favourable_grains_are_barley_and_slow_cooked_oatmeal(): # p0407
     grains = catalog.items(CARBOHYDRATE, catalog.CARB_FAVORABLE_GRAIN)
     assert sorted(i.name for i in grains) == ["Barley", "Slow cooked oatmeal"]
-    assert catalog.find("Barley").portion("female") == "1/2 cup per meal"
-    assert catalog.find("Slow cooked oatmeal").portion("male") == "1 cup per meal"
+    assert catalog.find("Barley").portion("woman") == "1/2 cup per meal"
+    assert catalog.find("Slow cooked oatmeal").portion("man") == "1 cup per meal"
 
 
 def test_favourable_and_unfavourable_is_a_carbohydrate_distinction(): # p0330
@@ -98,7 +98,7 @@ def test_favourable_and_unfavourable_is_a_carbohydrate_distinction(): # p0330
 
 @pytest.mark.parametrize("name", ["Lentils", "Chickpeas", "Black beans", "Kidney beans", "Hummus"])
 def test_legumes_and_beans_offered_as_a_protein_are_corrected(name):
-    assessed = rules.assess(sex="female", proteins=[name])
+    assessed = rules.assess(sex="woman", proteins=[name])
     assert assessed.chosen[PROTEIN] == (), f"{name} was accepted as a protein"
     assert [c.name for c in assessed.corrections] == [name]
     assert assessed.corrections[0].actually == CARBOHYDRATE
@@ -107,14 +107,14 @@ def test_legumes_and_beans_offered_as_a_protein_are_corrected(name):
 
 @pytest.mark.parametrize("name", ["Almonds- slivered, whole", "Cashews", "Walnuts", "Almond butter", "Tahini"])
 def test_nuts_and_nut_butters_are_fats_not_proteins(name):
-    assessed = rules.assess(sex="female", proteins=[name])
+    assessed = rules.assess(sex="woman", proteins=[name])
     assert assessed.chosen[PROTEIN] == ()
     assert assessed.corrections[0].actually == FAT
     assert "fats" in assessed.corrections[0].text
 
 
 def test_a_food_that_is_on_no_list_is_reported_as_unknown_not_guessed():
-    assessed = rules.assess(sex="female", proteins=["Ostrich jerky"])
+    assessed = rules.assess(sex="woman", proteins=["Ostrich jerky"])
     assert assessed.unknown == ("Ostrich jerky",)
     assert assessed.chosen[PROTEIN] == ()
     assert assessed.corrections == ()
@@ -125,31 +125,31 @@ def test_a_food_that_is_on_no_list_is_reported_as_unknown_not_guessed():
 # ---------------------------------------------------------------------------
 
 def test_the_first_question_is_always_protein():
-    assert rules.assess(sex="female").next_group == PROTEIN
+    assert rules.assess(sex="woman").next_group == PROTEIN
     assert rules.ASK_ORDER == (PROTEIN, CARBOHYDRATE, FAT)
 
 
 def test_carbohydrate_is_asked_only_after_a_protein_is_chosen():
-    assessed = rules.assess(sex="female", proteins=["Fish"])
+    assessed = rules.assess(sex="woman", proteins=["Fish"])
     assert assessed.next_group == CARBOHYDRATE
     assert not assessed.complete
 
 
 def test_fat_is_asked_last():
-    assessed = rules.assess(sex="female", proteins=["Fish"], carbohydrates=["Broccoli"])
+    assessed = rules.assess(sex="woman", proteins=["Fish"], carbohydrates=["Broccoli"])
     assert assessed.next_group == FAT
     assert not assessed.complete
 
 
 def test_the_meal_is_finished_only_when_all_three_are_chosen(): # p0263
-    assessed = rules.assess(sex="female", proteins=["Fish"], carbohydrates=["Broccoli"], fats=["Olives"])
+    assessed = rules.assess(sex="woman", proteins=["Fish"], carbohydrates=["Broccoli"], fats=["Olives"])
     assert assessed.complete
     assert assessed.next_group is None
 
 
 def test_a_carbohydrate_offered_before_a_protein_still_leaves_protein_next():
     """Choosing out of order does not reorder the questions."""
-    assessed = rules.assess(sex="female", carbohydrates=["Broccoli"])
+    assessed = rules.assess(sex="woman", carbohydrates=["Broccoli"])
     assert assessed.next_group == PROTEIN
 
 
@@ -162,14 +162,14 @@ def test_a_carbohydrate_offered_before_a_protein_still_leaves_protein_next():
     "Ricotta cheese (skim)", "Hard cheese or full fat cheese",
 ])
 def test_cheese_as_the_protein_means_no_fat_is_asked_for(cheese):
-    assessed = rules.assess(sex="female", proteins=[cheese], carbohydrates=["Spinach"])
+    assessed = rules.assess(sex="woman", proteins=[cheese], carbohydrates=["Spinach"])
     assert assessed.complete, "a fat was still being asked for after cheese"
     assert FAT in assessed.satisfied
     assert any(a.code == "cheese_has_fat" for a in assessed.advice)
 
 
 def test_a_protein_that_is_not_cheese_still_needs_a_fat():
-    assessed = rules.assess(sex="female", proteins=["Fish"], carbohydrates=["Spinach"])
+    assessed = rules.assess(sex="woman", proteins=["Fish"], carbohydrates=["Spinach"])
     assert not assessed.complete
     assert assessed.next_group == FAT
     assert not any(a.code == "cheese_has_fat" for a in assessed.advice)
@@ -180,7 +180,7 @@ def test_a_protein_that_is_not_cheese_still_needs_a_fat():
 # ---------------------------------------------------------------------------
 
 def test_an_unfavourable_carbohydrate_is_named_limited_and_paired():
-    assessed = rules.assess(sex="female", proteins=["Fish"], carbohydrates=["Potatoes (baked, mashed, boiled, chips)"])
+    assessed = rules.assess(sex="woman", proteins=["Fish"], carbohydrates=["Potatoes (baked, mashed, boiled, chips)"])
     advice = {a.code: a.text for a in assessed.advice}
     assert "unfavorable_carb" in advice
     assert "unfavourable" in advice["unfavorable_carb"]
@@ -189,7 +189,7 @@ def test_an_unfavourable_carbohydrate_is_named_limited_and_paired():
 
 
 def test_quinoa_and_grains_add_the_whole_grain_refusal():
-    assessed = rules.assess(sex="female", carbohydrates=["Quinoa"])
+    assessed = rules.assess(sex="woman", carbohydrates=["Quinoa"])
     codes = {a.code for a in assessed.advice}
     assert "whole_grain" in codes
     assert "unfavorable_carb" in codes
@@ -199,7 +199,7 @@ def test_quinoa_and_grains_add_the_whole_grain_refusal():
 
 def test_all_super_favourable_carbs_ask_for_something_favourable_alongside():
     """p0259/p0273: there has to be enough glucose to feed the brain."""
-    assessed = rules.assess(sex="female", proteins=["Fish"],
+    assessed = rules.assess(sex="woman", proteins=["Fish"],
                             carbohydrates=["Broccoli", "Spinach", "Cauliflower"])
     advice = {a.code: a.text for a in assessed.advice}
     assert "needs_favorable_carb" in advice
@@ -208,17 +208,17 @@ def test_all_super_favourable_carbs_ask_for_something_favourable_alongside():
 
 
 def test_all_very_favourable_carbs_ask_for_the_same():
-    assessed = rules.assess(sex="female", carbohydrates=["Kale", "Zucchini"])
+    assessed = rules.assess(sex="woman", carbohydrates=["Kale", "Zucchini"])
     assert any(a.code == "needs_favorable_carb" for a in assessed.advice)
 
 
 def test_a_favourable_carb_alongside_settles_it():
-    assessed = rules.assess(sex="female", proteins=["Fish"], carbohydrates=["Broccoli", "Chickpeas"])
+    assessed = rules.assess(sex="woman", proteins=["Fish"], carbohydrates=["Broccoli", "Chickpeas"])
     assert not any(a.code == "needs_favorable_carb" for a in assessed.advice)
 
 
 def test_a_fruit_alongside_settles_it_too():
-    assessed = rules.assess(sex="female", proteins=["Fish"], carbohydrates=["Spinach", "Apple"])
+    assessed = rules.assess(sex="woman", proteins=["Fish"], carbohydrates=["Spinach", "Apple"])
     assert not any(a.code == "needs_favorable_carb" for a in assessed.advice)
 
 
@@ -236,7 +236,7 @@ def test_the_suggestions_the_source_names_are_the_ones_offered(): # p0273
 # ---------------------------------------------------------------------------
 
 def test_cooking_the_protein_means_light_olive_oil():
-    assessed = rules.assess(sex="female", proteins=["Chicken breast, skinless or deli-style"],
+    assessed = rules.assess(sex="woman", proteins=["Chicken breast, skinless or deli-style"],
                             carbohydrates=["Broccoli", "Chickpeas"], cooked=True)
     text = next(a.text for a in assessed.advice if a.code == "cooking_fat")
     assert "light olive oil" in text
@@ -244,12 +244,12 @@ def test_cooking_the_protein_means_light_olive_oil():
 
 
 def test_a_fat_on_the_avoid_list_is_called_out():
-    assessed = rules.assess(sex="female", fats=["Vegetable shortening"])
+    assessed = rules.assess(sex="woman", fats=["Vegetable shortening"])
     assert any(a.code == "avoid_fat" for a in assessed.advice)
 
 
 def test_an_omega_6_fat_is_called_the_poor_choice():
-    assessed = rules.assess(sex="female", fats=["Peanuts & Peanut butter (natural)"])
+    assessed = rules.assess(sex="woman", fats=["Peanuts & Peanut butter (natural)"])
     text = next(a.text for a in assessed.advice if a.code == "poor_fat")
     assert "omega-6" in text and "omega-9" in text
 
@@ -265,34 +265,45 @@ def test_omega_3_fish_oil_is_not_a_meal_fat(): # p0539
 
 def test_a_meal_portion_is_the_sources_own_wording():
     fish = catalog.find("Fish")
-    assert rules.portion_for(fish, "female", rules.MEAL)[0] == "5oz"
-    assert rules.portion_for(fish, "male", rules.MEAL)[0] == "7oz"
+    assert rules.portion_for(fish, "woman", rules.MEAL)[0] == "5oz"
+    assert rules.portion_for(fish, "man", rules.MEAL)[0] == "7oz"
 
 
 def test_a_snack_is_half_a_meal_portion_said_not_computed(): # p0463, p0495
-    amount, ref = rules.portion_for(catalog.find("Fish"), "female", rules.SNACK)
+    amount, ref = rules.portion_for(catalog.find("Fish"), "woman", rules.SNACK)
     assert amount == "half of 5oz"
     assert "p0249" in ref
     # Halving "9 nuts" arithmetically would invent 4.5 nuts.
-    assert rules.portion_for(catalog.find("Cashews"), "female", rules.SNACK)[0] == "half of 9 nuts"
+    assert rules.portion_for(catalog.find("Cashews"), "woman", rules.SNACK)[0] == "half of 9 nuts"
+
+
+def test_a_snack_portion_does_not_say_per_meal():
+    """"half of 4 cups per meal" says per meal about a snack. The amount is
+    untouched; only the source's unit of occasion goes."""
+    assert rules.portion_for(catalog.find("Kale"), "woman", rules.SNACK)[0] == "half of 4 cups"
+    assert rules.portion_for(catalog.find("Lentils"), "man", rules.SNACK)[0] == "half of 1.5 cups"
+    assert rules.portion_for(catalog.find("Barley"), "woman", rules.SNACK)[0] == "half of 1/2 cup"
+    assert rules.portion_for(catalog.find("Raspberries"), "woman", rules.SNACK)[0] == "half of 4 cups"
+    # A per-food amount that never carried the words is unchanged.
+    assert rules.portion_for(catalog.find("Fish"), "woman", rules.SNACK)[0] == "half of 5oz"
 
 
 def test_super_favourable_is_unlimited_at_both_occasions(): # p0411
     broccoli = catalog.find("Broccoli")
-    assert rules.portion_for(broccoli, "female", rules.MEAL)[0] == "unlimited raw or cooked"
+    assert rules.portion_for(broccoli, "woman", rules.MEAL)[0] == "unlimited raw or cooked"
     # Half of an unlimited allowance is still unlimited.
-    assert rules.portion_for(broccoli, "female", rules.SNACK)[0] == "unlimited raw or cooked"
+    assert rules.portion_for(broccoli, "woman", rules.SNACK)[0] == "unlimited raw or cooked"
 
 
 def test_very_favourable_falls_back_to_the_tier_allowance(): # p0428
     kale = catalog.find("Kale")
-    assert rules.portion_for(kale, "female", rules.MEAL)[0] == "4 cups per meal"
-    assert rules.portion_for(kale, "male", rules.MEAL)[0] == "6 cups per meal"
+    assert rules.portion_for(kale, "woman", rules.MEAL)[0] == "4 cups per meal"
+    assert rules.portion_for(kale, "man", rules.MEAL)[0] == "6 cups per meal"
 
 
 def test_the_favourable_tier_allowance(): # p0453
-    assert rules.portion_for(catalog.find("Lentils"), "female", rules.MEAL)[0] == "1 cup per meal"
-    assert rules.portion_for(catalog.find("Lentils"), "male", rules.MEAL)[0] == "1.5 cups per meal"
+    assert rules.portion_for(catalog.find("Lentils"), "woman", rules.MEAL)[0] == "1 cup per meal"
+    assert rules.portion_for(catalog.find("Lentils"), "man", rules.MEAL)[0] == "1.5 cups per meal"
 
 
 def test_portions_differ_by_sex_where_the_source_says_so():
@@ -302,7 +313,7 @@ def test_portions_differ_by_sex_where_the_source_says_so():
 
 
 def test_the_recap_lists_every_choice_with_its_amount(): # p0279
-    assessed = rules.assess(sex="male", proteins=["Fish"], carbohydrates=["Broccoli", "Chickpeas"], fats=["Olives"])
+    assessed = rules.assess(sex="man", proteins=["Fish"], carbohydrates=["Broccoli", "Chickpeas"], fats=["Olives"])
     lines = rules.recap(assessed)
     assert lines == [
         "Fish - 7oz",
@@ -313,7 +324,7 @@ def test_the_recap_lists_every_choice_with_its_amount(): # p0279
 
 
 def test_a_recap_line_for_a_food_with_no_amount_says_so_rather_than_inventing_one():
-    assessed = rules.assess(sex="female", carbohydrates=["Lemon"])
+    assessed = rules.assess(sex="woman", carbohydrates=["Lemon"])
     assert rules.recap(assessed) == ["Lemon - amount not specified in the food lists"]
 
 
@@ -331,7 +342,7 @@ def _every_assessment():
         dict(fats=["Vegetable shortening", "Peanuts & Peanut butter (natural)"]),
         dict(carbohydrates=["Lemon", "Sugar (all kinds)"]),
     ]
-    for sex in ("female", "male"):
+    for sex in ("woman", "man"):
         for occasion in rules.OCCASIONS:
             for case in cases:
                 yield rules.assess(sex=sex, occasion=occasion, **case)
@@ -369,7 +380,7 @@ def test_the_composition_is_the_same_for_a_snack_as_for_a_meal(): # p0247
 
 def test_an_unknown_occasion_or_sex_is_refused_rather_than_defaulted():
     with pytest.raises(ValueError):
-        rules.assess(sex="female", occasion="brunch")
+        rules.assess(sex="woman", occasion="brunch")
     with pytest.raises(ValueError):
         rules.assess(sex="unspecified")
 

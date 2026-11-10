@@ -52,7 +52,9 @@ def test_members_directory_search_filters_sort_and_member_360(admin_client):
     assert [h["total"] for h in detail["health_assessment"]] == [14, 22]
     assert [h["yes_count"] for h in detail["simple_quiz"]] == [2, 5]
     assert detail["guided_sessions"] == [] and detail["conversations"] == []
-    assert "Food Choices" in detail["not_connected"]
+    # Food Choices left this list on 10 Nov 2026; Mindfulness has not.
+    assert "Food Choices" not in detail["not_connected"]
+    assert "Mindfulness" in detail["not_connected"]
     # Stored results are exactly what the member's records hold — nothing recalculated.
     assert detail["health_assessment"][1]["status"] == "Moderate Inflammation"
     assert detail["health_assessment"][1]["calculation_version"] == "health-assessment-2026-08-25-v2"

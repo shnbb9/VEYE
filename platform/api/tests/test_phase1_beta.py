@@ -5,7 +5,7 @@ views. Every test drives the public API exactly as the browser does."""
 from __future__ import annotations
 
 import io
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -203,7 +203,7 @@ def test_support_details_are_edited_in_the_console_and_read_publicly(client, adm
     assert public["support_email"] == "help@veye.co" and public["support_phone"] == "+1 555 0199"
     features = admin_client.get("/api/v1/admin/settings/features").json()
     states = {f["key"]: f["state"] for f in features}
-    assert states["mood"] == "available" and states["food_choices"] == "client_input" and states["requests"] == "available"
+    assert states["mood"] == "available" and states["food_choices"] == "available" and states["requests"] == "available"
 
 
 # ---------------------------------------------------------------- console views
@@ -211,7 +211,13 @@ def test_member_360_shows_mood_diary_and_requests_for_that_member_only(member_cl
     # Member 360 computes the Balance score against the REAL current date, so
     # this entry has to be inside the client's 30-day window. A pinned date
     # made the assertion rot 30 days after it was written.
-    today = date.today().isoformat()
+    #
+    # It has to be the date the CONSOLE reckons by, which is UTC. Using the
+    # machine's local date failed here between local midnight and UTC
+    # midnight: the entry was stamped tomorrow as far as the console was
+    # concerned, fell outside `cutoff <= entry_date <= today`, and the balance
+    # came back None. That window is 5.5 hours wide on this machine.
+    today = datetime.now(timezone.utc).date().isoformat()
     member_client.put("/api/v1/members/me/mood", params={"today": today}, json={"entry_date": today, "mood": "calm"})
     member_client.post("/api/v1/members/me/food-diary", json={"entry_date": today, "meal_time": "08:00", "description": "Porridge"})
     member_client.post("/api/v1/members/me/requests", json={"kind": "contact_us", "message": "Hello from Aditya"})
@@ -228,7 +234,8 @@ def test_member_360_shows_mood_diary_and_requests_for_that_member_only(member_cl
     assert [m["description"] for m in aditya["food_diary"]] == ["Porridge"] and aditya["food_diary_days"] == 1
     assert [r["message"] for r in aditya["requests"]] == ["Hello from Aditya"]
     assert [m["mood"] for m in maya["mood_entries"]] == ["angry"] and maya["food_diary"] == [] and maya["requests"] == []
-    assert "Mood Tracker" not in aditya["not_connected"] and "Food Choices" in aditya["not_connected"]
+    assert "Mood Tracker" not in aditya["not_connected"] and "Food Choices" not in aditya["not_connected"]
+    assert "Mindfulness" in aditya["not_connected"]
     insights = admin_client.get("/api/v1/admin/insights").json()
     assert insights["mood_entries"] == 2 and insights["mood_members"] == 2 and insights["food_diary_entries"] == 1
     assert insights["requests_by_kind"] == {"contact_us": 1}

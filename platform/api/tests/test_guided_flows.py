@@ -163,7 +163,11 @@ class TestDefinitions:
         assert snapshot["has_blood_markers"] is False and snapshot["has_health_assessment"] is False
         # Connected trackers (19 Sep 2026): the guide opens them for real.
         assert snapshot["health_assessment_available"] is True and snapshot["simple_quiz_available"] is True
-        assert snapshot["food_choices_available"] is False  # still no production slice
+        # Food Choices joined them on 10 Nov 2026, when Cara's training
+        # document was found and the lists and HOW TO were built from it.
+        assert snapshot["food_choices_available"] is True
+        # A member who has not used it yet still reads as not having done so.
+        assert snapshot["has_food_choices"] is False
 
     def test_interpreter_is_deterministic_and_never_invents(self):
         yes_no = FIRST["nodes"]["b2"]["choices"]
@@ -207,7 +211,10 @@ class TestFirstTimeFlow:
         start(member)
         step = answer(member, choice="how_to")
         assert step["node"]["type"] == "AI_TASK" and step["node"]["task"] == "how_to_meal_planning"
-        assert "not connected in the Veye application yet" in step["node"]["text"]
+        # Until 10 Nov 2026 this said the HOW TO was "not connected in the Veye
+        # application yet". It is connected now, so Sprout describes it instead.
+        assert "Food Choices" in step["node"]["text"]
+        assert "not connected" not in step["node"]["text"]
         finished = answer(member, choice="finish")
         assert finished["status"] == "completed" and finished["node"]["type"] == "COMPLETE"
         assert member.post(f"{FT}/answer", json={"choice": "finish"}).status_code == 409

@@ -378,9 +378,8 @@ DEFINITION = {'key': 'first_time_user',
                        'pause': True},
            'how_to': {'type': 'AI_TASK',
                       'section': 'how_to',
-                      'text': 'The “how to” — building your meal plan with me — is the AI part of the program, and it is not connected in the Veye '
-                              'application yet. Cara’s training material for it is still to come. For now, Food Choices is where your meal planning '
-                              'begins.',
+                      'text': 'The “how to” — building your meal plan with me — is in Food Choices. I will ask what time you get up, then take '
+                              'you through a meal or a snack one choice at a time, with the amounts for you and the time to eat next.',
                       'source_ref': '260627  Intro Decision Tree.docx ¶005, 013',
                       'copy_origin': 'derived',
                       'task': 'how_to_meal_planning',

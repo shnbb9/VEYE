@@ -146,3 +146,69 @@ export const getPersonalTip = () => apiJson<PersonalTip>("/api/v1/companion/pers
 
 export type SupportDetails = { support_email: string; support_phone: string };
 export const getSupportDetails = () => apiJson<SupportDetails>("/api/v1/settings/support");
+
+/* ---- Food Choices -------------------------------------------------------- */
+/* The client's four food lists and the HOW TO meal builder. Every tier,
+   portion and rule comes from the API, which reads them from one transcribed
+   source (`app/food_choices/`). The screen holds no food data of its own:
+   a second copy here is exactly how the prototype's scoring once drifted. */
+
+export type FoodSex = "woman" | "man";
+export type FoodOccasion = "meal" | "snack";
+
+export type FoodChoiceItem = {
+  name: string;
+  tier: string;
+  tier_label: string;
+  /** The source's own wording, or null where it states no amount. */
+  portion: string | null;
+  favorable: boolean | null;
+  source_ref: string;
+};
+export type FoodChoiceTier = { tier: string; label: string; allowance: string | null; foods: FoodChoiceItem[] };
+export type FoodChoiceGroup = { group: "protein" | "carbohydrate" | "fat"; tiers: FoodChoiceTier[] };
+export type FoodChoiceCatalog = {
+  sex: FoodSex; source: string; groups: FoodChoiceGroup[]; notes: Record<string, string>;
+};
+
+export type FoodChoiceSelections = {
+  sex: string;
+  selections: Record<string, string[]>;
+  write_ins: Record<string, string[]>;
+  write_in_note: string;
+};
+export type FoodChoiceSelectionsInput = {
+  sex?: string;
+  selections?: Record<string, string[]>;
+  write_ins?: Record<string, string[]>;
+};
+
+export type HowToPrompt = {
+  step: string; text: string; answer: "time" | "choice" | "foods" | "none";
+  options: string[]; notes: string[]; recap: string[]; candidates: string[]; source_ref: string;
+};
+export type HowToOccasion = {
+  kind: FoodOccasion; at: string | null; at_label: string | null; confirmed: boolean;
+  proteins: string[]; carbohydrates: string[]; fats: string[];
+};
+export type HowToPlan = {
+  id: string; sex: FoodSex; step: string;
+  wake: string | null; wake_label: string | null;
+  bedtime: string | null; bedtime_label: string | null;
+  done_eating_reason: string; occasions: HowToOccasion[]; prompt: HowToPrompt; complete: boolean;
+};
+export type HowToAnswer = { time?: string; choice?: string; foods?: string[]; cooked?: boolean };
+
+const FOOD_CHOICES = `/api/v1/members/${ME}/food-choices`;
+
+export const getFoodCatalog = (sex: FoodSex, occasion: FoodOccasion = "meal") =>
+  apiJson<FoodChoiceCatalog>(`${FOOD_CHOICES}/catalog?sex=${sex}&occasion=${occasion}`);
+export const getFoodSelections = () => apiJson<FoodChoiceSelections>(`${FOOD_CHOICES}/selections`);
+export const saveFoodSelections = (input: FoodChoiceSelectionsInput) =>
+  postJson<FoodChoiceSelections>(`${FOOD_CHOICES}/selections`, input, "PUT");
+
+export const getHowToPlan = () => apiJson<HowToPlan | null>(`${FOOD_CHOICES}/how-to`);
+export const startHowToPlan = (sex: FoodSex) => postJson<HowToPlan>(`${FOOD_CHOICES}/how-to`, { sex });
+export const answerHowToPlan = (answer: HowToAnswer) =>
+  postJson<HowToPlan>(`${FOOD_CHOICES}/how-to/answer`, answer);
+export const discardHowToPlan = () => apiJson<void>(`${FOOD_CHOICES}/how-to`, { method: "DELETE" });

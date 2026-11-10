@@ -14,7 +14,7 @@ const WIDTHS = [
   { name: "390", width: 390, height: 844 },
 ];
 const PUBLIC = ["/", "/why-veye", "/about", "/help", "/pricing", "/login", "/signup", "/onboarding"];
-const MEMBER = ["/app", "/app/progress", "/app/progress/health-assessment", "/app/progress/simple-quiz", "/app/mood", "/app/food-diary", "/app/companion", "/app/fitness", "/app/supplements", "/app/resources", "/app/settings"];
+const MEMBER = ["/app", "/app/progress", "/app/progress/health-assessment", "/app/progress/simple-quiz", "/app/mood", "/app/food-diary", "/app/food-choices", "/app/companion", "/app/fitness", "/app/supplements", "/app/resources", "/app/settings"];
 const ADMIN_PAGES = ["/admin", "/admin/members", "/admin/assessments", "/admin/care", "/admin/requests", "/admin/content", "/admin/insights", "/admin/settings", "/admin/companion/conversations", "/admin/companion/settings/guided-experiences"];
 
 function watchConsole(page: Page): string[] {

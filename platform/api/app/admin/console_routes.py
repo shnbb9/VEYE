@@ -638,7 +638,7 @@ def member_360(member_id: UUID, principal: CurrentPrincipal = Depends(require_ad
         mood_entries=[mood_entry_out(m) for m in moods], mood_stats=compute_stats(moods, today=_now().date()),
         food_diary=[meal_out(m) for m in meals], food_diary_days=diary_days,
         requests=[request_out(r) for r in requests],
-        not_connected=["Food Choices", "Mindfulness", "Activity Tracker (Exercise, Meditation)"],
+        not_connected=["Mindfulness", "Activity Tracker (Exercise, Meditation)"],
         sharing_state=permission.state,
         sharing_label=PERMISSION_LABELS.get(permission.state, permission.state),
         shares_health_data=shares,

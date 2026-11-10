@@ -142,7 +142,7 @@ def portion_for(item: FoodItem, sex: str, occasion: str) -> tuple[str | None, st
     if amount is None and item.group == CARBOHYDRATE:
         allowance = catalog.TIER_ALLOWANCE.get(item.tier)
         if allowance is not None:
-            amount = allowance[0] if sex == "female" else allowance[1]
+            amount = allowance[0] if sex == catalog.WOMAN else allowance[1]
             ref = allowance[2]
     if amount is None:
         return None, ref
@@ -151,6 +151,10 @@ def portion_for(item: FoodItem, sex: str, occasion: str) -> tuple[str | None, st
         # unlimited" would be nonsense rather than caution.
         if "unlimited" in amount:
             return amount, ref
+        # "half of 4 cups per meal" says per meal about a snack. The trailing
+        # words are the source's unit of occasion, not part of the amount, so
+        # they go when the occasion changes. The amount itself is untouched.
+        amount = amount.removesuffix(" per meal")
         return f"half of {amount}", f"{ref} + {SNACK_IS_HALF_A_MEAL_REF}"
     return amount, ref
 
@@ -199,8 +203,8 @@ def assess(
     """
     if occasion not in OCCASIONS:
         raise ValueError(f"occasion must be one of {OCCASIONS}, not {occasion!r}")
-    if sex not in ("female", "male"):
-        raise ValueError(f"sex must be 'female' or 'male', not {sex!r}")
+    if sex not in catalog.SEXES:
+        raise ValueError(f"sex must be one of {catalog.SEXES}, not {sex!r}")
 
     offered = {PROTEIN: proteins or [], CARBOHYDRATE: carbohydrates or [], FAT: fats or []}
     chosen: dict[str, tuple[Chosen, ...]] = {}

@@ -6027,3 +6027,103 @@
     .settings-card { padding:22px 18px; }
     .settings-fields input, .settings-fields select, .settings-select select { padding:10px 12px; }
   }
+
+/* ===== Food Choices (fcx-) ================================================
+   The client's four food lists and the HOW TO meal builder. Additive: it
+   reuses the member application's own tokens, buttons (.btn-primary /
+   .btn-ghost) and card treatment, and changes nothing above. */
+.fcx-blurb { margin:0 0 18px; max-width:62ch; color:var(--muted,#6f7d5c); font-size:15px; line-height:1.55; }
+.fcx-tabs { display:flex; gap:8px; margin:0 0 18px; flex-wrap:wrap; }
+.fcx-tab {
+  appearance:none; border:1px solid var(--line,#dfe8cd); background:var(--paper,#fff);
+  color:var(--deep,#38670b); border-radius:999px; padding:9px 18px; font:inherit; font-weight:600;
+  font-size:14px; cursor:pointer;
+}
+.fcx-tab.is-on { background:var(--deep,#38670b); border-color:var(--deep,#38670b); color:#fff; }
+.fcx-grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:20px; align-items:start; }
+.fcx-panel {
+  background:var(--paper,#fff); border:1px solid var(--line,#dfe8cd); border-radius:18px;
+  padding:24px; box-shadow:var(--shadow,0 18px 45px rgba(49,77,14,.1));
+}
+.fcx-panel__title { margin:0 0 12px; font-size:19px; color:var(--ink,#294407); }
+.fcx-note { margin:0 0 10px; color:var(--muted,#6f7d5c); font-size:14px; line-height:1.5; }
+.fcx-hint { margin:0 0 10px; font-size:13px; color:var(--muted,#6f7d5c); }
+.fcx-prompt-note {
+  margin:0 0 10px; padding:10px 14px; border-left:3px solid var(--leaf,#80c800);
+  background:var(--cream,#fff8ea); border-radius:0 10px 10px 0; font-size:14px; line-height:1.5;
+}
+.fcx-ask { margin:16px 0 12px; font-size:17px; font-weight:600; color:var(--ink,#294407); }
+.fcx-recap { margin:0 0 12px; padding-left:20px; font-size:14px; line-height:1.7; }
+.fcx-answer { display:flex; flex-direction:column; gap:10px; align-items:flex-start; }
+.fcx-label { font-size:13px; font-weight:600; color:var(--muted,#6f7d5c); }
+.fcx-input, .fcx-select {
+  font:inherit; padding:10px 12px; border:1px solid var(--line,#dfe8cd); border-radius:10px;
+  background:var(--paper,#fff); color:var(--ink,#294407); min-width:220px; max-width:100%;
+}
+.fcx-input--inline { min-width:180px; }
+.fcx-check { display:flex; gap:8px; align-items:center; font-size:14px; }
+.fcx-choices { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 14px; }
+.fcx-choice {
+  appearance:none; border:1px solid var(--line,#dfe8cd); background:var(--cream,#fff8ea);
+  color:var(--deep,#38670b); border-radius:12px; padding:12px 18px; font:inherit; font-weight:600;
+  cursor:pointer;
+}
+.fcx-choice:hover:not(:disabled) { border-color:var(--leaf,#80c800); }
+.fcx-choice.is-on { background:var(--deep,#38670b); border-color:var(--deep,#38670b); color:#fff; }
+.fcx-candidates, .fcx-foods { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px; }
+.fcx-food {
+  appearance:none; display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+  border:1px solid var(--line,#dfe8cd); background:var(--paper,#fff); color:var(--ink,#294407);
+  border-radius:10px; padding:8px 12px; font:inherit; font-size:13px; cursor:pointer; text-align:left;
+}
+.fcx-food:hover { border-color:var(--leaf,#80c800); }
+.fcx-food.is-on { background:var(--leaf-soft,#b6e85b); border-color:var(--deep,#38670b); }
+.fcx-portion { font-size:11px; color:var(--muted,#6f7d5c); }
+.fcx-food.is-on .fcx-portion { color:var(--deep,#38670b); }
+.fcx-action { margin-top:6px; }
+.fcx-err { margin:0 0 14px; padding:10px 14px; border-radius:10px; background:#fdeeee; color:#8c2f2f; font-size:14px; }
+.fcx-empty { margin:0; color:var(--muted,#6f7d5c); font-size:14px; }
+
+.fcx-panel--day .fcx-day { list-style:none; margin:0 0 14px; padding:0; display:flex; flex-direction:column; gap:8px; }
+.fcx-day-row {
+  display:grid; grid-template-columns:78px 60px minmax(0,1fr); gap:8px; align-items:baseline;
+  padding:9px 12px; border:1px solid var(--line,#dfe8cd); border-radius:10px; font-size:13px;
+}
+.fcx-day-row.is-done { background:var(--cream,#fff8ea); }
+.fcx-day-time { font-weight:700; color:var(--deep,#38670b); }
+.fcx-day-kind { color:var(--muted,#6f7d5c); }
+.fcx-day-foods { color:var(--ink,#294407); }
+
+.fcx-lists-head { display:flex; gap:16px; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; }
+.fcx-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.fcx-filters .fcx-select { min-width:140px; }
+.fcx-group { margin-top:22px; }
+.fcx-group__title { margin:0 0 10px; font-size:16px; color:var(--deep,#38670b); }
+.fcx-tier { margin:0 0 16px; }
+.fcx-tier__label {
+  margin:0 0 8px; font-size:13px; font-weight:700; color:var(--ink,#294407);
+  display:flex; gap:8px; align-items:baseline; flex-wrap:wrap;
+}
+.fcx-allowance { font-weight:500; font-size:12px; color:var(--muted,#6f7d5c); }
+.fcx-writeins { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.fcx-writein {
+  display:inline-flex; gap:6px; align-items:center; padding:5px 10px; border-radius:999px;
+  background:var(--cream,#fff8ea); border:1px dashed var(--line,#dfe8cd); font-size:12px;
+}
+.fcx-writein button { appearance:none; border:0; background:none; cursor:pointer; font-size:14px; line-height:1; color:var(--muted,#6f7d5c); }
+.fcx-lists-actions { display:flex; gap:14px; align-items:center; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+.fcx-count { font-size:13px; color:var(--muted,#6f7d5c); }
+
+@media (max-width: 900px) {
+  .fcx-grid { grid-template-columns:1fr; }
+}
+@media (max-width: 560px) {
+  .fcx-panel { padding:18px; }
+  .fcx-input, .fcx-select, .fcx-filters .fcx-select { min-width:0; width:100%; }
+  .fcx-answer { align-items:stretch; }
+  .fcx-answer .fcx-action { width:100%; }
+  .fcx-day-row { grid-template-columns:68px 1fr; }
+  .fcx-day-kind { grid-column:2; }
+  .fcx-day-foods { grid-column:1 / -1; }
+  .fcx-lists-head, .fcx-lists-actions { justify-content:flex-start; }
+}

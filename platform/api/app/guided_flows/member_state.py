@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.assessments.repository import health_number_history
+from app.food_choices.models import has_food_choices
 from app.guided_flows.engine import MEMBER_STATES
 from app.progress.blood_markers.repository import blood_markers_history
 from app.progress.body_composition.repository import body_composition_history
@@ -19,14 +20,15 @@ from app.progress.simple_quiz.repository import simple_quiz_history
 # (Cara's "Health Status Report" / "HSR" / "Health Questionnaire" — canonical
 # id health_assessment) and the Simple Quiz became production slices on
 # 19 Sep 2026, so the Progress Tracker Guide now opens them instead of
-# announcing that they are not connected. Food Choices is a member section
-# without a production slice yet, so a flow must not pretend it can be completed.
+# announcing that they are not connected. Food Choices joined them on
+# 10 Nov 2026, when Cara's training document was found in the workspace and
+# the lists, the rules and the HOW TO conversation were built from it.
 TRACKER_AVAILABILITY = {
     "blood_markers": True,
     "body_composition": True,
     "health_assessment": True,
     "simple_quiz": True,
-    "food_choices": False,
+    "food_choices": True,
 }
 
 
@@ -41,7 +43,7 @@ class MemberStateService:
             "has_health_number": bool(health_number_history(self.db, member_id)),
             "has_health_assessment": bool(health_assessment_history(self.db, member_id)),
             "has_simple_quiz": bool(simple_quiz_history(self.db, member_id)),
-            "has_food_choices": False,       # not connected yet
+            "has_food_choices": has_food_choices(self.db, member_id),
             "blood_markers_available": TRACKER_AVAILABILITY["blood_markers"],
             "body_composition_available": TRACKER_AVAILABILITY["body_composition"],
             "health_assessment_available": TRACKER_AVAILABILITY["health_assessment"],

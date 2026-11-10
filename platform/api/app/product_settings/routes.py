@@ -108,7 +108,10 @@ def feature_states(db: Session = Depends(get_db)) -> list[FeatureState]:
         ("simple_quiz", "Simple Quiz", "available", "8 yes/no count; never touches the Health Number."),
         ("mood", "Mood Tracker", "available", "One mood per day with a note; Balance score by the client formula."),
         ("food_diary", "Food Diary", "available", "Meal entries, the prototype macro estimate, day Save, rule-based feedback and history."),
-        ("food_choices", "Food Choices", "client_input", "Decision tree / business logic not supplied."),
+        ("food_choices", "Food Choices", "available",
+         "The client's four food lists and the HOW TO meal builder, transcribed from "
+         "AI Chatbot Training.docx (250804) with a paragraph reference on every row. "
+         "Portion units for p0249 are the one open question."),
         ("meal_planning", "Meal Planning", "available", "Saved days, the client's sample days and date assignment. AI-assisted planning is in development."),
         ("mindfulness", "Mindfulness", "client_input", "No content supplied; section stays in development."),
         ("fitness", "Fitness", "phase_2", f"Phase 2. {published.get('fitness', 0)} published Care Studio item(s) and the approved development preview; final scope and content are Phase 2."),

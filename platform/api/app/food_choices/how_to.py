@@ -484,6 +484,11 @@ def _label(value: time) -> str:
     return f"{hour}:{value.minute:02d} {suffix}"
 
 
+def clock_label(hhmm: str | None) -> str | None:
+    """"07:30" as the member reads it, "7:30 am". None stays None."""
+    return _label(_time(hhmm)) if hhmm else None
+
+
 def _minutes_of(hhmm: str) -> int:
     parsed = _time(hhmm)
     return parsed.hour * 60 + parsed.minute
@@ -519,7 +524,7 @@ def _next_time(state: HowTo, previous: Occasion) -> time | None:
 
 
 def start(sex: str) -> HowTo:
-    if sex not in ("female", "male"):
+    if sex not in catalog.SEXES:
         raise HowToError("The food lists give amounts for a woman and for a man.")
     return HowTo(sex=sex)
 
@@ -528,5 +533,5 @@ __all__ = [
     "HowTo", "HowToError", "Occasion", "Prompt", "STEPS", "STEP_WAKE_TIME",
     "STEP_OCCASION", "STEP_PROTEIN", "STEP_CARBOHYDRATE", "STEP_FAT",
     "STEP_CONFIRM", "STEP_FIX", "STEP_CONTINUE", "STEP_BEDTIME",
-    "STEP_COMPLETE", "advance", "prompt", "start",
+    "STEP_COMPLETE", "advance", "prompt", "start", "clock_label",
 ]

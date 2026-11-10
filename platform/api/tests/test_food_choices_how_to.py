@@ -19,7 +19,7 @@ def _say(state, **answer):
     return how_to.advance(state, answer)
 
 
-def _run_to_first_meal(sex="female", kind=rules.MEAL, wake="07:00"):
+def _run_to_first_meal(sex="woman", kind=rules.MEAL, wake="07:00"):
     state = how_to.start(sex)
     _say(state, time=wake)
     _say(state, choice=kind)
@@ -31,7 +31,7 @@ def _run_to_first_meal(sex="female", kind=rules.MEAL, wake="07:00"):
 # ---------------------------------------------------------------------------
 
 def test_the_first_question_is_what_time_they_get_up(): # p0285
-    state = how_to.start("female")
+    state = how_to.start("woman")
     asked = how_to.prompt(state)
     assert asked.step == how_to.STEP_WAKE_TIME
     assert asked.answer == "time"
@@ -39,7 +39,7 @@ def test_the_first_question_is_what_time_they_get_up(): # p0285
 
 
 def test_the_eating_time_is_stated_before_snack_or_meal_is_asked(): # p0287, p0289
-    state = how_to.start("female")
+    state = how_to.start("woman")
     _say(state, time="07:00")
     asked = how_to.prompt(state)
     assert asked.step == how_to.STEP_OCCASION
@@ -50,7 +50,7 @@ def test_the_eating_time_is_stated_before_snack_or_meal_is_asked(): # p0287, p02
 
 
 def test_the_occasion_question_states_both_durations(): # p0302
-    state = how_to.start("male")
+    state = how_to.start("man")
     _say(state, time="06:30")
     asked = how_to.prompt(state)
     assert "2 hours" in asked.text and "5 hours" in asked.text
@@ -58,7 +58,7 @@ def test_the_occasion_question_states_both_durations(): # p0302
 
 
 def test_a_time_that_is_not_a_time_is_refused_rather_than_guessed():
-    state = how_to.start("female")
+    state = how_to.start("woman")
     with pytest.raises(how_to.HowToError):
         _say(state, time="when the sun comes up")
     with pytest.raises(how_to.HowToError):
@@ -285,7 +285,7 @@ def test_a_confirm_answer_that_is_neither_yes_nor_no_is_refused():
 # ---------------------------------------------------------------------------
 
 def test_a_three_meal_day_lands_on_the_right_clock_times():
-    state = how_to.start("male")
+    state = how_to.start("man")
     _say(state, time="07:00")
     for _ in range(3):
         _say(state, choice=rules.MEAL)
@@ -298,7 +298,7 @@ def test_a_three_meal_day_lands_on_the_right_clock_times():
 
 
 def test_bedtime_within_four_hours_of_the_last_meal_closes_the_day(): # p0316
-    state = how_to.start("female")
+    state = how_to.start("woman")
     _say(state, time="07:00")
     _say(state, choice=rules.MEAL)
     _complete_a_meal(state)
@@ -311,7 +311,7 @@ def test_bedtime_within_four_hours_of_the_last_meal_closes_the_day(): # p0316
 
 
 def test_bedtime_well_clear_of_the_last_meal_does_not_claim_they_are_done():
-    state = how_to.start("female")
+    state = how_to.start("woman")
     _say(state, time="07:00")
     _say(state, choice=rules.MEAL)
     _complete_a_meal(state)
@@ -323,7 +323,7 @@ def test_bedtime_well_clear_of_the_last_meal_does_not_claim_they_are_done():
 
 
 def test_bedtime_within_ninety_minutes_of_a_snack_closes_the_day(): # p0318
-    state = how_to.start("female")
+    state = how_to.start("woman")
     _say(state, time="07:00")
     _say(state, choice=rules.SNACK)
     _complete_a_meal(state)
@@ -334,7 +334,7 @@ def test_bedtime_within_ninety_minutes_of_a_snack_closes_the_day(): # p0318
 
 
 def test_a_bedtime_after_midnight_is_that_night():
-    state = how_to.start("female")
+    state = how_to.start("woman")
     _say(state, time="08:00")
     _say(state, choice=rules.MEAL)
     _complete_a_meal(state)
@@ -345,7 +345,7 @@ def test_a_bedtime_after_midnight_is_that_night():
 
 
 def test_the_finished_plan_cannot_be_advanced_again():
-    state = how_to.start("female")
+    state = how_to.start("woman")
     _say(state, time="07:00")
     _say(state, choice=rules.MEAL)
     _complete_a_meal(state)
@@ -357,7 +357,7 @@ def test_the_finished_plan_cannot_be_advanced_again():
 
 
 def test_the_day_can_be_read_back_as_a_schedule():
-    state = how_to.start("female")
+    state = how_to.start("woman")
     _say(state, time="07:00")
     _say(state, choice=rules.MEAL)
     _complete_a_meal(state)
@@ -375,7 +375,7 @@ def test_the_day_can_be_read_back_as_a_schedule():
 def test_the_state_round_trips_through_json():
     import json
 
-    state = _complete_a_meal(_run_to_first_meal(sex="male", kind=rules.SNACK, wake="06:15"))
+    state = _complete_a_meal(_run_to_first_meal(sex="man", kind=rules.SNACK, wake="06:15"))
     state.correction = "something to carry"
     restored = how_to.HowTo.from_dict(json.loads(json.dumps(state.to_dict())))
     assert restored.to_dict() == state.to_dict()
@@ -389,7 +389,7 @@ def test_the_state_round_trips_through_json():
 def _every_prompt():
     """Walk the conversation widely enough to see every line it can emit."""
     seen = []
-    for sex in ("female", "male"):
+    for sex in ("woman", "man"):
         for kind in rules.OCCASIONS:
             for protein in ("Fish", "Hard cheese or full fat cheese"):
                 for carbs in (["Broccoli"], ["Quinoa"], ["Spinach", "Chickpeas"],
