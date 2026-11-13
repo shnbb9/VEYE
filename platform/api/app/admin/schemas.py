@@ -106,6 +106,7 @@ class DocumentOut(BaseModel):
     is_current: bool
     ingestion_status: str
     ingestion_error: str | None
+    extraction_note: str | None = None
     chunk_count: int
     ingested_at: datetime | None
     created_at: datetime

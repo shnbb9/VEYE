@@ -175,7 +175,14 @@ class CompanionService:
     def _generate(self, principal: CurrentPrincipal, conversation: CompanionConversation, member_message: CompanionMessage,
                   decision: PolicyDecision, text: str, known, trace: CompanionTrace) -> tuple[str, str, list[RetrievedChunk], dict]:
         # 2. Retrieval orchestrator -> approved knowledge only, within the policy's scopes.
-        passages = self.knowledge.search(text, scopes=list(decision.retrieval_scopes), limit=self.runtime.settings.retrieval_limit)
+        #    The query is the member's own words and the outbound privacy
+        #    filter has not run yet (it runs at step 5, on the built request),
+        #    so whose words these are travels with them. With the local
+        #    embedding provider nothing leaves the machine; with an external
+        #    one this is what decides whether the call is made at all.
+        passages = self.knowledge.search(text, scopes=list(decision.retrieval_scopes),
+                                         limit=self.runtime.settings.retrieval_limit,
+                                         classification=classify_for(principal))
         # 3. Structured member context: allowlisted summaries for the permitted scopes.
         context = self.context_service.build(principal, decision.member_data_scopes, decision)
         # 4. Prompt.

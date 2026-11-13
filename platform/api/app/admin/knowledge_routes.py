@@ -26,7 +26,8 @@ def document_out(document: KnowledgeDocument) -> DocumentOut:
     return DocumentOut(id=document.id, source_version=document.source_version, filename=document.filename,
                        content_type=document.content_type, byte_size=document.byte_size, sha256=document.sha256,
                        is_current=document.is_current, ingestion_status=document.ingestion_status,
-                       ingestion_error=document.ingestion_error, chunk_count=document.chunk_count,
+                       ingestion_error=document.ingestion_error, extraction_note=document.extraction_note,
+                       chunk_count=document.chunk_count,
                        ingested_at=document.ingested_at, created_at=document.created_at)
 
 

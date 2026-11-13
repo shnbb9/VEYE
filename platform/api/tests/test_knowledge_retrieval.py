@@ -70,9 +70,13 @@ def test_activation_needs_an_ingested_document_and_versions_demote(tmp_path):
             service.activate(source, approved_by="test")
         assert excinfo.value.status_code == 409
 
-        # Unsupported file types fail honestly and cannot be activated.
+        # A file that cannot be read fails honestly and cannot be activated.
+        # PDFs are ingested now, so these truncated bytes fail as an unreadable
+        # PDF rather than as an unsupported type.
         failed = service.attach_document(source, filename="guide.pdf", content_type="application/pdf", data=b"%PDF-1.4")
-        assert failed.ingestion_status == "failed" and "Markdown" in failed.ingestion_error
+        assert failed.ingestion_status == "failed" and "PDF could not be read" in failed.ingestion_error
+        assert failed.extraction_note is None
+
         with pytest.raises(KnowledgeError):
             service.activate(source, approved_by="test")
 

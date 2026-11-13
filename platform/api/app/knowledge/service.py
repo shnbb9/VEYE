@@ -14,6 +14,8 @@ from sqlalchemy import cast, func, literal, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.companion.providers.embeddings import EmbeddingProvider, cosine_similarity
+from app.companion.providers.llm import DataClassification
+from app.knowledge import extract as extract_module
 from app.knowledge.chunking import chunk_text
 from app.knowledge.models import (
     SCOPES,
@@ -29,8 +31,11 @@ from app.knowledge.models import (
 from app.knowledge.object_store import KnowledgeObjectStore
 from app.knowledge.vector_type import Vector
 
-TEXT_CONTENT_TYPES = {"text/plain", "text/markdown", "text/x-markdown"}
-TEXT_EXTENSIONS = {".txt", ".md", ".markdown"}
+# Kept as re-exports: callers and tests imported these from here before the
+# readers moved into `extract`.
+TEXT_CONTENT_TYPES = extract_module.TEXT_CONTENT_TYPES
+TEXT_EXTENSIONS = extract_module.TEXT_EXTENSIONS
+SUPPORTED_EXTENSIONS = extract_module.SUPPORTED_EXTENSIONS
 
 
 class KnowledgeError(Exception):
@@ -175,43 +180,51 @@ class KnowledgeService:
 
     def ingest(self, document: KnowledgeDocument) -> KnowledgeDocument:
         try:
-            text = self._extract_text(document)
-            chunks = chunk_text(text)
+            extracted = self._extract(document)
+            chunks = chunk_text(extracted.text)
             if not chunks:
                 raise KnowledgeError(422, "The document contains no readable text.")
-            vectors = self.embeddings.embed([c.text for c in chunks])
+            # Approved knowledge, not anybody's personal data.
+            vectors = self.embeddings.embed([c.text for c in chunks], purpose="document",
+                                            classification=DataClassification.GENERAL)
             for chunk, vector in zip(chunks, vectors):
                 self.db.add(KnowledgeChunk(document_id=document.id, source_id=document.source_id, ordinal=chunk.ordinal,
                                            heading=chunk.heading, text=chunk.text, token_estimate=chunk.token_estimate,
                                            embedding=vector, embedding_model=self.embeddings.model,
-                                           meta={"filename": document.filename}))
+                                           meta={"filename": document.filename,
+                                                 "extracted_from": extracted.kind}))
             document.chunk_count = len(chunks)
             document.embedding_model = self.embeddings.model
             document.ingestion_status = "ingested"
             document.ingestion_error = None
+            document.extraction_note = extracted.note
             document.ingested_at = datetime.now(timezone.utc)
         except KnowledgeError as exc:
             document.ingestion_status = "failed"
             document.ingestion_error = exc.detail
+            document.extraction_note = None
         self.db.flush()
         return document
 
-    def _extract_text(self, document: KnowledgeDocument) -> str:
-        extension = "." + document.filename.rsplit(".", 1)[-1].lower() if "." in document.filename else ""
-        if document.content_type.split(";")[0].strip() not in TEXT_CONTENT_TYPES and extension not in TEXT_EXTENSIONS:
-            raise KnowledgeError(415, "Only plain-text and Markdown documents are ingested in this environment.")
+    def _extract(self, document: KnowledgeDocument) -> extract_module.Extracted:
+        """Text, Word and PDF."""
         raw = self.object_store.get(document.object_key)
         try:
-            return raw.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise KnowledgeError(422, "The document is not UTF-8 text.") from exc
+            return extract_module.extract(document.filename, document.content_type, raw)
+        except extract_module.ExtractionError as exc:
+            raise KnowledgeError(exc.status_code, exc.detail) from exc
 
     # ---- retrieval ------------------------------------------------------------------------
-    def search(self, query: str, *, scopes: list[str] | None = None, limit: int = 4) -> list[RetrievedChunk]:
+    def search(self, query: str, *, scopes: list[str] | None = None, limit: int = 4,
+               classification: DataClassification = DataClassification.REAL_MEMBER) -> list[RetrievedChunk]:
         query = query.strip()
         if not query:
             return []
-        vector = self.embeddings.embed([query])[0]
+        # The member's own words, and the Companion retrieves before it runs
+        # the outbound privacy filter, so this is unredacted text. An
+        # external provider refuses it unless the deployment is cleared.
+        vector = self.embeddings.embed([query], purpose="query",
+                                       classification=classification)[0]
         base = (
             select(KnowledgeChunk, KnowledgeSource, KnowledgeDocument)
             .join(KnowledgeDocument, KnowledgeChunk.document_id == KnowledgeDocument.id)

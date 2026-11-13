@@ -69,7 +69,8 @@ def build_runtime(config: Settings | None = None) -> Runtime:
                                      "model": config.gemini_model, "api_key": config.gemini_api_key,
                                      "member_data_cleared": config.gemini_member_data_cleared,
                                      "production": config.is_production})
-    embeddings = build_embedding_provider(config.embedding_provider, dimensions=config.embedding_dimensions)
+    embeddings = build_embedding_provider(config.embedding_provider,
+                                          dimensions=config.embedding_dimensions, settings=config)
     object_store = build_object_store(config.knowledge_object_store, local_root=config.knowledge_object_root,
                                       bucket=config.knowledge_bucket, prefix=config.knowledge_object_prefix)
     media_store = build_media_storage(config.media_object_store, local_root=config.media_object_root,

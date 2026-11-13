@@ -126,9 +126,16 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
     llm_timeout_seconds: float = 30.0
     # EmbeddingProvider: "hashing" is the deterministic local provider used for
-    # development retrieval; no external embedding provider is connected.
+    # development retrieval and is the default; "google" is Google's text
+    # embeddings on Vertex AI, which is implemented but not connected.
+    #
+    # `embedding_dimensions` is not a free choice: knowledge_chunks.embedding
+    # is vector(n) fixed by migration, so changing it means migrating the
+    # column and re-ingesting every source in the same move.
     embedding_provider: str = "hashing"
     embedding_dimensions: int = 256
+    # Empty means the provider's own documented default.
+    embedding_model: str = ""
     # "local" (development) or "gcs". Source documents live in their own
     # bucket, separate from member media: different lifecycle, different
     # audience, and one IAM grant should not cover both.

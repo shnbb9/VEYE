@@ -116,14 +116,19 @@ export default function KnowledgeSourcesPage() {
                     <div className="rowitem__title">{source.title} <span className="t-support">v{source.version}</span></div>
                     <div className="rowitem__meta">{source.type} · {source.scope_label}{source.reference_label ? ` · ${source.reference_label}` : ""}</div>
                     <div className="rowitem__meta">
-                      {doc ? <>Document: {doc.filename} · <Chip label={doc.ingestion_status} />{doc.ingestion_status === "ingested" ? ` · ${doc.chunk_count} passages` : doc.ingestion_error ? ` · ${doc.ingestion_error}` : ""}</> : "No document attached"}
+                      {doc ? <>Document: {doc.filename} · <Chip label={doc.ingestion_status} />
+                        {doc.ingestion_status === "ingested" ? ` · ${doc.chunk_count} passages` : doc.ingestion_error ? ` · ${doc.ingestion_error}` : ""}
+                        {/* What the reader left behind — images, pages with no text layer. */}
+                        {doc.ingestion_status === "ingested" && doc.extraction_note ? ` · ${doc.extraction_note}` : ""}</> : "No document attached"}
                       {" · "}Updated {fmtDate(source.updated_at)}
                       {source.approved_at && <> · Approved by {source.approved_by} on {fmtDate(source.approved_at)}</>}
                     </div>
                     {source.status !== "Archived" && (
                       <label className="filelabel t-support" style={{ marginTop: 6 }}>
-                        Attach document (.md or .txt)
-                        <input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" disabled={busy === source.id}
+                        Attach document (.docx, .pdf, .md or .txt)
+                        <input type="file"
+                          accept=".docx,.pdf,.md,.markdown,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/markdown,text/plain"
+                          disabled={busy === source.id}
                                onChange={(event) => { void attach(source, event.target.files?.[0]); event.target.value = ""; }} />
                       </label>
                     )}
@@ -147,7 +152,7 @@ export default function KnowledgeSourcesPage() {
             })}
           </div>
         </div>
-        <div className="card__foot"><span className="t-support">Archiving keeps the source record, its documents and its history. Nothing is permanently deleted from this screen. Storage: {storage} (production target S3, not configured).</span></div>
+        <div className="card__foot"><span className="t-support">Archiving keeps the source record, its documents and its history. Nothing is permanently deleted from this screen. Storage: {storage} (production target Google Cloud Storage, not connected).</span></div>
       </section>
     </CompanionPage>
   );

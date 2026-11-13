@@ -114,3 +114,84 @@ def test_advanced_surfaces_report_without_secrets(client, admin_client):
     reviewed = admin_client.post(f"/api/v1/admin/companion/feedback/{rows[0]['id']}/review").json()
     assert reviewed["reviewed_by"] == "Cara Hogue"
     assert admin_client.get("/api/v1/admin/companion/feedback?filter=unreviewed").json() == []
+
+
+def test_an_administrator_uploads_a_word_document_and_a_member_can_be_answered_from_it(admin_client, member_client):
+    """The whole point of the knowledge base, end to end.
+
+    Until Word and PDF were readable, none of the client's actual source
+    material could be loaded at all: her documents are .docx. This walks the
+    real path — an administrator attaches a Word file, approves it, and the
+    passage reaches a member's Companion answer as a cited source.
+    """
+    from tests.test_knowledge_extraction import DOCX_TYPE, make_docx
+
+    created = admin_client.post("/api/v1/admin/companion/knowledge-sources",
+                                json=_source_payload(title="Olive oil in cooking"))
+    sid = created.json()["id"]
+
+    document = make_docx([
+        "Olive oil in cooking",
+        "",
+        "When a protein is cooked, the fat to cook it in is light olive oil.",
+        "Olive oil can also be used to saute the carbohydrates.",
+    ], table=[["Fat", "Amount"], ["Olive oil (extra light for cooking)", "1 tsp"]])
+
+    attached = admin_client.post(
+        f"/api/v1/admin/companion/knowledge-sources/{sid}/document",
+        files={"file": ("Olive oil.docx", document, DOCX_TYPE)})
+    assert attached.status_code == 201, attached.text
+    doc = attached.json()["current_document"]
+    assert doc["ingestion_status"] == "ingested", doc.get("ingestion_error")
+    assert doc["chunk_count"] >= 1
+    # The note is not an error, and says what the reader left behind.
+    assert doc["ingestion_error"] is None
+    assert "Word document" in doc["extraction_note"] and "table(s) read in place" in doc["extraction_note"]
+
+    assert admin_client.post(f"/api/v1/admin/companion/knowledge-sources/{sid}/activate").json()["retrievable"] is True
+
+    hits = admin_client.post("/api/v1/admin/companion/advanced/retrieval-diagnostics/query",
+                             json={"query": "what fat should I cook the protein in"}).json()
+    assert any(h["title"] == "Olive oil in cooking" for h in hits), hits
+
+    # And the member's own side: the passage is offered to the Companion and
+    # comes back as a cited source, not as something the model recalled.
+    answered = member_client.post("/api/v1/companion/messages",
+                                  json={"message": "what fat should I cook the protein in?"})
+    assert answered.status_code == 201, answered.text
+    titles = [s["title"] for s in answered.json()["sources"]]
+    assert "Olive oil in cooking" in titles, answered.json()
+
+
+def test_a_pdf_an_administrator_uploads_is_read_page_by_page(admin_client):
+    from tests.test_knowledge_extraction import make_pdf
+
+    created = admin_client.post("/api/v1/admin/companion/knowledge-sources",
+                                json=_source_payload(title="Breakfast timing"))
+    sid = created.json()["id"]
+    attached = admin_client.post(
+        f"/api/v1/admin/companion/knowledge-sources/{sid}/document",
+        files={"file": ("Timing.pdf", make_pdf(["Eat within an hour of getting up."]),
+                        "application/pdf")})
+    doc = attached.json()["current_document"]
+    assert doc["ingestion_status"] == "ingested", doc.get("ingestion_error")
+    assert "PDF: 1 of 1 page(s)" in doc["extraction_note"]
+
+
+def test_a_scanned_document_fails_loudly_rather_than_indexing_nothing(admin_client):
+    """A source that reports success while holding no text is how an
+    administrator comes to believe content is loaded when it is not."""
+    from tests.test_knowledge_extraction import DOCX_TYPE, make_docx
+
+    created = admin_client.post("/api/v1/admin/companion/knowledge-sources",
+                                json=_source_payload(title="A scan"))
+    sid = created.json()["id"]
+    attached = admin_client.post(
+        f"/api/v1/admin/companion/knowledge-sources/{sid}/document",
+        files={"file": ("Scan.docx", make_docx([], with_image=True), DOCX_TYPE)})
+    doc = attached.json()["current_document"]
+    assert doc["ingestion_status"] == "failed"
+    assert "OCR" in doc["ingestion_error"]
+    assert doc["extraction_note"] is None
+    # And it cannot be approved while it holds nothing.
+    assert admin_client.post(f"/api/v1/admin/companion/knowledge-sources/{sid}/activate").status_code == 409

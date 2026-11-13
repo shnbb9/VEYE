@@ -86,6 +86,8 @@ export type KnowledgeDocument = {
   is_current: boolean;
   ingestion_status: string;
   ingestion_error: string | null;
+  /** What the reader took and what it left behind. Not a failure. */
+  extraction_note: string | null;
   chunk_count: number;
   ingested_at: string | null;
   created_at: string;

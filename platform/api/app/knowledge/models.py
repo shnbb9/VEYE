@@ -97,6 +97,10 @@ class KnowledgeDocument(Base):
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     ingestion_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")  # pending | ingested | failed
     ingestion_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What the reader took and what it left behind (images, pages with no
+    # text layer). Not an error: a source that reads thinner than the
+    # original should be explicable without reopening the file.
+    extraction_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     embedding_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
