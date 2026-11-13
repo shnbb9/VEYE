@@ -95,7 +95,7 @@ export default function AdminHome() {
       <div className="grid grid--main-side" style={{ marginTop: "var(--s-6)" }}>
         <div className="stack gap-5">
           <div className="card">
-            <div className="card__head"><div><h2 className="card__title"><Icon name="clipboard" /> Progress trackers</h2><p className="t-support">Members with at least one saved result, and results saved in total.</p></div></div>
+            <div className="card__head"><div><h2 className="card__title"><Icon name="clipboard" /> Progress trackers</h2><p className="t-support">Members with at least one saved result. The bar is their share of all {overview?.members_total ?? 0} members.</p></div></div>
             <div className="card__body">
               {overview ? (
                 <div className="bars">
@@ -106,7 +106,7 @@ export default function AdminHome() {
                       <div className="bar" key={key}>
                         <span className="bar__label">{TRACKER_LABELS[key]}</span>
                         <span className="bar__track"><span className="bar__fill bar__fill--deep" style={{ width: `${Math.max(pct, members ? 4 : 0)}%` }} /></span>
-                        <span className="bar__n">{members} <span className="t-muted">/ {overview.completions[key]}</span></span>
+                        <span className="bar__n">{members}<span className="t-muted"> of {overview.members_total} · {overview.completions[key]} saved</span></span>
                       </div>
                     );
                   })}

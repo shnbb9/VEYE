@@ -240,6 +240,10 @@ th[aria-sort] .th-sort { color: var(--ink-heading); }
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-significant) 18%, transparent);
 }
 .textarea { min-height: 96px; resize: vertical; line-height: var(--lh-body); }
+/* Let the `rows` attribute set the height exactly. The 96px minimum is not
+   a whole number of lines, so a short textarea showed three and a half of
+   them and the fourth was sliced through the middle. */
+.textarea--rows { min-height: 0; }
 .select { appearance: none; padding-right: 34px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7361' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 11px center;
@@ -629,3 +633,4 @@ th[aria-sort] .th-sort { color: var(--ink-heading); }
 .segbar__opt input:focus-visible + .segbar__face {
   outline: 2px solid var(--line-focus); outline-offset: 2px;
 }
+

@@ -107,7 +107,7 @@ export default function SettingsPage() {
                     <span className={`rowitem__icon${topic.allowed ? "" : " rowitem__icon--warn"}`}><Icon name={topic.allowed ? "check-circle" : "lock"} size={18} /></span>
                     <div>
                       <div className="rowitem__title">{topic.label}</div>
-                      <textarea className="textarea" rows={2} aria-label={`Keywords for ${topic.label}`} value={topic.keywords.join(", ")}
+                      <textarea className="textarea textarea--rows" rows={4} aria-label={`Keywords for ${topic.label}`} value={topic.keywords.join(", ")}
                                 onChange={(e) => setDraft({ ...draft, policy: { ...draft.policy, topics: draft.policy.topics.map((t, i) => i === index ? { ...t, keywords: splitKeywords(e.target.value) } : t) } })} />
                       <div className="rowitem__meta">Retrieval: {topic.retrieval_scopes.map((s) => settings.retrieval_scope_options[s] ?? s).join(", ") || "none"} · Member data: {topic.member_data_scopes.join(", ") || "none"}</div>
                     </div>
@@ -121,7 +121,7 @@ export default function SettingsPage() {
                     <span className="rowitem__icon rowitem__icon--warn"><Icon name="lock" size={18} /></span>
                     <div>
                       <div className="rowitem__title">{rule.label}</div>
-                      <textarea className="textarea" rows={2} aria-label={`Keywords for ${rule.label}`} value={rule.keywords.join(", ")}
+                      <textarea className="textarea textarea--rows" rows={4} aria-label={`Keywords for ${rule.label}`} value={rule.keywords.join(", ")}
                                 onChange={(e) => setDraft({ ...draft, policy: { ...draft.policy, prohibited: draft.policy.prohibited.map((r, i) => i === index ? { ...r, keywords: splitKeywords(e.target.value) } : r) } })} />
                       {rule.why && <div className="rowitem__meta">{rule.why}</div>}
                     </div>

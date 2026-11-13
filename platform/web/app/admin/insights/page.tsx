@@ -40,7 +40,7 @@ export default function InsightsPage() {
               <div className="card__body"><MonthBars series={data.members_by_month} /></div>
             </div>
             <div className="card">
-              <div className="card__head"><div><h2 className="card__title">Tracker usage</h2><p className="t-support">Members with a result (of {data.members_total}) · results saved.</p></div></div>
+              <div className="card__head"><div><h2 className="card__title">Tracker usage</h2><p className="t-support">Members with at least one saved result. The bar is their share of all {data.members_total} members.</p></div></div>
               <div className="card__body">
                 <div className="bars">
                   {TRACKER_KEYS.map((key) => {
@@ -50,7 +50,7 @@ export default function InsightsPage() {
                       <div className="bar" key={key}>
                         <span className="bar__label">{TRACKER_LABELS[key]}</span>
                         <span className="bar__track"><span className="bar__fill bar__fill--deep" style={{ width: `${Math.max(pct, members ? 4 : 0)}%` }} /></span>
-                        <span className="bar__n">{members} <span className="t-muted">/ {data.attempts[key]}</span></span>
+                        <span className="bar__n">{members}<span className="t-muted"> of {data.members_total} · {data.attempts[key]} saved</span></span>
                       </div>
                     );
                   })}
@@ -59,7 +59,11 @@ export default function InsightsPage() {
             </div>
           </div>
 
-          <div className="grid grid--2" style={{ marginTop: "var(--s-5)" }}>
+          {/* Full width, not two up: both of these are six-column tables.
+              In a half-width card at 1440px the header read "Health As" and
+              the Simple Quiz column was off the card entirely — scrollable,
+              but with nothing on screen to say so. */}
+          <div className="grid" style={{ marginTop: "var(--s-5)" }}>
             <div className="card">
               <div className="card__head"><div><h2 className="card__title">Results saved by month</h2><p className="t-support">Per tracker, last twelve months.</p></div></div>
               <div className="card__body card__body--flush">

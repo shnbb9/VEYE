@@ -236,6 +236,10 @@ export type CareContentType = "video" | "program" | "article" | "link" | "copy";
 export type CareStatus = "Draft" | "Published" | "Archived";
 export const CARE_KINDS: CareKind[] = ["fitness", "supplement", "resource"];
 export const CARE_KIND_LABELS: Record<CareKind, string> = { fitness: "Fitness", supplement: "Supplements", resource: "Resources" };
+/** What one item of each kind is called. Written out because chopping a
+ *  trailing "s" off the section name turns Fitness into "fitnes", which is
+ *  what the New-item button said. */
+export const CARE_ITEM_LABELS: Record<CareKind, string> = { fitness: "fitness", supplement: "supplement", resource: "resource" };
 export const CARE_CONTENT_TYPES: CareContentType[] = ["video", "program", "article", "link", "copy"];
 
 export type CareItemInput = {

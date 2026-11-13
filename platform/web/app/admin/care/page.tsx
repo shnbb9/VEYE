@@ -7,6 +7,7 @@ import { Drawer, Field } from "@/components/admin/drawer";
 import {
   CARE_CONTENT_TYPES,
   CARE_KINDS,
+  CARE_ITEM_LABELS,
   CARE_KIND_LABELS,
   createCareItem,
   getCareSummary,
@@ -91,7 +92,7 @@ function CareStudio() {
     <div className="page">
       <PageHead title="Care Studio" desc="The member content Veye configures: fitness recommendations, supplement education and resources. Draft it, publish it, retire it."
                 crumbs={[{ label: "Home", href: "/admin" }, { label: "Care Studio" }]}
-                actions={<button className="btn btn--primary" type="button" onClick={() => { setFormError(""); setEditing({ item: null, form: { ...EMPTY, kind, display_order: (items?.length ?? 0) + 1 } }); }}><Icon name="plus" size={18} /> New {CARE_KIND_LABELS[kind].replace(/s$/, "").toLowerCase()} item</button>} />
+                actions={<button className="btn btn--primary" type="button" onClick={() => { setFormError(""); setEditing({ item: null, form: { ...EMPTY, kind, display_order: (items?.length ?? 0) + 1 } }); }}><Icon name="plus" size={18} /> New {CARE_ITEM_LABELS[kind]} item</button>} />
       {error && <p className="errorbar">{error}</p>}
 
       <Subnav items={CARE_KINDS.map((k) => ({ key: k, label: CARE_KIND_LABELS[k], href: `/admin/care?kind=${k}`, count: summary?.find((s) => s.kind === k)?.published }))} active={kind} />
@@ -137,7 +138,7 @@ function CareStudio() {
       </div>
 
       {editing && (
-        <Drawer eyebrow="Care Studio" title={editing.item ? `Edit · ${editing.item.title}` : `New ${CARE_KIND_LABELS[kind].toLowerCase()} item`} onClose={() => setEditing(null)}
+        <Drawer eyebrow="Care Studio" title={editing.item ? `Edit · ${editing.item.title}` : `New ${CARE_ITEM_LABELS[kind]} item`} onClose={() => setEditing(null)}
                 desc={editing.item ? `${editing.item.status} · last updated ${fmtDate(editing.item.updated_at)}` : "Saved as a draft; publish it when it is ready."}
                 foot={<><button className="btn btn--primary" type="button" disabled={busy} onClick={save} data-testid="care-save">{busy ? "Saving…" : editing.item ? "Save changes" : "Create draft"}</button><button className="btn btn--ghost" type="button" onClick={() => setEditing(null)}>Cancel</button>{formError && <span className="field__error" style={{ marginLeft: "auto" }}>{formError}</span>}</>}>
           <div className="stack gap-5">

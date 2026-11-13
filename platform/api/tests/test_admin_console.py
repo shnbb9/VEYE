@@ -215,3 +215,50 @@ def test_the_feature_list_reports_phase_2_modules_as_phase_2(admin_client):
     for key in ("production_email", "production_ai"):
         assert features[key]["state"] == "holding"
         assert features[key]["state"] != "available"
+
+
+def test_home_and_insights_report_the_same_number_of_members(admin_client):
+    """Two screens an administrator reads one after the other must not give two
+    different totals for the same word.
+
+    They did: Home joined members to accounts and Insights counted member rows
+    directly, so a member row with no account — which is nobody who can sign
+    in — made Insights read one higher, while its own subtitle said "accounts
+    with a member profile".
+    """
+    home = admin_client.get("/api/v1/admin/overview").json()
+    insights = admin_client.get("/api/v1/admin/insights").json()
+    directory = admin_client.get("/api/v1/admin/members").json()
+
+    assert home["members_total"] == insights["members_total"] == len(directory["rows"])
+
+
+def test_a_member_row_without_an_account_is_counted_by_neither(admin_client):
+    """The orphan case directly: a member profile with no sign-in behind it."""
+    from app.db.session import SessionLocal
+    from app.members.models import Member
+
+    db = SessionLocal()
+    try:
+        orphan = Member(email="orphan@demo.veye.test", display_name="Orphan Row")
+        db.add(orphan)
+        db.commit()
+        orphan_id = orphan.id
+    finally:
+        db.close()
+
+    try:
+        home = admin_client.get("/api/v1/admin/overview").json()
+        insights = admin_client.get("/api/v1/admin/insights").json()
+        assert home["members_total"] == insights["members_total"]
+        assert all(row["member_id"] != str(orphan_id)
+                   for row in admin_client.get("/api/v1/admin/members").json()["rows"])
+    finally:
+        db = SessionLocal()
+        try:
+            row = db.get(Member, orphan_id)
+            if row is not None:
+                db.delete(row)
+                db.commit()
+        finally:
+            db.close()

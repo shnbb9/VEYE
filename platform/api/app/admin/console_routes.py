@@ -708,7 +708,12 @@ def assessment_attempts(
 
 @router.get("/insights", response_model=InsightsOut)
 def insights(db: Session = Depends(get_db)) -> InsightsOut:
-    members = db.query(Member.created_at).all()
+    # The same population Home and the directory count: a member row with no
+    # account is not someone who can sign in, and counting it here gave the
+    # console two different totals for the word "Members" on two screens an
+    # administrator reads one after the other.
+    members = (db.query(Member.created_at)
+               .join(UserAccount, UserAccount.member_id == Member.id).all())
     # Sign-ups, requests and Companion usage carry no health content and stay.
     # Everything derived from a health, mood or food record is counted only for
     # members who have shared.

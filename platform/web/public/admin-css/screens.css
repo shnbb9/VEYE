@@ -464,6 +464,11 @@
 .instr__desc { font-size: var(--fs-support); color: var(--text-muted); margin-top: 2px; }
 .instr__versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); }
 .vslot {
+  /* A column, not three inline spans. As inline content the label, value and
+     meta ran together — "MEMBERS SCORED34 results" for 3 members and 4
+     results — and the `margin-top: 2px` below did nothing, which is the tell
+     that stacking was always the intent. */
+  display: flex; flex-direction: column; align-items: flex-start;
   border: 1px solid var(--line); border-radius: var(--r-field);
   padding: var(--s-3) var(--s-4); background: var(--surface-softer); min-width: 0;
 }

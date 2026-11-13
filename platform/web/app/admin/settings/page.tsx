@@ -120,8 +120,12 @@ function AccountSection() {
     } finally { setBusy(null); }
   }
 
+  // Flipped: the dense card here is Account security, not the identity card
+  // beside it. In the default 1.62fr/1fr order the security rows had about
+  // 110px for their text and wrapped to one word a line, while half the row
+  // sat empty.
   return (
-    <div className="hgrid" data-testid="settings-account">
+    <div className="hgrid hgrid--flip" data-testid="settings-account">
       <div className="card">
         <div className="card__head"><div><h2 className="card__title">{account.first_name} {account.last_name}</h2><p className="t-support">Administrator</p></div><span className="avatar avatar--lg">{initials}</span></div>
         <div className="card__body stack gap-5">
