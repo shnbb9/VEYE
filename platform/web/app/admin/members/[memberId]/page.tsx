@@ -280,7 +280,7 @@ function Member360View() {
               {member.food_diary.length ? (
                 <div className="table-wrap"><table className="table table--compact">
                   <thead><tr><th scope="col">Day</th><th scope="col">Time</th><th scope="col">Meal</th><th scope="col">Felt before</th></tr></thead>
-                  <tbody>{member.food_diary.map((m) => <tr key={m.id}><td>{m.entry_date}</td><td>{m.meal_time}</td><td>{m.description}{m.notes ? <div className="cell-sub">{m.notes}</div> : null}</td><td className="t-support">{m.feelings.join(", ") || "—"}</td></tr>)}</tbody>
+                  <tbody>{member.food_diary.map((m) => <tr key={m.id}><td className="t-nowrap">{m.entry_date}</td><td className="t-nowrap">{m.meal_time}</td><td>{m.description}{m.notes ? <div className="cell-sub">{m.notes}</div> : null}</td><td className="t-support">{m.feelings.join(", ") || "—"}</td></tr>)}</tbody>
                 </table></div>
               ) : <p className="t-support" style={{ padding: 20 }}>No diary entry yet.</p>}
             </div>
