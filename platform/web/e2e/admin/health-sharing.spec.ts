@@ -58,7 +58,10 @@ test.describe.serial("Health Data Sharing Permission", () => {
     // 2. The console asks. That is all it can do.
     await page.getByTestId("sharing-ask").click();
     await expect(page.getByTestId("sharing-ask")).toBeDisabled();
-    expect((await read()).sharing_state).toBe("requested");
+    // The button is disabled while the request is still in flight, so the
+    // read waits for the state rather than racing the POST (it lost once, 15
+    // Nov 2026, when the ask's email took longer than the check).
+    await expect.poll(async () => (await read()).sharing_state).toBe("requested");
     expect((await read()).shares_health_data).toBe(false);
 
     // 3. The member decides, in their own application, on the consent screen
