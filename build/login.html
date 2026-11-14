@@ -10,7 +10,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles/tokens.css?v=2">
 <link rel="stylesheet" href="styles/base.css">
-<link rel="stylesheet" href="styles/auth.css?v=4">
+<link rel="stylesheet" href="styles/auth.css?v=5">
+<!-- The application's own auth additions (a copy of platform/web/public/auth-css/auth-app.css),
+     for the "password changed" note below — identical in prototype and app. -->
+<link rel="stylesheet" href="styles/auth-app.css?v=1">
 </head>
 <body>
 <main class="auth">
@@ -26,6 +29,8 @@
     <form class="auth__form" data-auth="login" action="dashboard.html" method="get" novalidate>
       <h1 class="auth__title">My Account</h1>
       <p class="auth__subtitle">Nice to see you!</p>
+      <!-- Shown only on arrival from the password change screen (login.html?flash=reset). -->
+      <p class="auth__notice" id="flashReset" hidden>Your password has been changed. Sign in with your new password.</p>
 
       <div class="auth__fields">
         <div class="field">
@@ -122,11 +127,16 @@
     <p class="pwd__sub" id="pwDoneMsg"></p>
     <p class="pwd__proto">Prototype demonstration &mdash; no email or text message was actually
       sent. Real account recovery needs the future Veye backend.</p>
+    <!-- Prototype stand-in for the emailed link: opens the password change
+         screen the link opens in the application. Shown after "Reset by email"
+         only (auth.js toggles style.display — .pwd__helplink sets display,
+         which would defeat a `hidden` attribute). -->
+    <a class="pwd__helplink" href="reset-password.html" id="pwOpenLink" style="display:none">Prototype: open the link from the email</a>
     <button class="btn btn--primary pwd__go" type="button" id="pwDone">Back to sign in</button>
   </div>
 </dialog>
 
 <script src="js/veye-calculations.js?v=5"></script>
-<script src="js/auth.js?v=5" defer></script>
+<script src="js/auth.js?v=6" defer></script>
 </body>
 </html>

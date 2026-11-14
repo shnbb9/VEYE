@@ -140,8 +140,12 @@ document.addEventListener('click', function (e) {
     b.addEventListener('click', function () { show('menu'); });
   });
 
-  function finish(msg) {
+  // viaEmail: only the email route has a link to follow (reset-password.html,
+  // the screen the emailed link opens in the application).
+  function finish(msg, viaEmail) {
     document.getElementById('pwDoneMsg').textContent = msg;
+    var openLink = document.getElementById('pwOpenLink');
+    if (openLink) openLink.style.display = viaEmail ? '' : 'none';
     show('done');
   }
   document.getElementById('pwSendEmail').addEventListener('click', function () {
@@ -150,7 +154,7 @@ document.addEventListener('click', function (e) {
     var ok = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(input.value.trim());
     err.hidden = ok;
     if (!ok) { input.focus(); return; }
-    finish('In the live product, a reset link would now be emailed to ' + input.value.trim() + '.');
+    finish('In the live product, a reset link would now be emailed to ' + input.value.trim() + '.', true);
   });
   document.getElementById('pwSendText').addEventListener('click', function () {
     var input = document.getElementById('pwPhone');
@@ -159,7 +163,31 @@ document.addEventListener('click', function (e) {
     var ok = digits.length >= 7;
     err.hidden = ok;
     if (!ok) { input.focus(); return; }
-    finish('In the live product, a one-time sign-in code would now be texted to ' + input.value.trim() + '.');
+    finish('In the live product, a one-time sign-in code would now be texted to ' + input.value.trim() + '.', false);
   });
   document.getElementById('pwDone').addEventListener('click', function () { dlg.close(); });
+})();
+
+// Back from the password change screen (reset-password.html): say so, exactly
+// as the application's sign-in does for /login?flash=reset.
+(function () {
+  var note = document.getElementById('flashReset');
+  if (note && /(?:^|[?&])flash=reset(?:&|$)/.test(window.location.search)) note.hidden = false;
+})();
+
+// Password change screen (reset-password.html), where the emailed link lands.
+// Prototype: like Sign in and Sign up, it never reads what is typed — the
+// contract above (no password value is read or stored) holds here too. Saving
+// returns to Sign in with the note the application shows (/login?flash=reset);
+// checking the new entries (12+ characters, both equal) is the application's.
+(function () {
+  var form = document.getElementById('resetForm');
+  if (!form) return;
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var CALC = window.VeyeCalculations;
+    var href = 'login.html?flash=reset';
+    if (CALC && CALC.storage && typeof CALC.storage.navigate === 'function') CALC.storage.navigate(href);
+    else window.location.href = href;
+  });
 })();
