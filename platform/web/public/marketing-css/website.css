@@ -398,12 +398,22 @@ body.site {
   .feature__text { left: 0; max-width: none; }
 }
 
+/* Tablet widths (761-920px): the five desktop links no longer fit one row and
+   wrapped onto two or three lines ("HOW / IT / WORKS"). Use the phone's
+   compact menu here too, before the row would wrap. (Owner decision 14 Nov
+   2026: fixed in the prototype and the app alike.) */
+@media (min-width: 761px) and (max-width: 920px) {
+  .nav__links, .nav__cta > span:not(.nav__cta-box) { display: none; }
+  .nav__burger { display: flex; }
+  .nav__links { position: fixed; top: 66px; left: 0; right: 0; background: var(--w-bg); flex-direction: column; gap: 0; padding: 12px 24px; box-shadow: 0 20px 30px rgba(0,0,0,.08); transform: translateY(-120%); transition: transform .25s; margin: 0; }
+  .nav__links.open { transform: translateY(0); display: flex; }
+  .nav__links li { padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,.05); }
+}
+
 @media (max-width: 760px) {
-  /* `.nav__cta span` hid BOTH spans — the "Get Started" label and the arrow
-     glyph that was meant to stay in its place. The result, measured at 920px
-     and every width below it, was a 34x16 bordered pill with nothing at all
-     inside it: the only call to action on the public site, with no label, no
-     glyph and no accessible name. Hide the label, keep the arrow. */
+  /* `.nav__cta span` hid BOTH spans: the "Get Started" label and the arrow
+     glyph meant to stay in its place, leaving an empty bordered pill with no
+     label and no accessible name. Hide the label, keep the arrow. */
   .nav__links, .nav__cta > span:not(.nav__cta-box) { display: none; }
   .nav__burger { display: flex; }
   .nav__links { position: fixed; top: 66px; left: 0; right: 0; background: var(--w-bg); flex-direction: column; gap: 0; padding: 12px 24px; box-shadow: 0 20px 30px rgba(0,0,0,.08); transform: translateY(-120%); transition: transform .25s; margin: 0; }

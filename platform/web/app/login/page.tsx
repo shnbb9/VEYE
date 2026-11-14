@@ -96,9 +96,12 @@ function Login() {
 
         <div className="divider">Don&rsquo;t have a Veye account?</div>
         <Link className="btn btn--lime" href="/onboarding">Start the process</Link>
-        <p className="auth__links">Already took the assessment? <Link href="/signup">Create your account</Link>.</p>
 
-        <p className="legal legal--privacy">This is the local development environment: accounts, sessions and emails stay on this machine. Production privacy and security will be governed by Veye&rsquo;s final Privacy Policy and technical safeguards.</p>
+        {/* The prototype's small print (build/login.html) without its first
+            sentence, "In this prototype, your demo information stays in this
+            browser", which is not true of real accounts (owner decision,
+            14 Nov 2026). */}
+        <p className="legal legal--privacy">Production privacy and security will be governed by Veye&rsquo;s final Privacy Policy and technical safeguards.</p>
       </form>
       {resetOpen && <PasswordRecovery initialEmail={email} onClose={() => setResetOpen(false)} />}
     </AuthFrame>
@@ -109,11 +112,31 @@ function Login() {
    real in this environment; reset by text has no SMS provider yet and says so. */
 function PasswordRecovery({ initialEmail, onClose }: { initialEmail: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [step, setStep] = useState<"menu" | "email" | "text" | "support" | "done">("menu");
+  type Step = "menu" | "email" | "text" | "support" | "done";
+  const [step, setStepState] = useState<Step>("menu");
+  // Each step opens with its first control focused, as the prototype's show()
+  // does (build/js/auth.js). Only a person's own step change asks for it: the
+  // counter is 0 at mount, so the first menu is left to showModal() (which
+  // focuses the close button, as in the prototype) — StrictMode's doubled
+  // mount effects included.
+  const [focusTick, setFocusTick] = useState(0);
+  const setStep = (next: Step) => { setStepState(next); setFocusTick((tick) => tick + 1); };
+  useEffect(() => {
+    if (focusTick === 0) return;
+    dialog.current?.querySelector<HTMLElement>(".pwd__step button, .pwd__step input, .pwd__step a")?.focus();
+  }, [focusTick]);
   const [email, setEmail] = useState(initialEmail);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ message: string; note: string; warn: boolean }>({ message: "", note: "", warn: false });
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+
+  function sendText() {
+    if (phone.replace(/[^0-9]/g, "").length < 7) { setPhoneError("Please enter a phone number."); return; }
+    setDone({ message: `Texting a sign-in code to ${phone.trim()} is not available yet, so nothing was sent. Please reset by email instead.`, note: "", warn: false });
+    setStep("done");
+  }
 
   useEffect(() => {
     const element = dialog.current;
@@ -131,7 +154,10 @@ function PasswordRecovery({ initialEmail, onClose }: { initialEmail: string; onC
       const result = await forgotPassword(value);
       const delivery = result.delivery;
       setDone({
-        message: result.message,
+        // The prototype's sentence ("a reset link would now be emailed to
+        // <address>"), made true: a link goes only to an address that has an
+        // account, and the screen must not reveal which addresses do.
+        message: `A reset link has now been emailed to ${value}, if it belongs to a Veye account.`,
         note: delivery
           ? delivery.status === "sent"
             ? "Development environment: the message was delivered to the local Mailpit mailbox (see the README for its address)."
@@ -159,11 +185,11 @@ function PasswordRecovery({ initialEmail, onClose }: { initialEmail: string; onC
           <p className="pwd__sub">Choose how you&rsquo;d like to get back into your account.</p>
           <button className="pwd__opt" type="button" onClick={() => setStep("email")}>
             <b>Reset by email</b>
-            <span>Veye sends a single-use password-reset link to your email address.</span>
+            <span>Veye sends a password-reset link to your email address.</span>
           </button>
           <button className="pwd__opt" type="button" onClick={() => setStep("text")}>
             <b>Reset by text</b>
-            <span>A one-time sign-in code by text message. Not available yet — no text-message provider is connected.</span>
+            <span>Veye will text a one-time sign-in code to your phone. Coming soon.</span>
           </button>
           <button className="pwd__opt" type="button" onClick={() => setStep("support")}>
             <b>Contact support</b>
@@ -186,10 +212,19 @@ function PasswordRecovery({ initialEmail, onClose }: { initialEmail: string; onC
         </div>
       )}
 
+      {/* The prototype's phone step, as approved. No text-message provider is
+          connected, so Send says so honestly instead of pretending
+          (CLAUDE.md: a polished placeholder, never invented behaviour). */}
       {step === "text" && (
         <div className="pwd__step">
-          <p className="pwd__sub">Reset by text is not available yet: Veye has no text-message provider connected in this environment. Use reset by email instead.</p>
-          <button className="btn btn--primary pwd__go" type="button" onClick={() => setStep("email")}>Reset by email</button>
+          <label className="pwd__label" htmlFor="pwPhone">Phone number</label>
+          <div className="field">
+            <input className={`field__input${phoneError ? " is-invalid" : ""}`} type="tel" id="pwPhone" placeholder="(555) 000-1234" autoComplete="tel"
+                   value={phone} onChange={(event) => { setPhone(event.target.value); setPhoneError(""); }}
+                   onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); sendText(); } }} />
+          </div>
+          {phoneError && <p className="pwd__err">{phoneError}</p>}
+          <button className="btn btn--primary pwd__go" type="button" onClick={sendText}>Send sign-in code</button>
           <button className="pwd__back" type="button" onClick={() => setStep("menu")}>Back</button>
         </div>
       )}

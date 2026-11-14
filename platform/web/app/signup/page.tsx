@@ -100,7 +100,8 @@ export default function SignUpPage() {
       <form className="auth__form" method="post" onSubmit={submit} noValidate>
         <h1 className="auth__title">Get Started</h1>
         <p className="auth__subtitle">Welcome to a healthier you!</p>
-        {answers && <p className="auth__notice">Your Health Number from the assessment will be saved to this account.</p>}
+        {/* No notice here: the approved Sign-up page carries the assessment
+            over silently (owner decision, 14 Nov 2026). It is still saved. */}
 
         <div className="auth__fields auth__fields--tight">
           <div className="field"><input className="field__input" type="text" placeholder="Enter your first name" autoComplete="given-name" aria-label="First name" value={form.first_name} onChange={(e) => set("first_name")(e.target.value)} /></div>
@@ -124,9 +125,11 @@ export default function SignUpPage() {
         <FormError message={error} />
 
         <button type="submit" className="btn btn--primary btn--mt" disabled={busy}>{busy ? "Creating your account…" : "Sign Up"}</button>
-        <p className="auth__links">Already have an account? <Link href="/login">Sign in</Link>.</p>
 
-        <p className="legal legal--privacy">Passwords are stored only as a modern one-way hash. This is the local development environment: accounts and emails stay on this machine.</p>
+        {/* The prototype's small print word for word (build/signup.html; owner
+            decision, 14 Nov 2026). "Bank-level security" and "not shared with
+            third parties" are listed for counsel in RELEASE_READINESS. */}
+        <p className="legal legal--privacy">We take your privacy very seriously. Your data is completely confidential and encrypted with bank-level security. We do not share your data with third parties and we do not send spam.</p>
       </form>
     </AuthFrame>
   );

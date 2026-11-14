@@ -434,15 +434,20 @@ function Result({ view, onSignUp }: { view: ResultView; onSignUp: () => void }) 
         <div className="result__actions">
           <Link className="quiz__btn quiz__btn--next" href="/app">Go to dashboard</Link>
         </div>
-      ) : !declined ? (
+      ) : (
         // Seeing the number does not sign anyone in: Sign Up is offered, and
         // declining keeps the result on screen (build/js/quiz.js renderResult).
-        <div className="result__actions">
-          <button className="quiz__btn quiz__btn--next" type="button" onClick={onSignUp}>Sign Up</button>
-          <button className="quiz__btn quiz__btn--prev" type="button" onClick={() => setDeclined(true)}>Not now</button>
-        </div>
-      ) : (
-        <p className="result__note">Your Health Number stays on this screen &mdash; you can create an account whenever you are ready. <Link href="/">Back to Veye</Link></p>
+        // After "Not now" both buttons stay and the note appears beneath them —
+        // what the approved prototype shows (its script hides the buttons, but
+        // its CSS keeps them visible; owner decision 14 Nov 2026: keep what
+        // Cara saw).
+        <>
+          <div className="result__actions">
+            <button className="quiz__btn quiz__btn--next" type="button" onClick={onSignUp}>Sign Up</button>
+            <button className="quiz__btn quiz__btn--prev" type="button" onClick={() => setDeclined(true)}>Not now</button>
+          </div>
+          {declined && <p className="result__note">Your Health Number stays on this screen &mdash; you can create an account whenever you are ready. <Link href="/">Back to Veye</Link></p>}
+        </>
       )}
       {!stored && saved && (
         <div className="result__saved" role="status" data-testid="saved-status">
@@ -464,7 +469,9 @@ function Result({ view, onSignUp }: { view: ResultView; onSignUp: () => void }) 
       {!stored && !saved && !view.saveFailed && !erased && view.offered && (
         <p className="result__note" data-testid="saved-status">Not saved. Your answers stay in this browser tab only.</p>
       )}
-      <p className="result__version">Calculation version {result.calculation_version}</p>
+      {/* No "Calculation version" line: the approved result screen
+          (build/js/quiz.js renderResult) has none. The version is stored
+          with every result and shown wherever results are reviewed. */}
     </div>
   );
 }

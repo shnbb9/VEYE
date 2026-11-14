@@ -222,7 +222,10 @@
 .link--btn { background: none; border: none; padding: 0; cursor: pointer;
   font: inherit; color: inherit; text-decoration: underline; }
 
-.pwd { width: min(440px, calc(100vw - 40px)); border: none; border-radius: 18px;
+/* margin: auto puts the modal back in the middle of the window: base.css's
+   `* { margin: 0 }` had overridden the browser's centring and pinned it to the
+   top-left corner (owner decision 14 Nov 2026: centred in prototype and app). */
+.pwd { width: min(440px, calc(100vw - 40px)); border: none; border-radius: 18px; margin: auto;
   padding: 28px 30px 30px; background: var(--cream); color: var(--ink);
   box-shadow: 0 24px 64px rgba(20, 40, 20, .25); }
 .pwd::backdrop { background: rgba(20, 35, 22, .45); }
@@ -250,7 +253,3 @@
 .pwd__helplink { display: block; text-align: center; margin-top: 12px; color: var(--green-900); }
 .pwd__proto { background: #FDF6E3; border: 1px solid #E4D9B8; border-radius: 10px;
   padding: 11px 14px; font-size: 13.5px; line-height: 1.5; color: #6B5D2E; margin: 0 0 4px; }
-/* A reset link that did not go out. The screen computed this case and then
-   rendered it in the same neutral cream as "delivered", so the one note that
-   needed reading looked like the one that did not. */
-.pwd__proto--warn { background: #FBEDEA; border-color: #E6C3BB; color: #B3402F; }

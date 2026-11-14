@@ -19,3 +19,9 @@ a.btn { text-decoration: none; }
 .auth__link-button:disabled { opacity: .6; cursor: progress; }
 .auth__link-button:focus-visible { outline: 2px solid var(--green-900); outline-offset: 2px; }
 .pwd__opt:disabled { cursor: default; opacity: .75; }
+
+/* A reset link that did not go out. The screen computed this case and then
+   rendered it in the same neutral cream as "delivered", so the one note that
+   needed reading looked like the one that did not. (Kept here so
+   public/auth-css/auth.css stays a byte-for-byte copy of the prototype's.) */
+.pwd__proto--warn { background: #FBEDEA; border-color: #E6C3BB; color: #B3402F; }

@@ -33,7 +33,9 @@ test.describe("Public → new member journey", () => {
     await page.getByRole("button", { name: "Sign Up" }).click();
     await expect(page).toHaveURL(/\/signup/);
     await expect(page.getByLabel("Email", { exact: true })).toHaveValue(member.email); // prefilled from the gate
-    await expect(page.getByText("Your Health Number from the assessment will be saved to this account.")).toBeVisible();
+    // As in the approved prototype, the result is carried over without a
+    // notice; the history check below proves it is saved.
+    await expect(page.locator(".auth__notice")).toHaveCount(0);
     await page.getByLabel("First name").fill(member.firstName);
     await page.getByLabel("Last name").fill(member.lastName);
     await page.getByPlaceholder("Enter your password").fill(member.password);

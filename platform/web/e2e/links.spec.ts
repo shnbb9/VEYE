@@ -56,7 +56,11 @@ async function sweep(page: Page, paths: string[]) {
 test.describe("Navigation and control audit", () => {
   test("public pages: every internal link resolves; inert controls are labelled", async ({ page }) => {
     const result = await sweep(page, PUBLIC);
-    expect(result.checked).toBeGreaterThanOrEqual(10);
+    // Nine distinct destinations on the approved pages. /signup is not among
+    // them: as in the prototype, sign-up is reached from the quiz result's
+    // Sign Up button (the extra "Create your account" link on Sign in was
+    // removed for 1:1 parity, 14 Nov 2026).
+    expect(result.checked).toBeGreaterThanOrEqual(9);
     expect(result.dead).toEqual([]);
     expect(result.unlabelled).toEqual([]);
   });

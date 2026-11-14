@@ -68,7 +68,7 @@ test.describe("Member portal — sign-up, verification, sign-in, reset", () => {
     await page.getByRole("button", { name: /Reset by email/ }).click();
     await page.locator("#pwEmail").fill(member.email);
     await page.getByRole("button", { name: "Send reset link" }).click();
-    await expect(page.getByText(/password-reset link has been sent/)).toBeVisible();
+    await expect(page.getByText(`A reset link has now been emailed to ${member.email}, if it belongs to a Veye account.`)).toBeVisible();
 
     const mail = await waitForMail(member.email, "Reset your Veye password");
     const link = linkFrom(mail.text, "reset-password");

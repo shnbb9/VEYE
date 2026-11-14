@@ -23,27 +23,36 @@ html { background: var(--cream); color: var(--ink); }
 body { margin: 0; }
 
 /* The public site deliberately retains the approved standalone marketing CSS.
-   The class scopes its document-level base rules away from the member app. */
-.public-site { position:relative; margin:0; min-height:100vh; font-family:var(--f-body, "Teachers", sans-serif); color:var(--w-body-ink, #222); background:var(--w-bg, #fffdf9); -webkit-font-smoothing:antialiased; overflow-x:clip; }
+   The class scopes its document-level base rules away from the member app.
+   isolation: the prototype's glow washes (.pglow, z-index:-1) are children of
+   <body>, whose background is painted on the canvas beneath them. Here they
+   sit in this positioned wrapper, which paints the same background — and a
+   positioned box's background is drawn over z-index:-1 content, so every glow
+   on every public page was hidden. Isolating the wrapper paints its
+   background first, then the glows, then the content: the prototype's order. */
+.public-site { position:relative; isolation:isolate; margin:0; min-height:100vh; font-family:var(--f-body, "Teachers", sans-serif); color:var(--w-body-ink, #222); background:var(--w-bg, #fffdf9); -webkit-font-smoothing:antialiased; overflow-x:clip; }
+/* Below the footer: the glows extend the scrollable page past the wrapper (as
+   they do in the prototype). There the prototype shows <body>'s #fffdf9,
+   carried to the canvas; this app's <html> is the member app's cream
+   (#FFF8EA), a 15-level difference measured on Pricing and Privacy. The page
+   root takes the public site's colour only when it holds the public site. */
+html:has(body > .public-site) { background:#fffdf9; }
 .public-site img, .public-site svg { display:block; max-width:100%; }
 .public-site a { color:inherit; text-decoration:none; }
 
-/* The approved navigation's five desktop links need more than a tablet-width
-   row. Reuse its existing compact-menu treatment before that row would wrap. */
-@media (min-width:761px) and (max-width:920px) {
-  /* Hide the label, keep the arrow glyph: `.nav__cta span` hid both and left
-     an empty 34x16 pill. See the matching note in marketing-css/website.css. */
-  .public-site .nav__links, .public-site .nav__cta > span:not(.nav__cta-box) { display:none; }
-  .public-site .nav__burger { display:flex; }
-  .public-site .nav__links {
-    position:fixed; top:66px; left:0; right:0; background:var(--w-bg);
-    flex-direction:column; gap:0; padding:12px 24px;
-    box-shadow:0 20px 30px rgba(0,0,0,.08); transform:translateY(-120%);
-    transition:transform .25s; margin:0;
-  }
-  .public-site .nav__links.open { transform:translateY(0); display:flex; }
-  .public-site .nav__links li { padding:12px 0; border-bottom:1px solid rgba(0,0,0,.05); }
-}
+/* Teachers at 700, as the approved website draws it. The website prototype
+   (build/index.html and its six pages) loads Teachers at 400/500/600 only, so
+   the three rules there that ask for 700 — the two Pricing headings and the
+   Privacy page's draft-note label — render with the 600 face. This app also
+   loads a 700 face (line 1) for the member and console screens; on the public
+   site these three take the face the prototype shows. Found by a pixel
+   comparison against build/ at 1440px (14 Nov 2026); no other public element
+   asks for Teachers above 600. */
+.public-site :is(.pricing__lead, .plans-soon__title, .draft-note p strong) { font-weight:600; }
+
+/* The tablet-width compact menu (761-920px) and the "Get Started" arrow now
+   live in the prototype's own website.css (14 Nov 2026), which
+   public/marketing-css/website.css copies byte for byte. */
 
 /* The <noscript> note in the root layout. It is the only thing a visitor sees
    if the bundle never arrives, so it carries its own colours rather than
