@@ -1,11 +1,17 @@
 /* ============================================================================
    Member 360
    ----------------------------------------------------------------------------
-   Five areas: Overview, Storyline, Assessments, Nutrition & Plans, Messages.
+   The console's member record (platform/web app/admin/members/[memberId]):
+   the header with the Health Number dial, the Health Data Sharing banner, and
+   Overview · Assessments · Mood & Diary · Companion · Requests · Account.
 
-   Consent and legal acceptance appear as plain member information, not as a
-   governance console. Health figures are shown exactly as the member's records
-   hold them — nothing is recomputed, and no screen converts between scales.
+   Health records are the member's to share. Until they grant it, the console
+   is not sent their Health Number, body composition, blood markers,
+   questionnaires, moods or food diary — the tabs are empty for that reason,
+   and the banner says so rather than letting the record read as an inactive
+   member. Asking is the only thing the console can do; the member decides in
+   the app. Every opening of a record is written to the audit log as viewed or
+   withheld, as the API does. Nothing here re-scores or edits a stored result.
    ============================================================================ */
 
 (function () {
@@ -18,685 +24,552 @@ const H = window.Veye.H;
 const esc = UI.esc;
 
 const TABS = [
-  { key: 'overview',   label: 'Overview' },
-  { key: 'storyline',  label: 'Storyline' },
+  { key: 'overview', label: 'Overview' },
   { key: 'assessments', label: 'Assessments' },
-  { key: 'nutrition',  label: 'Nutrition & Plans' },
-  { key: 'messages',   label: 'Messages' },
+  { key: 'journal', label: 'Mood & Diary' },
+  { key: 'companion', label: 'Companion' },
+  { key: 'requests', label: 'Requests' },
+  { key: 'account', label: 'Account' },
 ];
+const DELIVERY_LABELS = {
+  sent: 'Email delivered to the mail server', queued: 'Email queued', sending: 'Email being sent',
+  retry: 'Email refused — will be retried', failed: 'Email failed', skipped: 'Email not sent',
+};
+const STATE_LABELS = { not_requested: 'Not requested', requested: 'Awaiting your decision', granted: 'Shared with the Veye team', declined: 'Declined', revoked: 'Withdrawn' };
+const REQUEST_STATUS_LABELS = { new: 'New', in_progress: 'In progress', resolved: 'Resolved' };
+const MOOD_BALANCE = { happy: 100, calm: 100, excited: 100, neutral: 50, tired: 25, sad: 25, stressed: 0, angry: 0 };
 
+function hnTone(value) {
+  if (value === null) return 'var(--line-strong)';
+  if (value <= 3) return 'var(--status-positive)';
+  if (value <= 6) return 'var(--status-attention)';
+  return 'var(--status-significant)';
+}
+const fmtNum = (v) => (v === null || v === undefined ? '—' : Number(v).toFixed(2));
+const localDate = (t) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+
+/** The console's mood header statistics (app/mood/service.py compute_stats). */
+function moodStats(entries) {
+  const today = new Date();
+  const month = localDate(today).slice(0, 7);
+  const byDay = new Set(entries.map((e) => e.entry_date));
+  const inMonth = entries.filter((e) => e.entry_date.slice(0, 7) === month);
+  const tally = {};
+  inMonth.forEach((e) => { tally[e.mood] = (tally[e.mood] || 0) + 1; });
+  const top = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] || null;
+  let streak = 0;
+  const cursor = new Date(today);
+  while (byDay.has(localDate(cursor))) { streak += 1; cursor.setDate(cursor.getDate() - 1); }
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - 29);
+  const window = entries.filter((e) => e.entry_date >= localDate(cutoff) && e.entry_date <= localDate(today)).map((e) => MOOD_BALANCE[e.mood]);
+  return {
+    days_logged_this_month: inMonth.length, day_streak: streak,
+    top_mood_label: top ? entries.find((e) => e.mood === top).mood_label : null,
+    balance_score: window.length ? Math.round(window.reduce((a, b) => a + b, 0) / window.length) : null, balance_entries: window.length,
+  };
+}
+
+/** May the console ask this member now? (app/health_permission/requests.py) */
+function eligibility(m) {
+  if (!m.isActive) return { can: false, reason: 'This account is deactivated.', requiresReason: false };
+  if (!m.emailVerified) return { can: false, reason: 'This member has not verified their email address yet. A request can be sent once they have.', requiresReason: false };
+  const state = m.sharing.state;
+  if (state === 'granted') return { can: false, reason: 'This member already shares their health records.', requiresReason: false };
+  if (state === 'requested' && m.sharing.requested_at) {
+    const hours = S.get().sharingSettings.notification.resend_interval_hours;
+    const next = Date.parse(m.sharing.requested_at) + hours * 36e5;
+    if (next > Date.now()) {
+      return { can: false, requiresReason: false,
+        reason: `Asked ${H.utcDay(m.sharing.requested_at)}. You can ask again after ${H.utcDayTime(new Date(next).toISOString())} UTC.` };
+    }
+  }
+  return { can: true, reason: null, requiresReason: state === 'declined' || state === 'revoked' };
+}
+
+/** Who looked at whose records, when — once per record per minute. */
+function recordView(m) {
+  const last = S.get().lastViewed;
+  if (last && last.id === m.id && Date.now() - last.at < 60e3) return;
+  S.set({ lastViewed: { id: m.id, at: Date.now() } }, { silent: true });
+  S.audit(S.shares(m) ? 'health.viewed' : 'health.withheld', 'member', m.id,
+    { permission: m.sharing.state, policy_version: m.sharing.policy_version || '' });
+}
+
+/* ------------------------------------------------------------------ render */
 function render(outlet, route) {
   const id = route.params.id;
-  const tab = route.params.tab || 'overview';
   const m = S.member(id);
-
   if (!m) {
     outlet.innerHTML = `<div class="page">
-      ${H.pageHead({ title: 'That member was not found',
-        crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members', route: '/members' }, { label: 'Not found' }],
-        desc: `No member in the directory has the id <code>${esc(id)}</code>. They may have been removed, or the link may be out of date.` })}
-      <div class="card"><div class="card__body">${H.emptyState({
-        icon: 'users', title: 'Try the directory',
+      ${H.pageHead({ title: 'That member was not found', crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members', route: '/members' }, { label: 'Not found' }],
+        desc: 'That member was not found.' })}
+      <div class="card"><div class="card__body">${H.emptyState({ icon: 'users', title: 'Try the directory',
         msg: 'The directory has a search across names, email addresses and member ids.',
-        action: `<a class="btn btn--primary" href="${R.href('/members')}">Go to the member directory</a>`,
-      })}</div></div></div>`;
+        action: `<a class="btn btn--primary" href="${R.href('/members')}">Go to the member directory</a>` })}</div></div>
+    </div>`;
     return;
   }
+  const tab = (TABS.find((t) => t.key === route.params.tab) || TABS[0]).key;
+  recordView(m);
 
-  if (!TABS.some((t) => t.key === tab)) {
-    outlet.innerHTML = `<div class="page">
-      ${H.pageHead({ title: esc(m.name),
-        crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members', route: '/members' }, { label: m.name }],
-        desc: `This member record has no section called <code>${esc(tab)}</code>.` })}
-      <div class="card"><div class="card__body">${H.emptyState({
-        icon: 'compass', title: 'Pick one of the five sections',
-        msg: 'Overview, Storyline, Assessments, Nutrition &amp; Plans and Messages.',
-        action: `<a class="btn btn--primary" href="${R.href('/members/' + id + '/overview')}">Open the overview</a>`,
-      })}</div></div></div>`;
-    return;
-  }
-
-  const d = S.detail(id) || {};
-  const tone = H.hnTone(m.hn);
-  const pct = m.hn == null ? 0 : Math.max(4, Math.min(100, (1 - m.hn / 10) * 100));
-  const toneColor = { ok: 'var(--status-positive)', warn: 'var(--status-attention)', risk: 'var(--status-significant)', neutral: 'var(--line-strong)' }[tone];
+  const shares = S.shares(m);
+  const latest = shares ? m.records.health_number[0] || null : null;
+  const hn = latest ? Number(latest.displayed_score) : null;
+  const pct = hn === null ? 0 : Math.max(4, Math.min(100, (1 - hn / 10) * 100));
 
   outlet.innerHTML = `
   <div class="page">
-    ${H.pageHead({
-      title: m.name,
-      crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members', route: '/members' }, { label: m.name }],
-      where: 'members',
-    })}
+    ${H.pageHead({ title: m.name, crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members', route: '/members' }, { label: m.name }] })}
 
     <section class="m360">
       <div class="m360__who">
         <div class="row gap-4" style="align-items:center">
-          <span class="avatar avatar--lg">${esc(m.initials)}</span>
+          ${H.avatar(m, 'lg')}
           <div style="min-width:0">
-            <div class="m360__id">${esc(m.id)} · joined ${esc(m.joined)} · ${esc(m.city)}</div>
+            <div class="m360__id">${esc(m.email)} · joined ${esc(H.fmtDate(m.joinedAt))}</div>
             <div class="row gap-2 wrap" style="margin-top:6px">
-              ${H.chip(m.status)}
-              <span class="tag">${esc(m.subscription)}</span>
-              ${m.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}
+              ${H.chip(m.isActive ? 'Active' : 'Inactive', m.isActive ? 'live' : 'archived')}
+              <span class="tag">${m.emailVerified ? 'Email verified' : 'Email unverified'}</span>
+              ${m.isSynthetic ? '<span class="tag">Synthetic demo account</span>' : ''}
+              ${m.adminAccess ? '<span class="tag">Also has admin access</span>' : ''}
             </div>
           </div>
         </div>
-        <!-- Contact and account facts are reference, not the answer to "what is
-             happening with this member". They open on demand. -->
         <details class="disclose" style="margin-top:var(--s-5)">
           <summary>${icon('chevron-right', { size: 15 })} Member details</summary>
           <dl class="facts" style="margin-top:var(--s-4)">
             <div class="fact"><dt>Email</dt><dd>${esc(m.email)}</dd></div>
-            <div class="fact"><dt>Phone</dt><dd>${esc(m.phone)}</dd></div>
-            <div class="fact"><dt>Date of birth</dt><dd>${esc(m.dob)}</dd></div>
-            <div class="fact"><dt>Last active</dt><dd>${esc(m.lastActive)}</dd></div>
-            <div class="fact"><dt>Plan</dt><dd>${esc(m.subscription)}</dd></div>
-            <div class="fact"><dt>Legal documents accepted</dt><dd>${esc(m.consent)}</dd></div>
+            <div class="fact"><dt>Phone</dt><dd>${esc(m.phone || '—')}</dd></div>
+            <div class="fact"><dt>Postal code</dt><dd>${esc(m.postalCode || '—')}</dd></div>
+            <div class="fact"><dt>Last active</dt><dd>${m.lastActiveAt ? esc(H.fmtDate(m.lastActiveAt)) : 'Never'}</dd></div>
+            <div class="fact"><dt>Onboarding</dt><dd>${esc(m.onboarding)}</dd></div>
+            <div class="fact"><dt>Member id</dt><dd class="mono">${esc(m.id)}</dd></div>
           </dl>
-          ${m.consent !== 'Current' ? `<div class="notice notice--warn" style="margin-top:var(--s-4)">
-            ${icon('alert-circle', { size: 18 })}
-            <div>This member has not accepted the newest version of one or more documents. They are asked at their next sign-in.</div>
-          </div>` : ''}
-          <p class="qualify">${icon('info', { size: 14 })} Document versions and acceptance counts are managed in Content → Legal Documents.</p>
         </details>
       </div>
       <div class="m360__hn">
         <div class="arc">
-          <div class="arc__dial" data-ring style="--pct:${pct.toFixed(0)};--tone:${toneColor}">
+          <div class="arc__dial" style="--pct:${pct.toFixed(0)};--tone:${hnTone(hn)}">
             <div class="arc__inner">
-              <div class="arc__val">${m.hn == null ? '—' : m.hn.toFixed(1)}</div>
+              <div class="arc__val">${hn === null ? '—' : hn.toFixed(1)}</div>
               <div class="arc__scale">of 10</div>
             </div>
           </div>
           <div style="min-width:0">
             <div class="t-eyebrow">Health Number</div>
-            <div class="t-strong" style="margin-top:2px">${esc(m.hnBand)}</div>
-            <p class="t-support" style="margin-top:4px">${esc(H.hnTrendWords(m.hnTrend))}</p>
-            <p class="t-support">Taken ${esc(m.hnTaken)}</p>
-          </div>
-        </div>
-        <!-- The two actions a coach reaches for stay visible. Everything else is
-             one menu away, so the header does not read as a toolbar. -->
-        <div class="m360__actions" style="margin-top:var(--s-6)">
-          <button class="btn btn--primary btn--sm" id="msgBtn">${icon('send', { size: 16 })} Message</button>
-          <button class="btn btn--secondary btn--sm" id="planBtn">${icon('calendar-check', { size: 16 })} Assign a plan</button>
-          <div class="menu-wrap">
-            <button class="btn btn--ghost btn--sm" id="moreBtn" aria-label="More actions for ${esc(m.name)}">
-              ${icon('more-horizontal', { size: 16 })} More</button>
+            <div class="t-strong" style="margin-top:2px">${shares ? esc(latest ? latest.status : 'Not completed') : 'Not shared'}</div>
+            <p class="t-support" style="margin-top:4px">A lower number is better on this scale.</p>
+            <p class="t-support">${!shares ? 'Withheld until this member shares their records.'
+              : latest ? `Taken ${esc(H.fmtDate(latest.completed_at))}` : 'No Health Number saved yet.'}</p>
           </div>
         </div>
       </div>
     </section>
 
-    ${H.subnav(TABS.map((t) => ({ ...t, route: '/members/' + id + '/' + t.key })), tab)}
+    <div id="sharingBanner"></div>
 
+    ${H.subnav(TABS.map((t) => ({ ...t, route: '/members/' + m.id + '/' + t.key })), tab)}
     <div id="tabBody"></div>
   </div>`;
 
-  const body = outlet.querySelector('#tabBody');
-  ({ overview, storyline, assessments, nutrition, messages })[tab](body, m, d);
-
-  wireActions(outlet, m);
+  banner(outlet.querySelector('#sharingBanner'), m, outlet, route);
+  ({ overview, assessments, journal, companion, requests, account })[tab](outlet.querySelector('#tabBody'), m, outlet, route);
 }
 
-/* --------------------------------------------------------------- overview -- */
-function overview(host, m, d) {
-  const st = S.get();
-  const prog = st.programs.find((p) => p.name === m.program);
-  const moods = (d.mood || []).slice(-14);
-  const items = st.attention.filter((a) => a.memberId === m.id);
+/* ------------------------------------------------------------ the banner -- */
+function banner(host, m, outlet, route) {
+  if (S.shares(m)) {
+    host.innerHTML = `<div class="notice notice--quiet" data-testid="sharing-banner">
+      ${icon('shield', { size: 18 })}
+      <div><strong>${esc(STATE_LABELS.granted)}.</strong> This member has chosen to share their saved results with the
+        Veye team. They can stop at any time, and the records close again immediately.</div>
+    </div>`;
+    return;
+  }
+  const explanation = {
+    not_requested: 'This member has not been asked to share their health records yet.',
+    requested: 'This member has been asked and has not answered yet.',
+    declined: 'This member was asked and chose not to share.',
+    revoked: 'This member shared before and has since stopped.',
+  }[m.sharing.state];
+  const allowed = eligibility(m);
+  const delivery = m.sharing.state === 'requested' ? m.sharing.delivery : null;
 
+  host.innerHTML = `<div class="notice" data-testid="sharing-banner">
+    ${icon('shield', { size: 18 })}
+    <div style="min-width:0">
+      <strong>Health records are not shared.</strong> ${esc(explanation)}
+      Their Health Number, body composition, blood markers, questionnaires, moods and food diary are not sent to
+      this console — the tabs below are empty for that reason, not because nothing was recorded. Name, email and
+      their messages to Veye are not covered by sharing and stay visible so the team can answer them.
+      ${delivery ? `<p class="t-support" style="margin-top:6px" data-testid="sharing-delivery">
+        ${esc(DELIVERY_LABELS[delivery.status] || delivery.status)}${delivery.sent_at ? ' · ' + esc(H.fmtDate(delivery.sent_at)) : ''} · to ${esc(delivery.to_email)}${delivery.last_error && delivery.status !== 'sent' ? ' · ' + esc(delivery.last_error) : ''}
+      </p>` : ''}
+      ${!allowed.can && allowed.reason ? `<p class="t-support" style="margin-top:6px" data-testid="sharing-cannot-ask">${esc(allowed.reason)}</p>` : ''}
+      ${allowed.requiresReason && allowed.can ? `<div class="field" style="margin-top:10px">
+        <label class="field__label" for="askReason">They said no before. Why ask again? (kept with the request)</label>
+        <input class="input" id="askReason" maxlength="300" placeholder="e.g. They asked for help reviewing their blood markers" data-testid="sharing-ask-reason">
+      </div>` : ''}
+      <div class="row gap-2 wrap" style="margin-top:10px">
+        <button class="btn btn--secondary btn--sm" type="button" id="askBtn" data-testid="sharing-ask" ${allowed.can && !allowed.requiresReason ? '' : 'disabled'}>
+          ${m.sharing.state === 'requested' ? 'Ask again' : 'Ask this member to share'}</button>
+        ${delivery && ['retry', 'failed'].includes(delivery.status) ? '<button class="btn btn--ghost btn--sm" type="button" id="resendBtn" data-testid="sharing-resend">Try sending the email again</button>' : ''}
+      </div>
+    </div>
+  </div>`;
+
+  const ask = host.querySelector('#askBtn');
+  const reasonInput = host.querySelector('#askReason');
+  if (reasonInput) reasonInput.addEventListener('input', () => { ask.disabled = reasonInput.value.trim().length < 10; });
+
+  ask.addEventListener('click', () => {
+    const reason = reasonInput ? reasonInput.value.trim() : '';
+    H.busy(ask, 'Asking…', () => {
+      const at = S.now();
+      const sent = S.deliver(m.email);
+      S.updateMember(m.id, (x) => {
+        x.sharing = { ...x.sharing, state: 'requested', requested_at: at, requested_by_name: S.me().name, decided_at: null,
+          reason: reason || null,
+          delivery: { status: sent.status, attempts: 1, last_error: sent.detail, sent_at: sent.status === 'sent' ? at : null, next_attempt_at: null, to_email: x.email } };
+        return x;
+      });
+      const terms = S.get().sharingSettings.terms;
+      S.audit('health_permission.requested', 'member', m.id, { state: 'requested', policy_version: `health-sharing-terms-v${terms.version}`, with_reason: !!reason });
+      render(outlet, route);
+    });
+  });
+
+  const resend = host.querySelector('#resendBtn');
+  if (resend) resend.addEventListener('click', () => {
+    H.busy(resend, 'Sending…', () => {
+      const sent = S.deliver(m.email);
+      S.updateMember(m.id, (x) => {
+        const d = x.sharing.delivery;
+        x.sharing.delivery = { ...d, status: sent.status, attempts: d.attempts + 1, last_error: sent.detail,
+          sent_at: sent.status === 'sent' ? S.now() : d.sent_at, next_attempt_at: null };
+        return x;
+      });
+      S.audit('health_permission.request_email_retried', 'member', m.id, {});
+      render(outlet, route);
+    });
+  });
+}
+
+/* ------------------------------------------------------------------- tabs -- */
+function lists(m) {
+  const shares = S.shares(m);
+  const empty = { health_number: [], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] };
+  return {
+    records: shares ? m.records : empty,
+    mood: shares ? m.mood : [],
+    diary: shares ? m.diary : [],
+    trackersCompleted: ['health_number', 'body_composition', 'blood_markers', 'health_assessment', 'simple_quiz'].filter((k) => m.records[k].length).length,
+  };
+}
+
+function overview(host, m) {
+  const { records, mood, diary, trackersCompleted } = lists(m);
+  const conversations = S.get().conversations.filter((c) => c.member_id === m.id);
+  const requests = S.get().requests.filter((r) => r.member_id === m.id);
+  const diaryDays = new Set(diary.map((d) => d.entry_date)).size;
+  const trackers = [
+    ['Health Number', records.health_number], ['Body Composition', records.body_composition], ['Blood Markers', records.blood_markers],
+    ['Health Assessment', records.health_assessment], ['Simple Quiz', records.simple_quiz],
+  ];
   host.innerHTML = `
-    ${items.length ? `<div class="notice notice--warn" style="margin-bottom:var(--s-5)">
-      ${icon('alert-triangle', { size: 18 })}
-      <div><b>${items.length} thing${items.length === 1 ? '' : 's'} waiting on this member</b><br>
-      ${items.map((i) => esc(i.title)).join(' · ')}</div>
-    </div>` : ''}
-
-    <!-- The first thing below the member header on every viewport. One reveal
-         for the whole block: the rows and cards inside it move with it. -->
-    <div class="hgrid" data-reveal>
+    <div class="grid grid--main-side">
       <div class="stack gap-5">
         <div class="card">
           <div class="card__head"><div><h2 class="card__title">Where they are</h2></div></div>
           <div class="card__body">
             <div class="minirow">
               <div class="mini"><span class="mini__n">${esc(m.onboarding)}</span><span class="mini__l">Onboarding</span></div>
-              <div class="mini"><span class="mini__n">${m.program ? esc(m.program) : 'None'}</span><span class="mini__l">Program</span></div>
-              <div class="mini"><span class="mini__n">${m.adherence == null ? '—' : m.adherence + '%'}</span><span class="mini__l">Plan adherence</span></div>
-              <div class="mini"><span class="mini__n">${esc(m.subscription)}</span><span class="mini__l">Subscription</span></div>
+              <div class="mini"><span class="mini__n">${trackersCompleted} of 5</span><span class="mini__l">Trackers with results</span></div>
+              <div class="mini"><span class="mini__n">${m.guided.length}</span><span class="mini__l">Guided sessions</span></div>
+              <div class="mini"><span class="mini__n">${conversations.length}</span><span class="mini__l">Sprout conversations</span></div>
             </div>
-            ${prog ? `<div style="margin-top:var(--s-6)">
-              <div class="row-between"><span class="t-support">${esc(prog.name)} · ${prog.weeks} weeks</span>
-                <a class="btn btn--ghost btn--sm" href="${R.href('/care/program/' + prog.id)}">Open the program</a></div>
-              <div class="weeks" style="margin-top:var(--s-3)">
-                ${Array.from({ length: prog.weeks }, (_, i) => {
-                  const done = Math.round((m.adherence || 0) / 100 * prog.weeks);
-                  return `<i class="${i < done ? '' : i === done ? 'low' : 'miss'}" style="height:${i < done ? 100 : i === done ? 60 : 22}%"></i>`;
-                }).join('')}
-              </div>
-              <p class="qualify">${icon('info', { size: 14 })} The weekly strip is modelled from the recorded adherence figure, not from week-by-week data.</p>
-            </div>` : `<p class="t-support" style="margin-top:var(--s-5)">No program is assigned yet.</p>`}
           </div>
         </div>
-
         <div class="card">
-          <div class="card__head"><div><h2 class="card__title">Health Number over time</h2>
-            <p class="t-support">A lower number is better on this scale.</p></div></div>
-          <div class="card__body" id="hnChart"></div>
+          <div class="card__head"><div><h2 class="card__title">Health Number over time</h2><p class="t-support">A lower number is better on this scale.</p></div></div>
+          <div class="card__body">
+            ${records.health_number.length ? `<div class="bars">
+              ${[...records.health_number].reverse().map((row) => `<div class="bar">
+                <span class="bar__label">${esc(H.fmtDate(row.completed_at))}</span>
+                <span class="bar__track"><span class="bar__fill" style="width:${Math.max(4, (Number(row.displayed_score) / 10) * 100)}%;background:${hnTone(Number(row.displayed_score))}"></span></span>
+                <span class="bar__n">${Number(row.displayed_score).toFixed(1)}</span>
+              </div>`).join('')}
+            </div>` : '<p class="t-support">No Health Number saved yet.</p>'}
+          </div>
         </div>
       </div>
-
       <div class="stack gap-5">
         <div class="card">
-          <div class="card__head"><div><h2 class="card__title">Recent activity</h2>
-            <p class="t-support">The last few things this member did.</p></div>
-            <a class="btn btn--ghost btn--sm" href="${R.href('/members/' + m.id + '/storyline')}">Full storyline</a></div>
-          <div class="card__body card__body--flush">
-            ${(d.storyline || []).length ? `<div class="rows">${(d.storyline || []).slice(0, 4).map((e) => `
-              <div class="rowitem" style="grid-template-columns:36px minmax(0,1fr);padding:14px 20px">
-                <span class="rowitem__icon" style="width:32px;height:32px">${icon(STORY_ICON[e.kind] || 'note', { size: 16 })}</span>
-                <div><div class="rowitem__title" style="font-weight:500;font-size:var(--fs-support)">${esc(e.text)}</div>
-                  <div class="rowitem__meta">${esc(e.at)}</div></div>
-              </div>`).join('')}</div>`
-            : `<div class="card__body"><p class="t-support">Nothing recorded yet.</p></div>`}
+          <div class="card__head"><div><h2 class="card__title">Progress trackers</h2><p class="t-support">Results saved, and the latest date.</p></div></div>
+          <div class="card__body">
+            <dl class="kv">
+              ${trackers.map(([label, rows]) => `<dt>${label}</dt><dd>${rows.length ? `${rows.length} · latest ${esc(H.fmtDate(rows[0].completed_at))}` : '<span class="t-muted">Not started</span>'}</dd>`).join('')}
+            </dl>
+          </div>
+          <div class="card__foot"><a class="btn btn--secondary btn--sm" href="${R.href('/members/' + m.id + '/assessments')}">Open Assessments</a><a class="btn btn--ghost btn--sm" href="${R.href('/members/' + m.id + '/journal')}">Mood &amp; Diary</a></div>
+        </div>
+        <div class="card">
+          <div class="card__head"><div><h2 class="card__title">Journal &amp; requests</h2><p class="t-support">Non-clinical entries and messages from this member.</p></div></div>
+          <div class="card__body">
+            <dl class="kv">
+              <dt>Mood entries</dt><dd>${mood.length ? `${mood.length} · latest ${esc(mood[0].entry_date)} (${esc(mood[0].mood_label)})` : '<span class="t-muted">Not started</span>'}</dd>
+              <dt>Food Diary</dt><dd>${diaryDays ? `${diaryDays} day${diaryDays === 1 ? '' : 's'} · latest ${esc(diary[0].entry_date)}` : '<span class="t-muted">Not started</span>'}</dd>
+              <dt>Requests</dt><dd>${requests.length ? `${requests.length} · ${requests.filter((r) => r.status !== 'resolved').length} open` : '<span class="t-muted">None</span>'}</dd>
+            </dl>
           </div>
         </div>
+        <div class="notice notice--quiet">${icon('info', { size: 18 })}<div>Not connected to the application yet: Mindfulness, Activity Tracker (Exercise, Meditation). These sections show honest empty states in the member product.</div></div>
       </div>
     </div>`;
-
-  /* The Health Number trend uses the shared interactive chart layer. */
-  const chartHost = host.querySelector('#hnChart');
-  const hist = [...(d.hnHistory || [])].reverse();
-  chartHost.innerHTML = hist.length > 1
-    ? window.Veye.C.markup({
-        id: 'hn-' + m.id, type: 'line', height: 170,
-        labels: hist.map((h) => h.date),
-        series: [{ key: 'hn', label: 'Health Number', unit: '', values: hist.map((h) => h.score) }],
-        min: 0, max: 10,
-        readoutLabel: 'taken',
-        alt: 'Health Number over time for this member. Lower is better.',
-        tableSummary: 'View the results as a table',
-        tableHead: ['Taken', 'Health Number', 'Band'],
-        tableRows: hist.map((h) => { const b = S.hnBand(h.score);
-          return [esc(h.date), h.score.toFixed(1), esc(b ? b.label : '—')]; }),
-        tableCaption: 'Health Number history',
-      })
-    : H.emptyState({ icon: 'gauge', title: 'Not enough results to draw a trend',
-        msg: 'A trend appears once this member has taken the assessment twice.' });
-  window.Veye.M.scan(chartHost);
 }
 
-const STORY_ICON = { health: 'droplet', assessment: 'clipboard', care: 'calendar-check',
-                     companion: 'sprout', life: 'smile', account: 'user-check' };
+function resultCard(title, description, head, rows) {
+  const count = rows.length;
+  return `<div class="card" data-testid="m360-${title.toLowerCase().replace(/\s+/g, '-')}">
+    <div class="card__head"><div><h2 class="card__title">${esc(title)}</h2><p class="t-support">${esc(description)}</p></div><span class="tag">${count} result${count === 1 ? '' : 's'} · System managed</span></div>
+    <div class="card__body card__body--flush">
+      ${rows.length ? `<div class="table-wrap"><table class="table table--compact">
+        <thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table></div>` : '<p class="t-support" style="padding:20px">Not started.</p>'}
+    </div>
+  </div>`;
+}
 
-/* -------------------------------------------------------------- storyline -- */
-function storyline(host, m, d) {
-  const KINDS = [
-    { key: 'health', label: 'Health' }, { key: 'assessment', label: 'Assessments' },
-    { key: 'care', label: 'Care' }, { key: 'companion', label: 'Companion' },
-    { key: 'life', label: 'Daily' }, { key: 'account', label: 'Account' },
-  ];
-  const notes = S.get().memberNotes.filter((x) => x.memberId === m.id)
-    .map((x) => ({ at: x.at, kind: 'care', text: 'Note from ' + x.who + ': ' + x.text }));
-  const all = notes.concat(d.storyline || []);
-  const on = new Set(KINDS.map((k) => k.key));
+function assessments(host, m) {
+  const { records } = lists(m);
+  host.innerHTML = `<div class="stack gap-5">
+    <div class="notice notice--quiet">${icon('lock', { size: 18 })}<div>Historical results are read-only. Each row is the calculation as it was saved on that day (with its calculation version); nothing here is re-scored.</div></div>
+    ${resultCard('Health Number', '12 questions · 1–10, lower is better.', ['Date', 'Number', 'Band', 'Category', 'Version'],
+      records.health_number.map((r) => [H.fmtDate(r.completed_at), Number(r.displayed_score).toFixed(1), r.status, r.category, r.calculation_version]))}
+    ${resultCard('Body Composition', "Standard BMI plus the client's body-fat tables.", ['Date', 'Sex', 'BMI', 'Body fat', 'Fat mass', 'Lean mass', 'Version'],
+      records.body_composition.map((r) => [H.fmtDate(r.completed_at), r.sex, r.bmi === null ? '—' : String(r.bmi),
+        r.body_fat_available ? `${r.body_fat_percent}%` : (r.unavailable_reason ? 'not available' : '—'),
+        r.fat_mass_lb === null ? '—' : `${r.fat_mass_lb} lb`, r.lean_mass_lb === null ? '—' : `${r.lean_mass_lb} lb`, r.calculation_version]))}
+    ${resultCard('Blood Markers', "Ratios with goal flags and the client's supplement suggestion.", ['Date', 'TG/HDL', 'HOMA-IR', 'AA/EPA', 'HbA1c', 'In range', 'Suggestion', 'Version'],
+      records.blood_markers.map((r) => {
+        const flags = Object.values(r.in_range).filter((v) => v !== null);
+        return [H.fmtDate(r.completed_at), fmtNum(r.tg_hdl), fmtNum(r.homa_ir), fmtNum(r.aa_epa),
+          r.markers.hba1c === null || r.markers.hba1c === undefined ? '—' : `${r.markers.hba1c}%`, `${flags.filter(Boolean).length} of ${flags.length}`,
+          r.recommendation.state === 'ok' ? `EPA/DHA ${r.recommendation.epa_dha_dose}` : r.recommendation.state === 'review' ? 'requires review' : '—', r.calculation_version];
+      }))}
+    ${resultCard('Health Assessment', '11 questions scoring 1–3 · total 11–33, lower is better · EPA/DHA suggestion by score.', ['Date', 'Total', 'Band', 'EPA/DHA', 'Version'],
+      records.health_assessment.map((r) => [H.fmtDate(r.completed_at), `${r.total} / 33`, r.status, r.epa_dha_dose, r.calculation_version]))}
+    ${resultCard('Simple Quiz', '8 yes/no questions · a dated count. Never creates or changes a Health Number.', ['Date', 'Result', 'Yes', 'No', 'Version'],
+      records.simple_quiz.map((r) => [H.fmtDate(r.completed_at), r.summary, String(r.yes_count), String(r.no_count), r.calculation_version]))}
+  </div>`;
+}
 
-  const moods = (d.mood || []).slice(-28);
-  const low = moods.filter((v) => v <= 2).length;
-
-  host.innerHTML = `
-    <!-- Mood lives here in v2. It is a record of what this member did day by day,
-         which is what a storyline is; on Overview it competed with the question
-         "what needs attention". -->
-    ${moods.length ? `<div class="card" style="margin-bottom:var(--grid-gutter)">
-      <div class="card__head">
-        <div><h2 class="card__title">Mood, last ${moods.length} days</h2>
-          <p class="t-support">Average ${(moods.reduce((a, b) => a + b, 0) / moods.length).toFixed(1)} out of 5.
-            ${low} low day${low === 1 ? '' : 's'}.</p></div>
-      </div>
-      <div class="card__body">
-        <!-- Icon plus colour plus a word in the title, so the meaning does not
-             depend on an emoji font or on colour alone. -->
-        <div class="moodrow">
-          ${moods.map((v, i) => `<span class="moodday moodday--${v}"
-            title="Day ${i + 1}: ${esc(H.MOOD[v].word)}">${icon(H.MOOD[v].icon, { size: 13 })}
-            <span class="sr-only">Day ${i + 1}: ${esc(H.MOOD[v].word)}</span></span>`).join('')}
-        </div>
-        <div class="moodkey">
-          ${[5, 4, 3, 2, 1].map((v) => `<span class="moodkey__item">
-            <span class="moodday moodday--${v}" aria-hidden="true">${icon(H.MOOD[v].icon, { size: 12 })}</span>
-            ${esc(H.MOOD[v].word)}</span>`).join('')}
-        </div>
-        ${H.chartAlt('View mood entries as a table', ['Day', 'Rating out of 5', 'Meaning'],
-          moods.map((v, i) => ['Day ' + (i + 1), String(v), esc(H.MOOD[v].word)]), 'Mood entries')}
-      </div>
-    </div>` : ''}
-
+function journal(host, m) {
+  const { mood, diary } = lists(m);
+  const stats = moodStats(mood);
+  const diaryDays = new Set(diary.map((d) => d.entry_date)).size;
+  host.innerHTML = `<div class="grid grid--2" data-testid="m360-journal">
     <div class="card">
-      <div class="card__head">
-        <div><h2 class="card__title">Everything, newest first</h2>
-          <p class="t-support">Assessments, health entries, care activity, Companion conversations and account changes in one line.</p></div>
-        <div class="sl-legend" id="slLegend">
-          ${KINDS.map((k) => `<button class="sl-legend__btn" aria-pressed="true" data-kind="${k.key}">
-            <span class="sl-legend__swatch"></span>${esc(k.label)}</button>`).join('')}
-        </div>
-      </div>
+      <div class="card__head"><div><h2 class="card__title">Mood Tracker</h2><p class="t-support">One mood a day with an optional note. Balance score: the client's 30-day formula (positive 100 · neutral 50 · tired/sad 25 · stressed/angry 0).</p></div><span class="tag">${mood.length} entr${mood.length === 1 ? 'y' : 'ies'}</span></div>
       <div class="card__body">
-        <div class="storyline" id="slBody"><span class="storyline__axis"></span></div>
+        <dl class="kv">
+          <dt>Logged this month</dt><dd>${stats.days_logged_this_month}</dd>
+          <dt>Day streak</dt><dd>${stats.day_streak}</dd>
+          <dt>Most felt</dt><dd>${stats.top_mood_label ? esc(stats.top_mood_label) : '<span class="t-muted">—</span>'}</dd>
+          <dt>Balance score</dt><dd>${stats.balance_score === null ? '<span class="t-muted">— (no entries in the last 30 days)</span>' : `${stats.balance_score}% over ${stats.balance_entries} day${stats.balance_entries === 1 ? '' : 's'}`}</dd>
+        </dl>
       </div>
-    </div>`;
-
-  const bodyEl = host.querySelector('#slBody');
-  const mark = { health: 'health', assessment: 'health', care: 'care', companion: 'care', life: 'life', account: 'admin' };
-  const ic = { health: 'droplet', assessment: 'clipboard', care: 'calendar-check', companion: 'sprout', life: 'smile', account: 'user-check' };
-
-  function paint() {
-    const rows = all.filter((e) => on.has(e.kind));
-    bodyEl.innerHTML = `<span class="storyline__axis"></span>` + (rows.length
-      ? rows.map((e) => `<div class="sl-item">
-          <div class="sl-item__when">${esc(e.at)}</div>
-          <div class="sl-item__mark sl-item__mark--${mark[e.kind] || 'admin'}">${icon(ic[e.kind] || 'note', { size: 16 })}</div>
-          <div class="sl-item__body">
-            <div class="sl-item__title">${esc(KINDS.find((k) => k.key === e.kind) ? KINDS.find((k) => k.key === e.kind).label : e.kind)}</div>
-            <div class="sl-item__text">${esc(e.text)}</div>
-          </div>
-        </div>`).join('')
-      : `<div style="padding:var(--s-6) 0 0 132px">${H.emptyState({
-          icon: 'filter', title: 'Nothing matches those filters',
-          msg: 'Turn one of the categories above back on.' })}</div>`);
-  }
-  paint();
-
-  host.querySelectorAll('#slLegend button').forEach((b) => {
-    b.addEventListener('click', () => {
-      const k = b.dataset.kind;
-      const now = b.getAttribute('aria-pressed') === 'true';
-      b.setAttribute('aria-pressed', String(!now));
-      if (now) on.delete(k); else on.add(k);
-      paint();
-    });
-  });
+      <div class="card__body card__body--flush">
+        ${mood.length ? `<div class="table-wrap"><table class="table table--compact">
+          <thead><tr><th scope="col">Day</th><th scope="col">Mood</th><th scope="col">Note</th></tr></thead>
+          <tbody>${mood.slice(0, 31).map((e) => `<tr><td>${esc(e.entry_date)}</td><td>${esc(e.mood_label)}</td><td class="t-support">${esc(e.note || '—')}</td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="t-support" style="padding:20px">No mood logged yet.</p>'}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card__head"><div><h2 class="card__title">Food Diary</h2><p class="t-support">Meal entries as the member wrote them. No nutritional analysis is computed — that is a client decision.</p></div><span class="tag">${diaryDays} day${diaryDays === 1 ? '' : 's'} logged</span></div>
+      <div class="card__body card__body--flush">
+        ${diary.length ? `<div class="table-wrap"><table class="table table--compact">
+          <thead><tr><th scope="col">Day</th><th scope="col">Time</th><th scope="col">Meal</th><th scope="col">Felt before</th></tr></thead>
+          <tbody>${diary.map((e) => `<tr><td class="t-nowrap">${esc(e.entry_date)}</td><td class="t-nowrap">${esc(e.meal_time)}</td><td>${esc(e.description)}${e.notes ? `<div class="cell-sub">${esc(e.notes)}</div>` : ''}</td><td class="t-support">${esc(e.feelings.join(', ') || '—')}</td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="t-support" style="padding:20px">No diary entry yet.</p>'}
+      </div>
+    </div>
+  </div>`;
 }
 
-/* ------------------------------------------------------------ assessments -- */
-function assessments(host, m, d) {
-  const b = (d.biomarkers || [])[0];
-  const rs = b && Array.isArray(b.ratioResults) ? b.ratioResults : [];
-
-  host.innerHTML = `
-    <div class="hgrid" data-reveal>
-      <div class="stack gap-5">
-        <div class="card">
-          <div class="card__head"><div><h2 class="card__title">Blood markers</h2>
-            <p class="t-support">${b ? 'Most recent submission, ' + esc(b.date) + '.' : 'None submitted yet.'}</p></div>
-            ${b ? `<a class="btn btn--ghost btn--sm" href="${R.href('/assessments/markers')}">Marker definitions</a>` : ''}
-          </div>
-          <div class="card__body${b ? ' card__body--flush' : ''}">
-            ${b ? `<div class="table-wrap"><table class="table table--compact">
-              <caption class="sr-only">Blood markers submitted ${esc(b.date)}</caption>
-              <thead><tr><th scope="col">Marker</th><th scope="col">Value</th><th scope="col">Unit</th></tr></thead>
-              <tbody>
-                <tr><th scope="row">Total cholesterol</th><td>${b.tc}</td><td>mg/dL</td></tr>
-                <tr><th scope="row">HDL</th><td>${b.hdl}</td><td>mg/dL</td></tr>
-                <tr><th scope="row">Triglycerides</th><td>${b.tg}</td><td>mg/dL</td></tr>
-                <tr><th scope="row">Fasting glucose</th><td>${b.glucose}</td><td>mg/dL</td></tr>
-                <tr><th scope="row">Fasting insulin</th><td>${b.insulin}</td><td>µIU/mL</td></tr>
-                <tr><th scope="row">Arachidonic acid</th><td>${b.aa}</td><td>%</td></tr>
-                <tr><th scope="row">EPA</th><td>${b.epa}</td><td>%</td></tr>
-                <tr><th scope="row">HbA1c</th><td>${b.hba1c}</td><td>%</td></tr>
-              </tbody></table></div>`
-            : H.emptyState({ icon: 'droplet', title: 'No blood markers yet',
-                msg: 'Markers appear here once the member submits them or a laboratory import brings them in.' })}
-          </div>
-        </div>
-
-        ${b ? `<div class="card">
-          <div class="card__head"><div><h2 class="card__title">Recorded ratio results</h2>
-            <p class="t-support">Results saved with this marker submission. This console does not recalculate them.</p></div></div>
-          <div class="card__body card__body--flush">
-            ${rs.length ? `<div class="table-wrap"><table class="table table--compact">
-              <caption class="sr-only">Recorded ratio results and goals</caption>
-              <thead><tr><th scope="col">Ratio</th><th scope="col">Result</th><th scope="col">Goal</th>
-                <th scope="col">Against goal</th></tr></thead>
-              <tbody>${rs.map((r) => `<tr>
-                <th scope="row">${esc(r.name)}</th>
-                <td class="t-num">${r.value == null ? '—' : r.value}</td>
-                <td>${esc(r.goal)}</td>
-                <td>${r.status === 'Inside goal' ? `<span class="chip chip--live">${icon('check', { size: 13 })} Inside goal</span>`
-                           : `<span class="chip chip--attention">${icon('alert-circle', { size: 13 })} Outside goal</span>`}</td>
-              </tr>`).join('')}</tbody>
-            </table></div>` : `<p class="t-support">No stored calculated results were supplied with this marker submission.</p>`}
-          </div>
-          <div class="card__foot">
-            <span class="t-support">Supplement amounts are chosen by condition, never from how many results sit outside their goal.</span>
-          </div>
-        </div>` : ''}
+function companion(host, m) {
+  const conversations = S.get().conversations.filter((c) => c.member_id === m.id).sort((a, b) => (a.last_message_at < b.last_message_at ? 1 : -1));
+  const guided = [...m.guided].sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+  host.innerHTML = `<div class="stack gap-5">
+    <div class="card">
+      <div class="card__head"><div><h2 class="card__title">${icon('sprout')} Guided experiences</h2><p class="t-support">Sprout's guided flows and where this member is in each.</p></div></div>
+      <div class="card__body card__body--flush">
+        ${guided.length ? `<div class="table-wrap"><table class="table table--compact">
+          <thead><tr><th scope="col">Flow</th><th scope="col">Version</th><th scope="col">Status</th><th scope="col">Step</th><th scope="col">Updated</th></tr></thead>
+          <tbody>${guided.map((g) => `<tr><td>${esc(g.flow_title)}</td><td>v${g.flow_version}</td>
+            <td>${H.chip(g.status.replace('_', ' '), g.status === 'completed' ? 'live' : g.status === 'skipped' ? 'archived' : 'draft')}</td>
+            <td class="mono">${esc(g.current_node)}</td><td class="t-nowrap">${esc(H.fmtDate(g.updated_at))}</td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="t-support" style="padding:20px">No guided session yet.</p>'}
       </div>
-
-      <div class="stack gap-5">
-        <div class="card">
-          <div class="card__head"><div><h2 class="card__title">Health Number</h2></div>
-            <a class="btn btn--ghost btn--sm" href="${R.href('/assessments/health-number')}">Definition</a></div>
-          <div class="card__body">
-            ${(d.hnHistory || []).length ? `<div class="table-wrap"><table class="table table--compact">
-              <caption class="sr-only">Health Number results</caption>
-              <thead><tr><th scope="col">Taken</th><th scope="col">Result</th><th scope="col">Band</th></tr></thead>
-              <tbody>${d.hnHistory.map((h) => {
-                const band = S.hnBand(h.score);
-                return `<tr><th scope="row">${esc(h.date)}</th><td class="t-num">${h.score.toFixed(1)}</td>
-                  <td>${esc(band ? band.label : '—')}</td></tr>`;
-              }).join('')}</tbody></table></div>`
-            : `<p class="t-support">Not completed yet.</p>`}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card__head"><div><h2 class="card__title">Simple Health Quiz</h2>
-            <p class="t-support">A count of Yes and No answers. Fewer Yes answers over time indicates improvement.</p></div></div>
-          <div class="card__body">
-            ${(d.quiz || []).length ? `<div class="table-wrap"><table class="table table--compact">
-              <caption class="sr-only">Simple Health Quiz results</caption>
-              <thead><tr><th scope="col">Taken</th><th scope="col">Result</th></tr></thead>
-              <tbody>${d.quiz.map((q) => `<tr><th scope="row">${esc(q.date)}</th>
-                <td>${q.no} No / ${q.yes} Yes</td></tr>`).join('')}</tbody></table></div>
-              <p class="qualify">${icon('info', { size: 14 })} This quiz produces no score, no status tier and no supplement amount, and it never changes a Health Number.</p>`
-            : `<p class="t-support">Not taken yet.</p>`}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card__head"><div><h2 class="card__title">Health Assessment</h2></div></div>
-          <div class="card__body">
-            ${(d.hsr || []).length ? `<div class="table-wrap"><table class="table table--compact">
-              <caption class="sr-only">Health Assessment results</caption>
-              <thead><tr><th scope="col">Taken</th><th scope="col">Total</th><th scope="col">Band</th></tr></thead>
-              <tbody>${d.hsr.map((r) => {
-                const band = S.get().statusReport.bands.find((x) => r.total >= x.from && r.total <= x.to);
-                return `<tr><th scope="row">${esc(r.date)}</th><td class="t-num">${r.total} of 33</td>
-                  <td>${esc(band ? band.label : '—')}</td></tr>`;
-              }).join('')}</tbody></table></div>`
-            : `<p class="t-support">Not taken yet.</p>`}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card__head"><div><h2 class="card__title">BMI and body composition</h2></div></div>
-          <div class="card__body">
-            ${d.body ? `<dl class="facts">
-                <div class="fact"><dt>Body fat</dt><dd>${d.body.bodyFat}%</dd></div>
-                <div class="fact"><dt>BMI</dt><dd>${d.body.bmi}</dd></div>
-                <div class="fact"><dt>Measured</dt><dd>${esc(d.body.date)}</dd></div>
-                <div class="fact"><dt>Table used</dt><dd>${esc(d.body.sex)}</dd></div>
-              </dl>
-              <p class="qualify">${icon('info', { size: 14 })} Body fat comes from the supplied lookup table for this sex. BMI is reported separately and is not part of that table.</p>`
-            : `<p class="t-support">No measurements recorded.</p>`}
-          </div>
-        </div>
+      <div class="card__foot"><a class="btn btn--ghost btn--sm" href="${R.href('/companion/settings/guided-experiences')}">Guided Experiences ${icon('chevron-right', { size: 16 })}</a></div>
+    </div>
+    <div class="card">
+      <div class="card__head"><div><h2 class="card__title">${icon('messages')} Conversations</h2><p class="t-support">Sprout conversations with this member. Transcripts open in Companion → Conversations.</p></div></div>
+      <div class="card__body card__body--flush">
+        ${conversations.length ? `<div class="table-wrap"><table class="table table--compact">
+          <thead><tr><th scope="col">Started</th><th scope="col">Last message</th><th scope="col">Messages</th><th scope="col">Review</th><th scope="col"><span class="sr-only">Open</span></th></tr></thead>
+          <tbody>${conversations.map((c) => `<tr><td class="t-nowrap">${esc(H.fmtDate(c.started_at))}</td><td class="t-nowrap">${esc(H.fmtDate(c.last_message_at))}</td><td>${c.message_count}</td>
+            <td>${c.flagged ? H.chip(c.reviewed_at ? 'reviewed' : 'needs review', c.reviewed_at ? 'live' : 'attention') : '<span class="t-muted">—</span>'}</td>
+            <td style="text-align:right"><a class="btn btn--secondary btn--sm" href="${R.href('/companion/conversations?conversation=' + c.id)}">Open</a></td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="t-support" style="padding:20px">No conversation yet.</p>'}
       </div>
-    </div>`;
+    </div>
+  </div>`;
 }
 
-/* --------------------------------------------------------------- nutrition -- */
-function nutrition(host, m) {
-  const st = S.get();
-  const prog = st.programs.find((p) => p.name === m.program);
-  const steps = prog ? st.programSteps.filter((s) => s.programId === prog.id) : [];
-  const seed = m.id.charCodeAt(m.id.length - 1);
-  /* A stand-in for what this member ticked on Food Choices. Taken from the real
-     catalogue so the four portals below are the member's own four, and thinned
-     deterministically per member so two records do not look identical. */
-  const portals = st.foodPortals || [];
-  const picked = (portalKey) => st.foods
-    .filter((f) => f.portal === portalKey)
-    .filter((_, i) => (i + seed) % 4 === 0)
-    .slice(0, 6);
-  const diary = [
-    { date: '13 Aug 2026', meal: 'Breakfast', food: 'Greek yoghurt, walnuts', source: 'Member' },
-    { date: '13 Aug 2026', meal: 'Lunch', food: 'Wild salmon, broccoli, olive oil', source: 'Member' },
-    { date: '13 Aug 2026', meal: 'Dinner', food: 'Chicken thigh, sweet potato, spinach', source: 'Member' },
-    { date: '12 Aug 2026', meal: 'Breakfast', food: 'Pasture eggs, avocado', source: 'Member' },
-    { date: '12 Aug 2026', meal: 'Snack', food: 'Almond butter', source: 'Companion suggestion, accepted' },
-  ];
-
-  host.innerHTML = `
-    <div class="hgrid" data-reveal>
-      <div class="stack gap-5">
-        <div class="card">
-          <div class="card__head">
-            <div><h2 class="card__title">Current plan</h2>
-              <p class="t-support">${prog ? esc(prog.name) + ' · ' + prog.weeks + ' weeks · ' + esc(prog.version) : 'No plan assigned.'}</p></div>
-            <button class="btn btn--secondary btn--sm" id="assignHere">${prog ? 'Change plan' : 'Assign a plan'}</button>
-          </div>
-          <div class="card__body${steps.length ? ' card__body--flush' : ''}">
-            ${steps.length ? `<div class="steps">${steps.slice(0, 8).map((s) => `
-              <div class="step">
-                <span class="step__day">W${s.week}</span>
-                <div><div class="step__name">${esc(s.title)}</div><div class="step__note">${esc(s.type)} · ${esc(s.timing)} · ${esc(s.detail)}</div></div>
-                <span class="tag">${esc(s.timing)}</span>
-              </div>`).join('')}</div>`
-            : H.emptyState({ icon: 'calendar-check', title: 'No plan yet',
-                msg: 'Assign a program and its steps appear here.' })}
-          </div>
-          ${steps.length > 8 ? `<div class="card__foot"><span class="t-support">Showing 8 of ${steps.length} steps.</span>
-            <a class="btn btn--ghost btn--sm" href="${R.href('/care/program/' + prog.id)}">Open the full program</a></div>` : ''}
-        </div>
-
-        <div class="card">
-          <div class="card__head"><div><h2 class="card__title">Food diary</h2>
-            <p class="t-support">The most recent entries. Members can correct their own rows.</p></div>
-            <button class="btn btn--ghost btn--sm" id="diaryExport">${icon('download', { size: 16 })} Export</button></div>
-          <div class="card__body card__body--flush">
-            <div class="table-wrap"><table class="table table--compact">
-              <caption class="sr-only">Recent food diary entries</caption>
-              <thead><tr><th scope="col">Date</th><th scope="col">Meal</th><th scope="col">What was eaten</th>
-                <th scope="col" data-col-priority="low">Source</th></tr></thead>
-              <tbody>${diary.map((r) => `<tr><th scope="row">${esc(r.date)}</th><td>${esc(r.meal)}</td>
-                <td>${esc(r.food)}</td><td data-col-priority="low" class="t-support">${esc(r.source)}</td></tr>`).join('')}</tbody>
-            </table></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card__head"><div><h2 class="card__title">Food choices</h2>
-          <p class="t-support">What this member picked in the four portals on their dashboard.</p></div>
-          <a class="btn btn--ghost btn--sm" href="${R.href('/care/library/catalogue')}">Catalogue</a></div>
-        <div class="card__body">
-          ${portals.map((p) => {
-            const list = picked(p.key);
-            return `<div style="margin-bottom:var(--s-5)">
-              <div class="t-eyebrow">${esc(p.label)}</div>
-              <div class="row gap-2 wrap" style="margin-top:6px">
-                ${list.length ? list.map((f) => `<span class="tag">${esc(f.name)}</span>`).join('')
-                  : '<span class="t-support">Nothing chosen in this portal yet.</span>'}
-              </div></div>`;
-          }).join('')}
-          <p class="qualify">${icon('info', { size: 14 })} The portals and the groups inside them are the
-            member product's own. They are administered in Care Studio → Food Library.</p>
-        </div>
-      </div>
-    </div>`;
-
-  host.querySelector('#assignHere').addEventListener('click', () => assignPlan(m));
-  host.querySelector('#diaryExport').addEventListener('click', () => {
-    UI.toast({ title: 'Diary export prepared', message: '5 entries for ' + m.name + '. In the real console the file downloads here.' });
-  });
+function requests(host, m) {
+  const rows = S.get().requests.filter((r) => r.member_id === m.id).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  host.innerHTML = `<div class="card" data-testid="m360-requests">
+    <div class="card__head"><div><h2 class="card__title">Requests</h2><p class="t-support">Contact Us messages, Help questions and Join Beta submissions from this member.</p></div><a class="btn btn--secondary btn--sm" href="${R.href('/requests')}">Open Requests &amp; Inbox</a></div>
+    <div class="card__body card__body--flush">
+      ${rows.length ? `<div class="table-wrap"><table class="table table--compact">
+        <thead><tr><th scope="col">Received</th><th scope="col">Kind</th><th scope="col">Subject</th><th scope="col">Answered</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Open</span></th></tr></thead>
+        <tbody>${rows.map((r) => `<tr><td>${esc(H.fmtDate(r.created_at))}</td><td>${esc(window.Veye.REQUEST_KIND_LABELS[r.kind])}</td><td>${esc(r.subject || r.message.slice(0, 60))}</td>
+          <td>${r.replies.length === 0 ? '<span class="t-support">Not yet</span>' : esc(H.fmtDate(r.replies[r.replies.length - 1].created_at))}</td>
+          <td>${H.chip(REQUEST_STATUS_LABELS[r.status], r.status === 'resolved' ? 'live' : r.status === 'new' ? 'attention' : 'info')}</td>
+          <td style="text-align:right"><a class="btn btn--secondary btn--sm" href="${R.href('/requests?view=all&id=' + r.id)}">Open</a></td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="t-support" style="padding:20px">No request from this member.</p>'}
+    </div>
+  </div>`;
 }
 
-/* --------------------------------------------------------------- messages -- */
-function messages(host, m) {
-  const t = S.thread(m.id);
+/* ----------------------------------------------------------- the account -- */
+let accountNote = { id: null, text: '' };
 
-  host.innerHTML = `
-    <div class="card" style="max-width:820px">
-      <div class="card__head"><div><h2 class="card__title">Messages with ${esc(m.name)}</h2>
-        <p class="t-support">${t ? 'Last message ' + esc(t.last) : 'No messages yet.'}</p></div></div>
+function account(host, m, outlet, route) {
+  const notice = accountNote.id === m.id ? accountNote.text : '';
+  const activity = S.accountActivity({ userId: m.accountId, limit: 10 });
+  host.innerHTML = `<div class="stack gap-5">
+    <div class="card">
+      <div class="card__head"><div><h2 class="card__title">Account</h2><p class="t-support">Identity and access facts. Administrator access is provisioned by the system, never self-served.</p></div></div>
       <div class="card__body">
-        ${t ? `<div class="convo" style="padding:0">
-          ${[...t.messages].reverse().map((x) => `
-            <div class="msg msg--${x.who === 'member' ? 'member' : 'companion'}">
-              <div class="msg__meta">${x.who === 'member' ? esc(m.name) : esc(x.from || 'Veye team')} · ${esc(x.at)}</div>
-              <div class="msg__bubble">${esc(x.text)}</div>
-            </div>`).join('')}
-        </div>` : H.emptyState({ icon: 'messages', title: 'No messages yet',
-            msg: 'Anything you send appears here and in the member’s dashboard.' })}
+        <dl class="kv">
+          <dt>Name</dt><dd>${esc(m.name)}</dd>
+          <dt>Email</dt><dd>${esc(m.email)} · ${m.emailVerified ? 'verified' : 'not verified'}</dd>
+          ${m.pendingEmail ? `<dt>Pending email</dt><dd>${esc(m.pendingEmail)} · waiting for the member to confirm from that mailbox</dd>` : ''}
+          <dt>Account id</dt><dd class="mono">${esc(m.accountId)}</dd>
+          <dt>Member id</dt><dd class="mono">${esc(m.id)}</dd>
+          <dt>Member portal</dt><dd>Yes — this account owns a member profile</dd>
+          <dt>Admin console</dt><dd>${m.adminAccess ? 'Yes — managed under Settings → Administrators' : 'No'}</dd>
+          <dt>Status</dt><dd>${m.isActive ? 'Active' : `Deactivated${m.deactivatedAt ? ' on ' + esc(H.fmtDate(m.deactivatedAt)) : ''}`}${m.isSynthetic ? ' · synthetic local demo account' : ''}</dd>
+          <dt>Signed in now</dt><dd>${m.activeSessions === 0 ? 'No live session' : `${m.activeSessions} session${m.activeSessions === 1 ? '' : 's'}`}${m.lastSessionAt ? ' · last seen ' + esc(H.fmtDate(m.lastSessionAt)) : ''}</dd>
+          <dt>Joined</dt><dd>${esc(H.fmtDate(m.joinedAt))}</dd>
+          <dt>Last active</dt><dd>${m.lastActiveAt ? esc(H.fmtDate(m.lastActiveAt)) : 'Never'}</dd>
+        </dl>
       </div>
-      <div class="card__foot" style="display:block">
-        <form id="replyForm">
-          <div class="field">
-            <label for="reply">Reply to ${esc(m.name)}</label>
-            <textarea class="textarea" id="reply" rows="3" placeholder="Write a reply…"></textarea>
-            <p class="field__error" id="reply-err" hidden></p>
-          </div>
-          <div class="row gap-3" style="margin-top:var(--s-3);justify-content:flex-end">
-            <button type="button" class="btn btn--secondary" id="templateBtn">Use a template</button>
-            <button type="submit" class="btn btn--primary" id="sendBtn">${icon('send', { size: 16 })} Send</button>
-          </div>
-        </form>
+    </div>
+    ${m.adminAccess ? `<div class="card" data-testid="m360-account-actions">
+      <div class="card__head"><div><h2 class="card__title">Account actions</h2></div></div>
+      <div class="card__body">
+        <div class="notice notice--quiet">${icon('info', { size: 18 })}<div>
+          ${esc(m.name)} also has console access, so this account is managed under
+          <a href="${R.href('/settings/administrators')}">Settings → Administrators</a>, where the last-administrator guard lives.
+        </div></div>
       </div>
-    </div>`;
+    </div>` : `<div class="card" data-testid="m360-account-actions">
+      <div class="card__head"><div><h2 class="card__title">Account actions</h2>
+        <p class="t-support">Access and email only. Results stay read-only, and a password is always chosen by the member.</p></div></div>
+      <div class="card__body card__body--flush">
+        ${notice ? `<p class="t-support" role="status" style="padding:12px 20px 0" data-testid="account-action-notice">${esc(notice)}</p>` : ''}
+        <div class="rows">
+          <div class="rowitem">
+            <span class="rowitem__icon${m.isActive ? '' : ' rowitem__icon--off'}">${icon('lock', { size: 18 })}</span>
+            <div>
+              <div class="rowitem__title">${m.isActive ? 'Deactivate account' : 'Reactivate account'}</div>
+              <div class="rowitem__meta">${m.isActive
+                ? 'Signs them out everywhere at once and refuses their password until reactivated. Their saved results are kept.'
+                : `Deactivated${m.deactivatedAt ? ' on ' + esc(H.fmtDate(m.deactivatedAt)) : ''}. Reactivating lets them sign in with the password they already had.`}</div>
+            </div>
+            ${m.isActive
+              ? '<button class="btn btn--danger-quiet btn--sm" type="button" data-act="deactivate" data-testid="account-deactivate">Deactivate</button>'
+              : '<button class="btn btn--secondary btn--sm" type="button" data-act="reactivate" data-testid="account-reactivate">Reactivate</button>'}
+          </div>
+          <div class="rowitem">
+            <span class="rowitem__icon${m.emailVerified ? ' rowitem__icon--off' : ''}">${icon('mail', { size: 18 })}</span>
+            <div>
+              <div class="rowitem__title">Verification email</div>
+              <div class="rowitem__meta">${m.emailVerified
+                ? `${esc(m.email)} is already verified, so there is nothing to resend.`
+                : `Sends a fresh verification link to ${esc(m.email)}. It works once and expires in 48 hours.`}</div>
+            </div>
+            <button class="btn btn--secondary btn--sm" type="button" data-act="resend-verification" data-testid="account-resend-verification" ${m.emailVerified || !m.isActive ? 'disabled' : ''}>Resend</button>
+          </div>
+          <div class="rowitem">
+            <span class="rowitem__icon">${icon('shield', { size: 18 })}</span>
+            <div>
+              <div class="rowitem__title">Password reset link</div>
+              <div class="rowitem__meta">Emails ${esc(m.email)} the ordinary single-use reset link (30 minutes). You never see or choose their password.</div>
+            </div>
+            <button class="btn btn--secondary btn--sm" type="button" data-act="send-password-reset" data-testid="account-send-reset" ${m.isActive ? '' : 'disabled'}>Send reset link</button>
+          </div>
+        </div>
+      </div>
+      ${activity.length ? `<div class="card__body card__body--flush" data-testid="account-history">
+        <div class="t-eyebrow" style="padding:16px 20px 0">Account history</div>
+        <div class="rows">${activity.map((a) => `<div class="rowitem">
+          <span class="rowitem__icon">${icon('clipboard', { size: 18 })}</span>
+          <div style="min-width:0"><div class="rowitem__title">${esc(a.label)}</div><div class="rowitem__meta">by ${esc(a.actor_name)}</div></div>
+          <span class="t-support" style="white-space:nowrap">${esc(H.fmtDate(a.at))}</span>
+        </div>`).join('')}</div>
+      </div>` : ''}
+      <div class="card__foot"><span class="t-support">Every action here is written to the admin audit log.</span></div>
+    </div>`}
+  </div>`;
 
-  const form = host.querySelector('#replyForm');
-  const ta = host.querySelector('#reply');
-
-  host.querySelector('#templateBtn').addEventListener('click', () => {
-    UI.modal({
-      title: 'Message templates',
-      body: `<div class="rows">${[
-        ['Check in after an assessment', 'I had a look at your latest results. Nothing to worry about — shall we go through it on Friday?'],
-        ['Nudge a stalled plan', 'Your plan is ready whenever you are. The first day takes about ten minutes to build.'],
-        ['Answer a supplement question', 'Amounts depend on your situation, so let us go through it together rather than me guessing here.'],
-      ].map(([name, text], i) => `<div class="rowitem">
-          <span class="rowitem__icon">${icon('file-text', { size: 18 })}</span>
-          <div><div class="rowitem__title">${esc(name)}</div><div class="rowitem__meta">${esc(text)}</div></div>
-          <div class="rowitem__side"><button class="btn btn--secondary btn--sm" data-tpl="${i}">Use</button></div>
-        </div>`).join('')}</div>`,
-      actions: [{ label: 'Close', variant: 'secondary', value: 'close' }],
-      onClose: () => {},
-    }).el.querySelectorAll('[data-tpl]').forEach((b, i, all) => {
-      b.addEventListener('click', () => {
-        ta.value = [
-          'I had a look at your latest results. Nothing to worry about — shall we go through it on Friday?',
-          'Your plan is ready whenever you are. The first day takes about ten minutes to build.',
-          'Amounts depend on your situation, so let us go through it together rather than me guessing here.',
-        ][+b.dataset.tpl];
-        b.closest('.modal-scrim').remove();
-        document.body.style.overflow = '';
-        ta.focus();
-      });
+  host.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
+    const action = btn.dataset.act;
+    const confirms = {
+      deactivate: { title: 'Deactivate this account?', message: `Deactivate ${esc(m.name)}? They are signed out at once and cannot sign in until reactivated.`, confirmLabel: 'Deactivate', danger: true },
+      'send-password-reset': { title: 'Send a reset link?', message: `Email ${esc(m.name)} a password-reset link?`, confirmLabel: 'Send reset link' },
+    };
+    if (confirms[action]) { const r = await UI.confirm(confirms[action]); if (!r.ok) return; }
+    const labels = { deactivate: 'Working…', reactivate: 'Working…', 'resend-verification': 'Sending…', 'send-password-reset': 'Sending…' };
+    H.busy(btn, labels[action], () => {
+      let message = '';
+      let delivery = null;
+      if (action === 'deactivate') {
+        S.updateMember(m.id, (x) => { x.isActive = false; x.deactivatedAt = S.now(); x.activeSessions = 0; return x; });
+        S.audit('member_account.deactivated', 'user_account', m.accountId, { email: m.email });
+        message = 'The account is deactivated and every session has ended.';
+      } else if (action === 'reactivate') {
+        S.updateMember(m.id, (x) => { x.isActive = true; x.deactivatedAt = null; return x; });
+        S.audit('member_account.reactivated', 'user_account', m.accountId, { email: m.email });
+        message = 'The account is active again. They can sign in as before.';
+      } else if (action === 'resend-verification') {
+        delivery = S.deliver(m.email);
+        S.audit('member_account.verification_resent', 'user_account', m.accountId, { email: m.email, delivery: delivery.status });
+        message = 'A fresh verification email has been sent.';
+      } else {
+        delivery = S.deliver(m.email);
+        S.audit('member_account.password_reset_sent', 'user_account', m.accountId, { email: m.email, delivery: delivery.status });
+        message = 'A password-reset link has been emailed to the member.';
+      }
+      accountNote = { id: m.id, text: delivery && delivery.status !== 'sent'
+        ? `${message} The email could not be sent: ${delivery.detail || 'mail service unavailable'}.` : message };
+      render(outlet, route);
     });
-  });
-
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const text = ta.value.trim();
-    const err = host.querySelector('#reply-err');
-    if (!text) {
-      ta.setAttribute('aria-invalid', 'true');
-      err.innerHTML = icon('alert-circle', { size: 14 }) + ' Write something before sending.';
-      err.hidden = false;
-      ta.focus();
-      return;
-    }
-    err.hidden = true;
-    ta.removeAttribute('aria-invalid');
-    H.withSaving(host.querySelector('#sendBtn'), () => {
-      const st = S.get();
-      const threads = st.threads.slice();
-      let th = threads.find((x) => x.memberId === m.id);
-      if (!th) { th = { id: 'TH-' + m.id, memberId: m.id, unread: 0, last: 'Just now', messages: [] }; threads.push(th); }
-      th.messages = [{ who: 'admin', at: 'Just now', from: st.me.name, text }, ...th.messages];
-      th.last = 'Just now';
-      th.unread = 0;
-      S.set({ threads });
-      S.note('Messaged ' + m.name);
-      messages(host, m);
-      UI.toast({ title: 'Message sent', message: 'In production, ' + m.name + ' would see it in their dashboard. Nothing leaves this prototype.' });
-    });
-  });
+  }));
 }
 
-/* -------------------------------------------------------------- header actions */
-function assignPlan(m) {
-  const st = S.get();
-  const live = st.programs.filter((p) => p.status === 'Live');
-  UI.modal({
-    title: 'Assign a plan to ' + m.name,
-    body: `${H.field({ id: 'ap-plan', label: 'Program', type: 'select', options: live.map((p) => p.name) })}
-      ${H.field({ id: 'ap-start', label: 'Start date', type: 'date', value: '2026-08-17' })}
-      ${H.field({ id: 'ap-note', label: 'Note to the member', type: 'textarea', rows: 3,
-        placeholder: 'Optional. Sent with the assignment.' })}`,
-    actions: [
-      { label: 'Cancel', variant: 'secondary', value: false },
-      { label: 'Assign the plan', variant: 'primary', value: true, autofocus: true, onClick: (ref) => {
-        const name = ref.el.querySelector('#ap-plan').value;
-        const members = S.get().members.map((x) => x.id === m.id ? { ...x, program: name, adherence: x.adherence == null ? 0 : x.adherence } : x);
-        S.set({ members });
-        S.note('Assigned ' + name + ' to ' + m.name);
-        UI.toast({ title: 'Plan assigned', message: m.name + ' now has ' + name + '.' });
-        R.navigate('/members/' + m.id + '/nutrition');
-      } },
-    ],
-  });
-}
-
-function wireActions(outlet, m) {
-  /* On any other tab this navigates. On the Messages tab itself navigation is a
-     no-op, so the button would look live and do nothing — there it puts the
-     cursor in the reply box instead. */
-  outlet.querySelector('#msgBtn').addEventListener('click', () => {
-    const reply = outlet.querySelector('#reply');
-    if (reply) { reply.focus(); reply.scrollIntoView({ block: 'center' }); return; }
-    R.navigate('/members/' + m.id + '/messages');
-  });
-  outlet.querySelector('#planBtn').addEventListener('click', () => assignPlan(m));
-
-  /* Everything secondary moves behind one menu, so the header reads as two
-     decisions rather than a toolbar of four. */
-  UI.attachMenu(outlet.querySelector('#moreBtn'), () => `
-    <button class="menu__item" data-value="note">${icon('note', { size: 18 })} Add a note</button>
-    <button class="menu__item" data-value="export">${icon('download', { size: 18 })} Export record</button>
-    <div class="menu__sep"></div>
-    <a class="menu__item" href="${R.href('/members/' + m.id + '/assessments')}" data-value="assess">${icon('clipboard', { size: 18 })} Assessment results</a>
-    <a class="menu__item" href="${R.href('/members/' + m.id + '/storyline')}" data-value="story">${icon('history', { size: 18 })} Full storyline</a>`,
-    (value) => { if (value === 'note') addNote(m); if (value === 'export') exportRecord(m); });
-}
-
-function addNote(m) {
-  UI.modal({
-      title: 'Add a note',
-      desc: 'Notes are visible to the Veye team and appear on the storyline. The member does not see them.',
-      body: H.field({ id: 'nt-text', label: 'Note', type: 'textarea', rows: 4, required: true,
-        placeholder: 'What should the next person to open this record know?' }),
-      actions: [
-        { label: 'Cancel', variant: 'secondary', value: false },
-        { label: 'Save the note', variant: 'primary', value: true, autofocus: true, onClick: (ref) => {
-          const text = ref.el.querySelector('#nt-text').value.trim();
-          if (!text) { H.fieldError(ref.el, 'nt-text', 'A note needs some words in it.'); return false; }
-          const st = S.get();
-          S.set({ memberNotes: [{ memberId: m.id, who: st.me.name, at: 'Just now', text }, ...st.memberNotes] });
-          S.note('Added a note on ' + m.name);
-          UI.toast({ title: 'Note saved', message: 'It is on the storyline.' });
-          R.navigate('/members/' + m.id + '/storyline');
-        } },
-      ],
-    });
-}
-
-function exportRecord(m) {
-  UI.confirm({
-    title: 'Export this member record?',
-    message: 'A spreadsheet of ' + m.name + '’s profile, assessment results, blood markers, mood entries and diary rows.',
-    reversible: 'In this prototype nothing leaves the browser.',
-    confirmLabel: 'Export the record',
-  }).then((r) => {
-    if (r.ok) UI.toast({ title: 'Export prepared', message: m.name + '’s record. In the real console the file downloads here.' });
-  });
-}
-
+window.Veye.memberEligibility = eligibility;
 window.Veye.screens = window.Veye.screens || {};
-window.Veye.screens['member-360'] = { render };
+/* Arriving at a record starts without a notice, as the console's remount does;
+   an account action re-renders internally so its own result stays on screen. */
+window.Veye.screens['member-360'] = { render: (outlet, route) => {
+  accountNote = { id: null, text: '' };
+  render(outlet, route);
+} };
 
 })();

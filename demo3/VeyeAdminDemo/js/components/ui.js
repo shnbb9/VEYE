@@ -343,6 +343,12 @@ function attachMenu(trigger, buildHtml, onSelect) {
   return { open, close };
 }
 
+/** Close every open modal and drawer — a route change must not leave one
+ *  standing over the next screen. */
+function closeAll() {
+  [...openStack].reverse().forEach((entry) => entry.close && entry.close());
+}
+
 /** Escape any string used inside innerHTML. */
 function esc(s) {
   return String(s == null ? '' : s)
@@ -351,6 +357,6 @@ function esc(s) {
 }
 
 window.Veye = window.Veye || { screens: {} };
-window.Veye.UI = { modal, confirm, drawer, toast, attachMenu, esc };
+window.Veye.UI = { modal, confirm, drawer, toast, attachMenu, closeAll, esc };
 
 })();

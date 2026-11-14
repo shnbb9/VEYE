@@ -1,0 +1,38 @@
+/* ============================================================================
+   Prototype-only additions
+   ----------------------------------------------------------------------------
+   The eight console stylesheets and admin-app.css in this folder are byte-for-
+   byte the real console's (platform/web/public/admin-css). Anything only the
+   prototype needs lives here instead, so those files can be re-copied from the
+   console whenever it changes without losing it.
+   ============================================================================ */
+
+/* The environment chip is a button here: it opens the prototype menu (what
+   this is, Reset the sample data). It still reads as the console's chip. */
+.protochip { border: 0; cursor: pointer; font-family: inherit; }
+.protochip:hover { filter: brightness(.96); }
+.protochip:focus-visible { outline: 2px solid var(--focus, #2E5A16); outline-offset: 2px; }
+.topbar .menu { min-width: 280px; }
+
+/* An uploaded picture in the large avatar of Settings → Your account and
+   Member 360 fills its circle like the initials do. */
+.avatar--lg.avatar--photo img { border-radius: 50%; }
+
+/* Below 768px the console's stylesheet hides the tab strip; the prototype's
+   section selector takes its place, and after Member 360's sharing banner it
+   needs the breathing room the strip's own padding gave. */
+#sharingBanner + .subnav + .sectionpick { margin-top: var(--s-4); }
+
+/* At 640px and below the console's .rowitem drops to two columns, and a
+   control that is not wrapped in .rowitem__side lands in the 40px icon column:
+   "Apply current policy to existing" hung off the left edge of a 390px screen
+   (the console does the same). It takes the whole row instead, as
+   .rowitem__side already does. */
+@media (max-width: 640px) {
+  .rowitem > :nth-child(3) { grid-column: 1 / -1; justify-self: start; max-width: 100%; }
+}
+
+/* Knowledge Sources → "Attach document": the label and the native file input
+   sit on one line, which ran 55px past a 390px screen. They wrap instead. */
+.filelabel { flex-wrap: wrap; max-width: 100%; }
+.filelabel input { min-width: 0; max-width: 100%; }

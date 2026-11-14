@@ -299,9 +299,15 @@
 }
 
 @media (max-width: 900px) {
-  /* Three selects and a search field in one row is a crowded strip on a phone.
-     They move into a drawer with room to read them. */
-  .findbar__filters { display: none; }
+  /* Three selects and a search field in one row is a crowded strip on a phone,
+     and the intention was to move them into a drawer with room to read them.
+     That drawer was never built: `.findbar__drawerbtn` is rendered nowhere, so
+     `display: none` here left the member directory with no status, onboarding
+     or activity filter at all below 900px — three of the four widths this
+     project accepts — and nothing to open in their place.
+     They wrap onto their own line instead, which `.findbar` already allows.
+     A crowded strip is worse than a clean one; it is much better than none. */
+  .findbar__filters { display: contents; }
   .findbar__drawerbtn { display: inline-flex; }
   .table-wrap--sticky { overflow-x: auto; }
   .table-wrap--sticky thead th { position: static; box-shadow: none; }

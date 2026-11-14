@@ -18,11 +18,15 @@
 <link rel="stylesheet" href="css/tokens.css?v=6">
 <link rel="stylesheet" href="css/base.css?v=3">
 <link rel="stylesheet" href="css/layout.css?v=3">
-<link rel="stylesheet" href="css/components.css?v=6">
-<link rel="stylesheet" href="css/screens.css?v=8">
-<link rel="stylesheet" href="css/client.css?v=7">
-<link rel="stylesheet" href="css/motion.css?v=6">
-<link rel="stylesheet" href="css/responsive.css?v=3">
+<link rel="stylesheet" href="css/components.css?v=7">
+<link rel="stylesheet" href="css/screens.css?v=9">
+<link rel="stylesheet" href="css/client.css?v=8">
+<link rel="stylesheet" href="css/motion.css?v=7">
+<link rel="stylesheet" href="css/responsive.css?v=4">
+<!-- The console's own additions on top of the eight shared sheets
+     (platform/web/public/admin-css/admin-app.css), then this prototype's. -->
+<link rel="stylesheet" href="css/admin-app.css?v=1">
+<link rel="stylesheet" href="css/prototype.css?v=4">
 </head>
 <body>
 
@@ -45,32 +49,33 @@
      Deliberately NOT type="module": this console has to open by double-clicking
      index.html, and browsers block module scripts on file:// URLs. Everything
      registers on one window.Veye namespace. -->
-<script src="js/mock-data.js?v=13"></script>
-<script src="js/icons.js?v=4"></script>
-<script src="js/components/ui.js?v=3"></script>
-<script src="js/router.js?v=3"></script>
-<script src="js/state.js?v=13"></script>
-<script src="js/charts.js?v=3"></script>
-<script src="js/motion.js?v=6"></script>
-<script src="js/helpers.js?v=8"></script>
+<script src="js/veye-guided-flows-data.js?v=2"></script>
+<script src="js/mock-data.js?v=15"></script>
+<script src="js/icons.js?v=5"></script>
+<script src="js/components/ui.js?v=4"></script>
+<script src="js/router.js?v=4"></script>
+<script src="js/state.js?v=14"></script>
+<script src="js/helpers.js?v=9"></script>
+<script src="js/components/rich-text.js?v=1"></script>
 
-<script src="js/screens/login.js?v=6"></script>
-<script src="js/screens/home.js?v=6"></script>
-<script src="js/screens/members.js?v=6"></script>
-<script src="js/screens/member-360.js?v=9"></script>
-<script src="js/screens/care-studio.js?v=14"></script>
-<script src="js/screens/care-program.js?v=6"></script>
-<script src="js/screens/assessments.js?v=9"></script>
-<script src="js/screens/assessment-editor.js?v=12"></script>
-<script src="js/veye-guided-flows-data.js?v=1"></script>
-<script src="js/screens/companion-guided.js?v=1"></script>
-<script src="js/screens/companion.js?v=12"></script>
-<script src="js/screens/requests.js?v=2"></script>
-<script src="js/screens/content.js?v=12"></script>
-<script src="js/screens/insights.js?v=9"></script>
-<script src="js/screens/settings.js?v=11"></script>
-<script src="js/screens/profile.js?v=6"></script>
+<script src="js/screens/login.js?v=7"></script>
+<script src="js/screens/home.js?v=7"></script>
+<script src="js/screens/members.js?v=7"></script>
+<script src="js/screens/prospects.js?v=1"></script>
+<script src="js/screens/deletions.js?v=1"></script>
+<script src="js/screens/member-360.js?v=10"></script>
+<script src="js/screens/care-studio.js?v=15"></script>
+<script src="js/screens/assessments.js?v=10"></script>
+<script src="js/screens/assessment-results.js?v=1"></script>
+<script src="js/screens/companion.js?v=13"></script>
+<script src="js/screens/companion-guided.js?v=2"></script>
+<script src="js/screens/companion-advanced.js?v=1"></script>
+<script src="js/screens/requests.js?v=3"></script>
+<script src="js/screens/content.js?v=13"></script>
+<script src="js/screens/insights.js?v=10"></script>
+<script src="js/screens/settings-cards.js?v=1"></script>
+<script src="js/screens/settings.js?v=13"></script>
 
-<script src="js/app.js?v=12"></script>
+<script src="js/app.js?v=13"></script>
 </body>
 </html>
