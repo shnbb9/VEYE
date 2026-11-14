@@ -16,7 +16,7 @@ from app.auth.identity import IdentityVerifier, build_identity_verifier
 from app.auth.provider import DevelopmentSessionAuthProvider
 from app.companion.providers.embeddings import EmbeddingProvider, build_embedding_provider
 from app.companion.providers.llm import LLMProvider, build_llm_provider
-from app.core.config import Settings, settings
+from app.core.config import Settings, reveal, settings
 from app.knowledge.object_store import KnowledgeObjectStore, build_object_store
 from app.notifications import templates
 from app.notifications.email import EmailProvider, build_email_provider
@@ -69,10 +69,10 @@ def build_runtime(config: Settings | None = None) -> Runtime:
     # The two deployment facts every message carries: where it really came
     # from, and whether replying reaches anybody.
     templates.configure(environment=config.environment, reply_to=config.email_reply_to)
-    llm = build_llm_provider(config.llm_provider, groq_api_key=config.groq_api_key, groq_model=config.groq_model,
+    llm = build_llm_provider(config.llm_provider, groq_api_key=reveal(config.groq_api_key), groq_model=config.groq_model,
                              timeout_seconds=config.llm_timeout_seconds,
                              gemini={"project": config.gcp_project or "", "location": config.gcp_location,
-                                     "model": config.gemini_model, "api_key": config.gemini_api_key,
+                                     "model": config.gemini_model, "api_key": reveal(config.gemini_api_key),
                                      "member_data_cleared": config.gemini_member_data_cleared,
                                      "production": config.is_production})
     embeddings = build_embedding_provider(config.embedding_provider,
@@ -87,14 +87,14 @@ def build_runtime(config: Settings | None = None) -> Runtime:
     if config.langfuse_enabled:
         from app.observability.langfuse_exporter import LangfuseTraceExporter
 
-        exporter = LangfuseTraceExporter.build(public_key=config.langfuse_public_key, secret_key=config.langfuse_secret_key,
+        exporter = LangfuseTraceExporter.build(public_key=config.langfuse_public_key, secret_key=reveal(config.langfuse_secret_key),
                                                base_url=config.langfuse_base_url, environment=config.environment)
         if exporter is not None:
             exporters.append(exporter)
             langfuse_status = "enabled"
         else:
             langfuse_status = "enabled-but-unavailable"
-    telemetry = TelemetryRecorder(exporters, pseudonym_key=config.telemetry_pseudonym_key, environment=config.environment,
+    telemetry = TelemetryRecorder(exporters, pseudonym_key=reveal(config.telemetry_pseudonym_key) or "", environment=config.environment,
                                   capture_content=config.ai_telemetry_capture_content)
     return Runtime(settings=config, auth_provider=auth_provider, identity=identity, email=email, llm=llm, embeddings=embeddings,
                    object_store=object_store, media_store=media_store, telemetry=telemetry, langfuse_status=langfuse_status)

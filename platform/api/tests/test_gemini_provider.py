@@ -188,6 +188,22 @@ def test_the_settings_default_to_nothing_connected_and_nothing_cleared():
     assert defaults.gemini_member_data_cleared is False
 
 
+def test_no_key_is_ever_printed_with_the_settings():
+    """A repr of the settings reaches tracebacks and log lines. Every key in
+    them is a SecretStr, so the value is never part of that text, and the one
+    place that needs it unwraps it on purpose."""
+    from app.core.config import Settings, reveal
+
+    keys = {"gemini_api_key": "gemini-canary-1f3a", "groq_api_key": "groq-canary-2b4c",
+            "langfuse_secret_key": "langfuse-canary-3d5e", "telemetry_pseudonym_key": "pseudonym-canary-4f6a",
+            "smtp_password": "smtp-canary-5a7b", "prospect_encryption_keys": "prospect-canary-6c8d"}
+    configured = Settings(database_url="sqlite:///./unused.db", **keys)
+    printed = repr(configured) + str(configured) + str(configured.model_dump())
+    for name, value in keys.items():
+        assert value not in printed, f"{name} is printed with the settings"
+        assert reveal(getattr(configured, name)) == value
+
+
 # ---- the trust boundary, by classification ---------------------------------
 # A heading in a prompt describes the prompt. The classification states whose
 # data it is, decided from server state when the request was built. These are

@@ -116,13 +116,13 @@ class Settings(BaseSettings):
     gcp_location: str = "us"
     # Local experimentation only. Refused in production, and never permitted to
     # carry member data.
-    gemini_api_key: str | None = None
+    gemini_api_key: SecretStr | None = None
     # Sending a member's health summaries to an external model is a disclosure,
     # and whether it is a permitted one is a BAA/covered-service question
     # nobody has answered. Until a deployment says otherwise, a prompt carrying
     # member context is refused rather than quietly emptied.
     gemini_member_data_cleared: bool = False
-    groq_api_key: str | None = None
+    groq_api_key: SecretStr | None = None
     groq_model: str = "llama-3.3-70b-versatile"
     llm_timeout_seconds: float = 30.0
     # EmbeddingProvider: "hashing" is the deterministic local provider used for
@@ -175,11 +175,11 @@ class Settings(BaseSettings):
     # Every trace is masked before it reaches any exporter. The database exporter
     # feeds the admin Advanced monitoring screens; Langfuse is optional and only
     # active when explicitly enabled with keys present.
-    telemetry_pseudonym_key: str = "local-development-pseudonym-key"
+    telemetry_pseudonym_key: SecretStr = SecretStr("local-development-pseudonym-key")
     ai_telemetry_capture_content: bool = False
     langfuse_enabled: bool = False
     langfuse_public_key: str | None = None
-    langfuse_secret_key: str | None = None
+    langfuse_secret_key: SecretStr | None = None
     langfuse_base_url: str = "https://cloud.langfuse.com"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VEYE_", extra="ignore")
@@ -217,6 +217,25 @@ class Settings(BaseSettings):
         if self.is_production and not self.session_cookie_secure:
             object.__setattr__(self, "session_cookie_secure", True)
         return self
+
+    @model_validator(mode="after")
+    def _limits_as_written_in_production(self) -> "Settings":
+        # The scale lets a local stack sign up a whole test suite's members
+        # from one address (compose.local.yaml sets 50). Production enforces
+        # every limit as written, whatever an env file copied from development
+        # says.
+        if self.is_production and self.rate_limit_scale != 1.0:
+            object.__setattr__(self, "rate_limit_scale", 1.0)
+        return self
+
+
+def reveal(value: SecretStr | str | None) -> str | None:
+    """The plain value of a secret setting, for the one call that hands it to
+    a provider. Keys are SecretStr so a repr, a log line or a traceback of the
+    settings never prints them."""
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    return value
 
 
 settings = Settings()

@@ -33,6 +33,7 @@ import re
 from typing import Literal, Protocol
 
 from app.companion.providers.llm import DataClassification
+from app.core.config import reveal
 
 # A corpus passage, or a member's search query.
 Purpose = Literal["document", "query"]
@@ -262,7 +263,7 @@ def build_embedding_provider(kind: str, *, dimensions: int, settings=None) -> Em
             location=getattr(settings, "gcp_location", "") or "",
             model=getattr(settings, "embedding_model", "") or "",
             member_data_cleared=bool(getattr(settings, "gemini_member_data_cleared", False)),
-            api_key=getattr(settings, "gemini_api_key", None),
+            api_key=reveal(getattr(settings, "gemini_api_key", None)),
             production=bool(getattr(settings, "is_production", False)),
         )
     raise ValueError(

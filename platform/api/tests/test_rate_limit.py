@@ -244,3 +244,21 @@ def test_the_scale_raises_a_limit_for_an_environment_but_can_never_lower_one(mem
         assert lowered._allowance(10) == 10
     finally:
         db.close()
+
+
+def test_production_enforces_the_limits_as_written_whatever_the_scale_says(member_client):
+    """compose.local.yaml raises every limit 50x for the acceptance suite. An
+    env file copied from there into production must not carry that along."""
+    from app.core.config import Settings
+
+    production = Settings(database_url="sqlite:///unused", environment="production", email_provider="smtp",
+                          smtp_host="smtp.example.test", session_cookie_secure=True, rate_limit_scale=50)
+    assert production.rate_limit_scale == 1.0
+    local = Settings(database_url="sqlite:///unused", environment="local", rate_limit_scale=50)
+    assert local.rate_limit_scale == 50
+    db = SessionLocal()
+    try:
+        assert RateLimiter(db, production)._allowance(10) == 10
+        assert RateLimiter(db, local)._allowance(10) == 500
+    finally:
+        db.close()

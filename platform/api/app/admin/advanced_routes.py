@@ -28,7 +28,7 @@ from app.admin.schemas import (
 from app.auth.principal import require_admin
 from app.companion.models import CompanionConversation, CompanionMessage, CompanionPolicyDecision
 from app.companion.settings import get_or_create_settings
-from app.core.config import Settings
+from app.core.config import Settings, reveal
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.knowledge.service import KnowledgeService
@@ -166,7 +166,7 @@ def provider_status(db: Session = Depends(get_db), runtime: Runtime = Depends(ge
         object_store=runtime.object_store.describe() | {"production_target": "Google Cloud Storage"},
         telemetry=runtime.telemetry.describe(),
         langfuse={"status": runtime.langfuse_status, "enabled": settings.langfuse_enabled, "base_url": settings.langfuse_base_url if settings.langfuse_enabled else None,
-                  "keys_present": bool(settings.langfuse_public_key and settings.langfuse_secret_key)},
+                  "keys_present": bool(settings.langfuse_public_key and reveal(settings.langfuse_secret_key))},
         database=database,
     )
 
