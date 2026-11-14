@@ -37,9 +37,9 @@ function pageHead(o = {}) {
 }
 
 /**
- * Section navigation: the console's tab strip, plus — below 768px, where the
- * console's own stylesheet hides the strip — the labelled selector this
- * prototype has always used, so a phone keeps a way between sections.
+ * Section navigation, as the console's Subnav renders it: the tab strip, plus
+ * the labelled selector that the stylesheet shows instead below 768px (the
+ * console gained the selector on 15 Nov 2026; this prototype always had it).
  */
 let navSeq = 0;
 function subnav(items, activeKey) {

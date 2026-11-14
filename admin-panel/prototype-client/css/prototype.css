@@ -18,21 +18,6 @@
    Member 360 fills its circle like the initials do. */
 .avatar--lg.avatar--photo img { border-radius: 50%; }
 
-/* Below 768px the console's stylesheet hides the tab strip; the prototype's
-   section selector takes its place, and after Member 360's sharing banner it
-   needs the breathing room the strip's own padding gave. */
-#sharingBanner + .subnav + .sectionpick { margin-top: var(--s-4); }
-
-/* At 640px and below the console's .rowitem drops to two columns, and a
-   control that is not wrapped in .rowitem__side lands in the 40px icon column:
-   "Apply current policy to existing" hung off the left edge of a 390px screen
-   (the console does the same). It takes the whole row instead, as
-   .rowitem__side already does. */
-@media (max-width: 640px) {
-  .rowitem > :nth-child(3) { grid-column: 1 / -1; justify-self: start; max-width: 100%; }
-}
-
-/* Knowledge Sources → "Attach document": the label and the native file input
-   sit on one line, which ran 55px past a 390px screen. They wrap instead. */
-.filelabel { flex-wrap: wrap; max-width: 100%; }
-.filelabel input { min-width: 0; max-width: 100%; }
+/* The section selector, the phone row layout and the Knowledge Sources file
+   label used to be fixed here. Since 15 Nov 2026 the console has them itself
+   (admin-app.css and its Subnav), so this file no longer needs them. */

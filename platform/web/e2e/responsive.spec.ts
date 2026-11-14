@@ -21,7 +21,12 @@ const MARKETING = ["/", "/why-veye", "/about", "/help", "/pricing"];
 const MEMBER = ["/app", "/app/progress", "/app/progress/health-assessment", "/app/progress/simple-quiz", "/app/mood", "/app/food-diary", "/app/food-choices", "/app/companion", "/app/fitness", "/app/supplements", "/app/resources", "/app/settings",
   "/app/sharing-request", "/app/saved-result"];
 const ADMIN_PAGES = ["/admin", "/admin/members", "/admin/assessments", "/admin/care", "/admin/requests", "/admin/content", "/admin/insights", "/admin/settings", "/admin/companion/conversations", "/admin/companion/settings/guided-experiences",
-  "/admin/members/prospects", "/admin/members/deletions"];
+  "/admin/members/prospects", "/admin/members/deletions",
+  // Added 15 Nov 2026: Knowledge Sources ran 55px past a 390px screen and the
+  // settings sections squeezed their row controls, and this list never
+  // visited them.
+  "/admin/companion/knowledge-sources", "/admin/companion/feedback", "/admin/companion/settings",
+  "/admin/settings?section=product", "/admin/settings?section=administrators", "/admin/settings?section=features"];
 
 /** Headings must step down one level at a time, in document order.
  *
@@ -135,6 +140,35 @@ for (const size of WIDTHS) {
       }
       expect(errors).toEqual([]);
     });
+
+    // Below 768px the console's stylesheet hides the tab strip and shows a
+    // labelled section selector instead. The selector was never rendered, so
+    // a phone had no way between the sections of 17 screens (15 Nov 2026).
+    if (size.width <= 768) {
+      test(`admin sections are reachable from the section selector`, async ({ page }) => {
+        await adminSignIn(page, ADMIN.email, ADMIN.password);
+        await expectAdminHome(page);
+        await open(page, "/admin/settings");
+        await expect(page.locator(".subnav")).toBeHidden();
+        const picker = page.getByRole("combobox", { name: "Section" });
+        await expect(picker).toBeVisible();
+        await picker.selectOption({ label: "Product settings" });
+        await expect(page).toHaveURL(/section=product/);
+        await expect(page.getByTestId("support-email-input")).toBeVisible();
+
+        await open(page, "/admin/companion/conversations");
+        await page.getByRole("combobox", { name: "Section" }).selectOption({ label: "Knowledge Sources" });
+        await expect(page).toHaveURL(/\/admin\/companion\/knowledge-sources/);
+        await expectNoHorizontalOverflow(page);
+
+        if (size.width <= 640) {
+          // A row's control takes the whole row, not the 40px icon column.
+          await open(page, "/admin/settings?section=product");
+          const box = await page.getByTestId("retention-apply").boundingBox();
+          expect(box?.width ?? 0, "a row control was squeezed into the icon column").toBeGreaterThan(120);
+        }
+      });
+    }
 
     test(`admin pages`, async ({ page }) => {
       const errors = watchConsole(page);

@@ -22,8 +22,24 @@
 .stackgap > * + * { margin-top: var(--s-5); }
 .metric-row--wrap { flex-wrap: wrap; }
 .metric-row--wrap > * + * { border-left: 0; }
-.filelabel { display: inline-flex; align-items: center; gap: var(--s-2); }
-.filelabel input { max-width: 260px; }
+/* Knowledge Sources → "Attach document": the label and the native file input
+   wrap rather than running past a phone (55px past a 390px screen, found
+   15 Nov 2026). */
+.filelabel { display: inline-flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; max-width: 100%; }
+.filelabel input { min-width: 0; max-width: min(260px, 100%); }
+
+/* At 640px and below a .rowitem drops to two columns (client.css), and a third
+   child that is not wrapped in .rowitem__side landed in the 40px icon column:
+   the Beta-default chips, "Apply current policy to existing" and the cleanup
+   buttons were squeezed into 40px. It takes the whole row instead, as
+   .rowitem__side already does. */
+@media (max-width: 640px) {
+  .rowitem > :nth-child(3) { grid-column: 1 / -1; justify-self: start; max-width: 100%; }
+}
+
+/* Member 360: below 768px the section selector replaces the tab strip, and
+   after the sharing banner it needs the room the strip's padding gave. */
+#sharingBanner + .subnav + .sectionpick { margin-top: var(--s-4); }
 
 /* Requests & Inbox: the replies already sent on a request. A reply is a
    quotation of what went out, so it keeps the typed line breaks, and one that

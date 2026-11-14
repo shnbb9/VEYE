@@ -62,7 +62,7 @@ function SharingBanner({ member, memberId, onAsked }: { member: Member360; membe
 
   if (member.shares_health_data) {
     return (
-      <div className="notice notice--quiet" data-testid="sharing-banner">
+      <div className="notice notice--quiet" id="sharingBanner" data-testid="sharing-banner">
         <Icon name="shield" size={18} />
         <div>
           <strong>{member.sharing_label}.</strong> This member has chosen to share their saved results with the
@@ -100,7 +100,7 @@ function SharingBanner({ member, memberId, onAsked }: { member: Member360; membe
   }
 
   return (
-    <div className="notice" data-testid="sharing-banner">
+    <div className="notice" id="sharingBanner" data-testid="sharing-banner">
       <Icon name="shield" size={18} />
       <div style={{ minWidth: 0 }}>
         <strong>Health records are not shared.</strong> {explanation}{" "}

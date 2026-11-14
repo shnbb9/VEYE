@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { myConsolePhotoUrl } from "@/lib/admin-console-api";
-import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useId, useState, type ReactNode } from "react";
 import { RequirePortal, useSession } from "@/components/session";
 
 /* The Veye Admin Console shell, ported from admin-panel/prototype-client
@@ -205,15 +205,36 @@ export function PageHead({ title, desc, crumbs, actions }: { title: string; desc
   );
 }
 
+/** Section navigation: the tab strip, and below 768px — where motion.css hides
+ *  the strip — the labelled selector the same stylesheet shows instead. Both
+ *  are always rendered and only one is displayed, so they cannot disagree. The
+ *  selector was missing, which left every sectioned screen on a phone with no
+ *  way between its sections (found mirroring the console into the prototype,
+ *  15 Nov 2026). */
 export function Subnav({ items, active }: { items: readonly { key: string; label: string; href: string; count?: number }[]; active: string }) {
+  const router = useRouter();
+  const pickerId = useId();
+  const current = items.find((item) => item.key === active);
   return (
-    <nav className="subnav" aria-label="Section">
-      {items.map((item) => (
-        <Link key={item.key} className={`subnav__btn${item.key === active ? " is-active" : ""}`} href={item.href} aria-current={item.key === active ? "page" : undefined}>
-          {item.label}{item.count != null && item.count > 0 && <span className="subnav__count">{item.count}</span>}
-        </Link>
-      ))}
-    </nav>
+    <>
+      <nav className="subnav" aria-label="Section">
+        {items.map((item) => (
+          <Link key={item.key} className={`subnav__btn${item.key === active ? " is-active" : ""}`} href={item.href} aria-current={item.key === active ? "page" : undefined}>
+            {item.label}{item.count != null && item.count > 0 && <span className="subnav__count">{item.count}</span>}
+          </Link>
+        ))}
+      </nav>
+      <div className="sectionpick">
+        <label className="sectionpick__label" htmlFor={pickerId}>Section</label>
+        <select className="select sectionpick__select" id={pickerId} data-testid="section-picker"
+                value={current ? current.href : ""} onChange={(event) => router.push(event.target.value)}>
+          {items.map((item) => (
+            <option key={item.key} value={item.href}>{item.label}{item.count ? ` (${item.count})` : ""}</option>
+          ))}
+          {!current && <option value="" disabled>Choose a section</option>}
+        </select>
+      </div>
+    </>
   );
 }
 

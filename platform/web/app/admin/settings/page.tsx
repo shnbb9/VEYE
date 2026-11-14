@@ -490,7 +490,7 @@ function AdministratorsSection() {
         {!page && !error && <p className="loading-row">Loading…</p>}
         {page && (
           <>
-            <div className="minirow" style={{ minWidth: 330 }} data-testid="admins-counts">
+            <div className="minirow" style={{ minWidth: 330, padding: "var(--s-4) var(--s-5) 0" }} data-testid="admins-counts">
               <div className="mini"><span className="mini__n">{page.total}</span><span className="mini__l">Administrators</span></div>
               <div className="mini"><span className="mini__n">{page.active}</span><span className="mini__l">Active</span></div>
               <div className="mini"><span className="mini__n">{page.pending}</span><span className="mini__l">Invitation pending</span></div>
@@ -518,7 +518,9 @@ function AdministratorsSection() {
                         </div>
                       </div>
                     </td>
-                    <td className="cell-sub">{row.email}</td>
+                    {/* .cell-sub is display:block; on the <td> itself it took the cell out of
+                        the table row and broke the row borders. */}
+                    <td><span className="cell-sub">{row.email}</span></td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <Chip label={INVITATION_LABELS[row.invitation_status]} tone={INVITATION_TONES[row.invitation_status]} />
                       {row.invited_at && row.invitation_status !== "accepted" && <div className="cell-sub">Sent {fmtDate(row.invited_at)}{row.invited_by ? ` by ${row.invited_by}` : ""}</div>}
