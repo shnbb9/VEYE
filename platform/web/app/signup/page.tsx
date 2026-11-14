@@ -8,6 +8,7 @@ import { useSession } from "@/components/session";
 import { signUp, type Delivery } from "@/lib/auth-api";
 import { PENDING_ANSWERS_KEY, PREFILL_EMAIL_KEY } from "@/lib/auth-keys";
 import type { Answers } from "@/lib/health-number";
+import { forgetSavedResultTokens, heldSavedResultToken } from "@/lib/prospects-api";
 
 /* Approved sign-up (build/signup.html). The email typed at the onboarding
    result gate is pre-filled from sessionStorage and the assessment answers are
@@ -22,6 +23,8 @@ export default function SignUpPage() {
   const [busy, setBusy] = useState(false);
   const [deliveries, setDeliveries] = useState<Delivery[] | null>(null);
   const [destination, setDestination] = useState("/app");
+  const [savedLink, setSavedLink] = useState<string>("none");
+  const [heldToken, setHeldToken] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -30,6 +33,7 @@ export default function SignUpPage() {
       const pending = sessionStorage.getItem(PENDING_ANSWERS_KEY);
       if (pending) setAnswers(JSON.parse(pending) as Answers);
     } catch { /* storage unavailable */ }
+    setHeldToken(heldSavedResultToken()?.token ?? null);
   }, []);
 
   const set = (key: keyof typeof form) => (value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
@@ -46,13 +50,17 @@ export default function SignUpPage() {
       const result = await signUp({
         first_name: form.first_name.trim(), last_name: form.last_name.trim(), email: form.email.trim(), password: form.password,
         confirm_password: form.confirm, phone: form.phone.trim(), postal_code: form.postal_code.trim(), remember: form.remember,
-        answers: answers ?? undefined,
+        answers: answers ?? undefined, prospectClaimToken: heldToken ?? undefined,
       });
       try { sessionStorage.removeItem(PREFILL_EMAIL_KEY); sessionStorage.removeItem(PENDING_ANSWERS_KEY); } catch { /* ignore */ }
+      // The link to the saved result is remembered server-side now; the tab
+      // no longer needs to hold the capability.
+      if (result.prospect_link === "pending_verification") forgetSavedResultTokens();
       await session.refresh();
       const failed = result.deliveries.filter((d) => d.status !== "sent");
       const target = result.health_number_attempt_id ? "/app" : "/onboarding";
-      if (failed.length === 0) { router.replace(target); return; }
+      setSavedLink(result.prospect_link);
+      if (failed.length === 0 && result.prospect_link !== "pending_verification") { router.replace(target); return; }
       // Email did not go out: say so before moving on rather than pretending.
       setDeliveries(result.deliveries);
       setDestination(target);
@@ -68,6 +76,12 @@ export default function SignUpPage() {
           <h1 className="auth__title">Account created</h1>
           <p className="auth__subtitle">Welcome to a healthier you!</p>
           <p className="auth__status">Your Veye account is ready and you are signed in.</p>
+          {savedLink === "pending_verification" && (
+            <p className="auth__notice" data-testid="signup-saved-pending">
+              Your saved result will be added to this account as soon as you verify your email address — open the
+              verification link we just sent you.
+            </p>
+          )}
           {deliveries.map((d) => (
             <p key={d.kind} className={`auth__notice${d.status === "sent" ? "" : " auth__notice--warn"}`}>
               <b>{d.kind === "email_verification" ? "Verification email" : "Welcome email"}:</b> {d.status === "sent" ? "sent." : `not sent — ${d.detail ?? "the local mail service is not running"}. You can request it again from Settings.`}

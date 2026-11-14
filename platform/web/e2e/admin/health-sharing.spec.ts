@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { ADMIN, freshMember } from "../fixtures/accounts";
-import { adminSignIn, expectAdminHome, memberApi, open, signUpMember } from "../fixtures/helpers";
+import { adminSignIn, expectAdminHome, linkFrom, memberApi, open, signUpMember, toPath, waitForMail } from "../fixtures/helpers";
 
 /* Health Data Sharing Permission, through both portals.
 
@@ -24,6 +24,10 @@ test.describe.serial("Health Data Sharing Permission", () => {
     const memberContext = await browser.newContext();
     const memberPage = await memberContext.newPage();
     await signUpMember(memberPage, member);
+    // V2 §4.3: a member is asked only once their address is verified.
+    const verify = await waitForMail(member.email, "Verify your Veye email address");
+    await open(memberPage, toPath(linkFrom(verify.text, "verify-email")));
+    await expect(memberPage.getByText("Your email address is verified.")).toBeVisible();
 
     await adminSignIn(page, ADMIN.email, ADMIN.password);
     await expectAdminHome(page);
@@ -57,10 +61,15 @@ test.describe.serial("Health Data Sharing Permission", () => {
     expect((await read()).sharing_state).toBe("requested");
     expect((await read()).shares_health_data).toBe(false);
 
-    // 3. The member decides, in their own application.
+    // 3. The member decides, in their own application, on the consent screen
+    //    (V2 §4.4) — every element in view before the two equal choices.
     await open(memberPage, "/app/settings");
     await expect(memberPage.getByTestId("health-sharing-state")).toContainText("Awaiting your decision");
-    await memberPage.getByTestId("health-sharing-grant").click();
+    await memberPage.getByTestId("health-sharing-review").click();
+    await expect(memberPage).toHaveURL(/\/app\/sharing-request\?request=/);
+    await memberPage.getByTestId("sharing-allow").click();
+    await expect(memberPage.getByTestId("sharing-request-decided")).toContainText("Shared with the Veye team");
+    await open(memberPage, "/app/settings");
     await expect(memberPage.getByTestId("health-sharing-state")).toContainText("Shared with the Veye team");
 
     const shared = await read();
@@ -68,6 +77,7 @@ test.describe.serial("Health Data Sharing Permission", () => {
     expect(shared.sharing_state).toBe("granted");
 
     // 4. Withdrawing re-locks on the very next request, not when something expires.
+    memberPage.once("dialog", (dialog) => void dialog.accept());
     await memberPage.getByTestId("health-sharing-revoke").click();
     await expect(memberPage.getByTestId("health-sharing-state")).toContainText("Withdrawn");
 
@@ -100,6 +110,12 @@ test.describe.serial("Health Data Sharing Permission", () => {
     expect(words).not.toContain("hipaa");
     expect(words).not.toContain("authorization");
     expect(words).not.toContain("authorisation");
+    // V2: the consent screen is now where the member reads the terms in full.
+    await open(memberPage, "/app/sharing-request");
+    const consent = memberPage.getByTestId("sharing-request");
+    await expect(consent).toBeVisible();
+    const terms = ((await consent.textContent()) ?? "").toLowerCase();
+    for (const word of ["hipaa", "authorization", "authorisation"]) expect(terms).not.toContain(word);
     await context.close();
   });
 });

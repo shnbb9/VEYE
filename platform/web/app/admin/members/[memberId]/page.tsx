@@ -6,10 +6,13 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
 import {
   REQUEST_STATUS_LABELS,
+  getHealthPermission,
   getMember360,
   memberAccountAction,
   memberPhotoUrl,
   requestHealthPermission,
+  resendHealthPermissionEmail,
+  type HealthPermission,
   type Member360,
   type MemberAccountAction,
 } from "@/lib/admin-console-api";
@@ -40,11 +43,22 @@ function hnTone(value: number | null): string {
 /* Health Data Sharing Permission, from the console's side. The API withholds
    every health record until the member shares, so this banner explains an
    empty Member 360 rather than letting it read as an inactive member. Asking
-   is the only thing the console can do here. */
+   is the only thing the console can do here — and since V2 the ask is also
+   emailed, so the banner says what actually happened to that email. */
+const DELIVERY_LABELS: Record<string, string> = {
+  sent: "Email delivered to the mail server", queued: "Email queued", sending: "Email being sent",
+  retry: "Email refused — will be retried", failed: "Email failed", skipped: "Email not sent",
+};
+
 function SharingBanner({ member, memberId, onAsked }: { member: Member360; memberId: string; onAsked: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [asked, setAsked] = useState(false);
+  const [permission, setPermission] = useState<HealthPermission | null>(null);
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    getHealthPermission(memberId).then(setPermission).catch(() => setPermission(null));
+  }, [memberId, member.sharing_state]);
 
   if (member.shares_health_data) {
     return (
@@ -58,7 +72,6 @@ function SharingBanner({ member, memberId, onAsked }: { member: Member360; membe
     );
   }
 
-  const alreadyAsked = member.sharing_state === "requested" || asked;
   const explanation = {
     not_requested: "This member has not been asked to share their health records yet.",
     requested: "This member has been asked and has not answered yet.",
@@ -66,6 +79,25 @@ function SharingBanner({ member, memberId, onAsked }: { member: Member360; membe
     revoked: "This member shared before and has since stopped.",
     granted: "",
   }[member.sharing_state];
+  const delivery = permission?.delivery ?? null;
+  const needsReason = Boolean(permission?.requires_reason);
+
+  async function ask() {
+    setBusy(true); setError("");
+    try {
+      const outcome = await requestHealthPermission(memberId, needsReason ? reason.trim() : undefined);
+      setPermission(outcome); setReason(""); onAsked();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "That request could not be sent.");
+    } finally { setBusy(false); }
+  }
+
+  async function resend() {
+    setBusy(true); setError("");
+    try { setPermission(await resendHealthPermissionEmail(memberId)); } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The email could not be sent again.");
+    } finally { setBusy(false); }
+  }
 
   return (
     <div className="notice" data-testid="sharing-banner">
@@ -75,19 +107,35 @@ function SharingBanner({ member, memberId, onAsked }: { member: Member360; membe
         Their Health Number, body composition, blood markers, questionnaires, moods and food diary are not sent to
         this console — the tabs below are empty for that reason, not because nothing was recorded. Name, email and
         their messages to Veye are not covered by sharing and stay visible so the team can answer them.
-        {error && <p className="t-support" style={{ color: "#A8402D", marginTop: 6 }}>{error}</p>}
-        <div style={{ marginTop: 10 }}>
-          <button className="btn btn--secondary btn--sm" type="button" disabled={busy || alreadyAsked}
-                  data-testid="sharing-ask"
-                  onClick={() => {
-                    setBusy(true); setError("");
-                    requestHealthPermission(memberId)
-                      .then(() => { setAsked(true); onAsked(); })
-                      .catch((reason) => setError(reason instanceof Error ? reason.message : "That request could not be sent."))
-                      .finally(() => setBusy(false));
-                  }}>
-            {busy ? "Asking…" : alreadyAsked ? "Already asked — waiting for their answer" : "Ask this member to share"}
+        {delivery && member.sharing_state === "requested" && (
+          <p className="t-support" style={{ marginTop: 6 }} data-testid="sharing-delivery">
+            {DELIVERY_LABELS[delivery.status] ?? delivery.status}
+            {delivery.sent_at ? ` · ${fmtDate(delivery.sent_at)}` : ""} · to {delivery.to_email}
+            {delivery.last_error && delivery.status !== "sent" ? ` · ${delivery.last_error}` : ""}
+          </p>
+        )}
+        {error && <p className="t-support" style={{ color: "#A8402D", marginTop: 6 }} role="alert">{error}</p>}
+        {permission && !permission.can_request && permission.cannot_request_reason && (
+          <p className="t-support" style={{ marginTop: 6 }} data-testid="sharing-cannot-ask">{permission.cannot_request_reason}</p>
+        )}
+        {needsReason && permission?.can_request && (
+          <div className="field" style={{ marginTop: 10 }}>
+            <label className="field__label" htmlFor="askReason">They said no before. Why ask again? (kept with the request)</label>
+            <input className="input" id="askReason" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)}
+                   placeholder="e.g. They asked for help reviewing their blood markers" data-testid="sharing-ask-reason" />
+          </div>
+        )}
+        <div className="row gap-2 wrap" style={{ marginTop: 10 }}>
+          <button className="btn btn--secondary btn--sm" type="button" data-testid="sharing-ask"
+                  disabled={busy || !permission?.can_request || (needsReason && reason.trim().length < 10)}
+                  onClick={() => void ask()}>
+            {busy ? "Asking…" : member.sharing_state === "requested" ? "Ask again" : "Ask this member to share"}
           </button>
+          {delivery && member.sharing_state === "requested" && ["retry", "failed"].includes(delivery.status) && (
+            <button className="btn btn--ghost btn--sm" type="button" disabled={busy} onClick={() => void resend()} data-testid="sharing-resend">
+              Try sending the email again
+            </button>
+          )}
         </div>
       </div>
     </div>

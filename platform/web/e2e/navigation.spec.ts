@@ -66,9 +66,13 @@ const ADMIN_DEEP = [
   "/admin/assessments/health_assessment", "/admin/assessments/simple_quiz",
   "/admin/requests?view=all", "/admin/requests?view=resolved", "/admin/care?kind=supplement", "/admin/content?group=member_copy",
   "/admin/settings?section=product", "/admin/settings?section=features",
+  // Architecture V2: the Members area's two new views.
+  "/admin/members/prospects", "/admin/members/deletions",
   ...COMPANION_NAV.map((n) => n.path), "/admin/companion/settings/guided-experiences", ...ADVANCED_NAV.map((n) => n.path),
 ];
-const MEMBER_DEEP = [...TRACKERS, "/app/mood", "/app/food-diary", "/app/settings", "/app/companion", "/app/progress"];
+const MEMBER_DEEP = [...TRACKERS, "/app/mood", "/app/food-diary", "/app/settings", "/app/companion", "/app/progress",
+  // Architecture V2: the consent screen and the saved-result claim page.
+  "/app/sharing-request", "/app/saved-result"];
 
 // Crawls visit thirty-odd screens each; against the Docker dev server every
 // first visit also compiles the route, so give them room.

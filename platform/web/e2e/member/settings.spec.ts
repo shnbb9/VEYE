@@ -2,8 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { ADITYA, ADMIN, DUAL, MAYA, freshMember } from "../fixtures/accounts";
 import { adminSignIn, expectAdminHome, expectMemberDashboard, memberSignIn, open, portalSessions, signUpMember } from "../fixtures/helpers";
 
-// A valid 1×1 PNG — enough for the server's magic-byte check.
-const PNG_1PX = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4DwABAQEAG92NtAAAAABJRU5ErkJggg==", "base64");
+// A real 1×1 PNG. The server decodes and rebuilds every upload (V2 §5.3);
+// the fixture here before had a bad IDAT checksum that magic-byte sniffing
+// never noticed.
+const PNG_1PX = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNwSRX5DwADawG9SIxpvAAAAABJRU5ErkJggg==", "base64");
 
 /* Settings → Profile: every value on the card (photo initial, name, email,
    status, tenure) and the topbar avatar come from the ONE member signed into

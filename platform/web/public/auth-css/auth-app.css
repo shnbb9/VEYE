@@ -13,4 +13,9 @@ a.btn { text-decoration: none; }
 .auth__links a { text-decoration: underline; }
 .field__input.is-invalid { border-color: #B3402F; }
 .auth__status { margin-top: 20px; font-size: 16px; line-height: 1.5; color: var(--ink); }
+/* A text-styled action inside the links line (Delete my saved result). */
+.auth__link-button { background: none; border: none; padding: 0; font: inherit; letter-spacing: inherit;
+  color: var(--green-900); text-decoration: underline; cursor: pointer; }
+.auth__link-button:disabled { opacity: .6; cursor: progress; }
+.auth__link-button:focus-visible { outline: 2px solid var(--green-900); outline-offset: 2px; }
 .pwd__opt:disabled { cursor: default; opacity: .75; }

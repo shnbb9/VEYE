@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { myConsolePhotoUrl } from "@/lib/admin-console-api";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { RequirePortal, useSession } from "@/components/session";
@@ -164,7 +165,9 @@ function AdminFrame({ children }: { children: ReactNode }) {
             <div className="topbar__tools">
               <span className="chip chip--lime">Local development · synthetic data</span>
               <Link className="who" style={{ padding: "2px 8px 2px 2px", textDecoration: "none" }} href="/admin/settings" aria-label="Your account settings">
-                <span className="avatar">{initials}</span>
+                {account?.photo_version
+                  ? <span className="avatar avatar--photo" data-testid="admin-chrome-photo"><img src={myConsolePhotoUrl(account.photo_version)} alt="" crossOrigin="use-credentials" /></span>
+                  : <span className="avatar">{initials}</span>}
                 <span className="who__text"><span className="who__name">{account?.first_name} {account?.last_name}</span><span className="who__role">Administrator</span></span>
               </Link>
             </div>

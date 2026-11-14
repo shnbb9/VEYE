@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { useToast } from "@/components/member/member-chrome";
 import { MemberAvatar } from "@/components/member/member-avatar";
+import { DeleteProfile } from "@/components/member/delete-profile";
 import { useSession } from "@/components/session";
 import {
   cancelEmailChange,
@@ -19,9 +21,7 @@ import {
   type MemberSession,
 } from "@/lib/auth-api";
 import {
-  declineHealthPermission,
   getHealthPermission,
-  grantHealthPermission,
   revokeHealthPermission,
   type HealthPermission,
   type HealthPermissionEvent,
@@ -34,11 +34,17 @@ import { exportUrl, removePhoto, updateProfile, uploadPhoto } from "@/lib/member
    implement yet say so instead of saving to the browser as the prototype did. */
 
 export default function SettingsPage() {
+  return <Suspense fallback={null}><SettingsView /></Suspense>;
+}
+
+function SettingsView() {
   const session = useSession();
+  const router = useRouter();
+  const params = useSearchParams();
   const toast = useToast();
   const account = session.member;
   const [preferences, setPreferences] = useState<Record<string, boolean> | null>(null);
-  const [busy, setBusy] = useState<"verify" | "password" | "profile" | "photo" | null>(null);
+  const [busy, setBusy] = useState<"verify" | "profile" | "photo" | null>(null);
   const [note, setNote] = useState("");
   const [profileNote, setProfileNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({ first_name: "", last_name: "", phone: "", postal_code: "" });
@@ -48,6 +54,20 @@ export default function SettingsPage() {
   useEffect(() => {
     getNotificationPreferences().then((result) => setPreferences(result.preferences)).catch(() => setPreferences({}));
   }, []);
+
+  // The emailed "Review sharing request" link lands here (architecture V2
+  // §4.4): /app/settings?section=privacy&request=<ref>. The member is signed
+  // in by now (the portal guard saw to that); the reference only says which
+  // request to open, on the dedicated consent screen.
+  const section = params.get("section");
+  const requestRef = params.get("request");
+  useEffect(() => {
+    if (section === "privacy" && requestRef) {
+      router.replace(`/app/sharing-request?request=${encodeURIComponent(requestRef)}`);
+      return;
+    }
+    if (section === "privacy") document.getElementById("privacy")?.scrollIntoView({ block: "start" });
+  }, [section, requestRef, router]);
 
   // Fill the form from the account once (and again after a save refreshes it).
   useEffect(() => {
@@ -64,20 +84,6 @@ export default function SettingsPage() {
         : `The verification email could not be sent: ${delivery.detail ?? "mail service unavailable"}.`);
     } catch (reason) {
       setNote(reason instanceof Error ? reason.message : "The verification email could not be sent.");
-    } finally { setBusy(null); }
-  }
-
-  async function changePassword() {
-    if (!account) return;
-    setBusy("password");
-    try {
-      const result = await forgotPassword(account.email);
-      const delivery = result.delivery;
-      setNote(delivery && delivery.status !== "sent"
-        ? `The password-change link could not be sent: ${delivery.detail ?? "mail service unavailable"}.`
-        : "A password-change link has been emailed to you. It works once and expires in 30 minutes.");
-    } catch (reason) {
-      setNote(reason instanceof Error ? reason.message : "The password-change link could not be sent.");
     } finally { setBusy(null); }
   }
 
@@ -189,11 +195,12 @@ export default function SettingsPage() {
           {profileNote && <p className={`settings-help settings-note${profileNote.tone === "error" ? " settings-note--error" : ""}`} role="status" data-testid="settings-profile-note">{profileNote.text}</p>}
           {!account.email_verified && (
             <div className="settings-profile-actions">
-              <button className="settings-save" type="button" onClick={() => void resend()} disabled={busy === "verify"}>
+              <button className="settings-save" type="button" onClick={() => void resend()} disabled={busy === "verify"} data-testid="settings-resend-verification">
                 {busy === "verify" ? "Sending…" : "Resend verification email"} <span aria-hidden="true">&rarr;</span>
               </button>
             </div>
           )}
+          {note && <p className="settings-help settings-note" role="status" data-testid="settings-verify-note">{note}</p>}
         </section>
 
         <section className="settings-card fade-in d2">
@@ -225,6 +232,15 @@ export default function SettingsPage() {
         <HealthSharingSection />
 
         <SecuritySection account={account} onEmailChangeRequested={() => void session.refresh()} />
+
+        {/* Privacy & your data (architecture V2 §6): a copy of everything, and
+            permanent deletion — which is not the same as being deactivated. */}
+        <section className="settings-card fade-in d4" id="your-data" data-testid="settings-your-data">
+          <div className="settings-card__head"><div><span className="settings-kicker">Privacy</span><h2>Your data</h2></div><span className="settings-card__mark">06</span></div>
+          <p className="settings-help">Download a copy of everything you have entered and been given. Deleting your member profile removes it and all of its data for good.</p>
+          <a className="settings-outline" href={exportUrl()} download data-testid="settings-export">Download my data (JSON) <span aria-hidden="true">&rarr;</span></a>
+          <DeleteProfile />
+        </section>
       </div>
     </>
   );
@@ -232,8 +248,10 @@ export default function SettingsPage() {
 
 /* Health Data Sharing Permission — the member's decision, and the only place
    it can be made. The Veye team can ask from the console; nothing they do
-   there changes what is below. Withdrawing takes effect on their very next
-   request, because the API reads this state each time rather than caching it. */
+   there changes what is below. Deciding happens on the consent screen, where
+   everything being agreed to is shown first (architecture V2 §4.4).
+   Withdrawing is one confirmed click here, and takes effect on the team's very
+   next request, because the API reads this state each time. */
 function HealthSharingSection() {
   const [permission, setPermission] = useState<HealthPermission | null>(null);
   const [busy, setBusy] = useState(false);
@@ -245,11 +263,12 @@ function HealthSharingSection() {
       setError(reason instanceof Error ? reason.message : "Your sharing setting could not be loaded."));
   }, []);
 
-  async function act(run: () => Promise<HealthPermission>, said: string) {
+  async function withdraw() {
+    if (!window.confirm("Stop sharing your saved results with the Veye team? It takes effect at once.")) return;
     setBusy(true); setError("");
     try {
-      setPermission(await run());
-      toast.flash(said);
+      setPermission(await revokeHealthPermission());
+      toast.flash("Sharing has stopped");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That could not be saved.");
     } finally { setBusy(false); }
@@ -257,9 +276,10 @@ function HealthSharingSection() {
 
   const asked = permission?.state === "requested";
   const sharing = permission?.shares_health_data === true;
+  const reviewHref = permission?.open_request ? `/app/sharing-request?request=${encodeURIComponent(permission.open_request.ref)}` : "/app/sharing-request";
 
   return (
-    <section className="settings-card fade-in d4" data-testid="health-sharing">
+    <section className="settings-card fade-in d4" id="privacy" data-testid="health-sharing">
       <div className="settings-card__head">
         <div><span className="settings-kicker">Your health records</span><h2>Sharing with the Veye team</h2></div>
         <span className="settings-card__mark">04</span>
@@ -284,24 +304,21 @@ function HealthSharingSection() {
             </p>
           )}
 
+          {permission.policy_version && permission.policy_version !== permission.current_policy_version && (
+            <p className="settings-help" data-testid="health-sharing-older-terms">
+              You decided against an earlier version of the terms ({permission.policy_version}); the current version is {permission.current_policy_version}.
+            </p>
+          )}
+
           <div className="settings-profile-actions">
             {!sharing && (
-              <button className="settings-save" type="button" disabled={busy}
-                      onClick={() => void act(grantHealthPermission, "Your results are now shared with the Veye team")}
-                      data-testid="health-sharing-grant">
-                {busy ? "Saving…" : asked ? "Share my results" : "Start sharing"}
-              </button>
-            )}
-            {asked && (
-              <button className="settings-outline" type="button" disabled={busy}
-                      onClick={() => void act(declineHealthPermission, "Your results stay private")}
-                      data-testid="health-sharing-decline">
-                Not now
-              </button>
+              <Link className="settings-save" href={reviewHref} data-testid="health-sharing-review">
+                {asked ? "Review the request" : "Review and decide"} <span aria-hidden="true">&rarr;</span>
+              </Link>
             )}
             {sharing && (
               <button className="settings-outline" type="button" disabled={busy}
-                      onClick={() => void act(revokeHealthPermission, "Sharing has stopped")}
+                      onClick={() => void withdraw()}
                       data-testid="health-sharing-revoke">
                 {busy ? "Saving…" : "Stop sharing"}
               </button>
@@ -426,7 +443,7 @@ function SecuritySection({ account, onEmailChangeRequested }: { account: Account
 
   return (
     <section className="settings-card fade-in d4" data-testid="settings-security">
-      <div className="settings-card__head"><div><span className="settings-kicker">Security</span><h2>Sign-in details</h2></div><span className="settings-card__mark">04</span></div>
+      <div className="settings-card__head"><div><span className="settings-kicker">Security</span><h2>Sign-in details</h2></div><span className="settings-card__mark">05</span></div>
 
       {/* Password */}
       {open === "password" ? (
@@ -518,7 +535,6 @@ function SecuritySection({ account, onEmailChangeRequested }: { account: Account
         </div>
       )}
 
-      <a className="settings-outline" href={exportUrl()} download data-testid="settings-export">Download my data (JSON) <span aria-hidden="true">&rarr;</span></a>
       {/* The approved destination for a member sign-out is the public site. */}
       <button className="settings-outline" type="button" onClick={() => void session.signOut("member", "/")}>Sign out <span aria-hidden="true">&rarr;</span></button>
       {note && <p className={`settings-help settings-note${note.tone === "error" ? " settings-note--error" : ""}`} role="status" data-testid="security-note">{note.text}</p>}

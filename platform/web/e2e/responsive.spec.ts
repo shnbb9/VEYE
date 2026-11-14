@@ -13,11 +13,15 @@ const WIDTHS = [
   { name: "768", width: 768, height: 1024 },
   { name: "390", width: 390, height: 844 },
 ];
-const PUBLIC = ["/", "/why-veye", "/about", "/help", "/pricing", "/login", "/signup", "/onboarding"];
+const PUBLIC = ["/", "/why-veye", "/about", "/help", "/pricing", "/login", "/signup", "/onboarding",
+  // Architecture V2: the emailed saved-result link and the deletion status page.
+  "/saved-result", "/account-deleted"];
 /** The pages that carry the public navigation; the auth screens use AuthFrame. */
 const MARKETING = ["/", "/why-veye", "/about", "/help", "/pricing"];
-const MEMBER = ["/app", "/app/progress", "/app/progress/health-assessment", "/app/progress/simple-quiz", "/app/mood", "/app/food-diary", "/app/food-choices", "/app/companion", "/app/fitness", "/app/supplements", "/app/resources", "/app/settings"];
-const ADMIN_PAGES = ["/admin", "/admin/members", "/admin/assessments", "/admin/care", "/admin/requests", "/admin/content", "/admin/insights", "/admin/settings", "/admin/companion/conversations", "/admin/companion/settings/guided-experiences"];
+const MEMBER = ["/app", "/app/progress", "/app/progress/health-assessment", "/app/progress/simple-quiz", "/app/mood", "/app/food-diary", "/app/food-choices", "/app/companion", "/app/fitness", "/app/supplements", "/app/resources", "/app/settings",
+  "/app/sharing-request", "/app/saved-result"];
+const ADMIN_PAGES = ["/admin", "/admin/members", "/admin/assessments", "/admin/care", "/admin/requests", "/admin/content", "/admin/insights", "/admin/settings", "/admin/companion/conversations", "/admin/companion/settings/guided-experiences",
+  "/admin/members/prospects", "/admin/members/deletions"];
 
 /** Headings must step down one level at a time, in document order.
  *

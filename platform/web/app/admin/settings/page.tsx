@@ -2,16 +2,23 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
 import { Drawer, Field } from "@/components/admin/drawer";
+import { PrivacyProspectsCard } from "@/components/admin/privacy-prospects-card";
+import { HealthSharingCard } from "@/components/admin/health-sharing-card";
 import { useSession } from "@/components/session";
 import { forgotPassword } from "@/lib/auth-api";
 import {
   INVITATION_LABELS,
   INVITATION_TONES,
   administratorAction,
+  administratorPhotoUrl,
   changeMyConsolePassword,
+  createMyMemberProfile,
+  myConsolePhotoUrl,
+  removeMyConsolePhoto,
+  uploadMyConsolePhoto,
   getFeatureStates,
   getSupportSettings,
   inviteAdministrator,
@@ -73,12 +80,42 @@ function AccountSection() {
   const [changing, setChanging] = useState(false);
   const [passwords, setPasswords] = useState({ current: "", next: "", confirm: "" });
   const [sessions, setSessions] = useState<ConsoleSession[] | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoNote, setPhotoNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const loadSessions = () => listMyConsoleSessions().then((result) => setSessions(result.rows)).catch(() => setSessions(null));
   useEffect(() => { void loadSessions(); }, []);
 
   if (!account) return null;
   const initials = `${account.first_name[0] ?? ""}${account.last_name[0] ?? ""}`.toUpperCase();
+
+  async function choosePhoto(file: File | undefined) {
+    if (!file) return;
+    setPhotoBusy(true); setPhotoNote(null);
+    try {
+      await uploadMyConsolePhoto(file);
+      await session.refresh();
+      setPhotoNote({ tone: "ok", text: "Your picture is updated." + (account?.member_access ? " It is the same picture in the member application." : "") });
+    } catch (reason) {
+      setPhotoNote({ tone: "error", text: reason instanceof Error ? reason.message : "The picture could not be saved." });
+    } finally {
+      setPhotoBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function dropPhoto() {
+    setPhotoBusy(true); setPhotoNote(null);
+    try {
+      await removeMyConsolePhoto();
+      await session.refresh();
+      setPhotoNote({ tone: "ok", text: "Picture removed — your initials are shown instead." });
+    } catch (reason) {
+      setPhotoNote({ tone: "error", text: reason instanceof Error ? reason.message : "The picture could not be removed." });
+    } finally { setPhotoBusy(false); }
+  }
 
   async function savePassword(event: FormEvent) {
     event.preventDefault();
@@ -127,10 +164,29 @@ function AccountSection() {
   return (
     <div className="hgrid hgrid--flip" data-testid="settings-account">
       <div className="card">
-        <div className="card__head"><div><h2 className="card__title">{account.first_name} {account.last_name}</h2><p className="t-support">Administrator</p></div><span className="avatar avatar--lg">{initials}</span></div>
+        <div className="card__head"><div><h2 className="card__title">{account.first_name} {account.last_name}</h2><p className="t-support">Administrator</p></div>
+          {account.photo_version
+            ? <span className="avatar avatar--lg avatar--photo" data-testid="settings-admin-photo"><img src={myConsolePhotoUrl(account.photo_version, "full")} alt="" crossOrigin="use-credentials" /></span>
+            : <span className="avatar avatar--lg" data-testid="settings-admin-initials">{initials}</span>}</div>
         <div className="card__body stack gap-5">
+          <div className="row gap-2 wrap" style={{ alignItems: "center" }}>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => void choosePhoto(event.target.files?.[0])} data-testid="admin-photo-input" />
+            <button className="btn btn--secondary btn--sm" type="button" disabled={photoBusy} onClick={() => fileRef.current?.click()} data-testid="admin-photo-change">{photoBusy ? "Saving…" : account.photo_version ? "Change picture" : "Add a picture"}</button>
+            {account.photo_version && <button className="btn btn--ghost btn--sm" type="button" disabled={photoBusy} onClick={() => void dropPhoto()} data-testid="admin-photo-remove">Remove</button>}
+            <span className="t-support">JPG, PNG or WebP, up to 2 MB. Location and camera details are removed.</span>
+          </div>
+          {photoNote && <p className={photoNote.tone === "error" ? "errorbar" : "t-support"} role="status" data-testid="admin-photo-note">{photoNote.text}</p>}
           <div><div className="t-eyebrow">Email</div><p data-testid="settings-admin-email">{account.email}</p></div>
           <div><div className="t-eyebrow">Access</div><p>Full VEYE administration{account.member_access ? " · also holds a member profile (signs into the member application separately at /login)" : ""}</p></div>
+          <div data-testid="settings-member-access">
+            <div className="t-eyebrow">Member application</div>
+            {account.member_access ? (
+              <p>You have your own member profile. <Link href="/login?next=/app" data-testid="open-member-app">Open the member application</Link> — it has its own sign-in, and shows only your own records.</p>
+            ) : (
+              <p>You do not have a member profile, so <code>/login</code> refuses this account.{" "}
+                <button className="btn btn--secondary btn--sm" type="button" onClick={() => setProfileOpen(true)} data-testid="create-member-profile">Create my member profile</button></p>
+            )}
+          </div>
           <div className="notice notice--quiet"><Icon name="info" size={18} /><div>This Beta console has one administrator capability. Roles, teams and organisation hierarchies are intentionally not included: every administrator account can do the same things. Who holds that access is managed under <Link href="/admin/settings?section=administrators">Administrators</Link>.</div></div>
         </div>
       </div>
@@ -197,7 +253,68 @@ function AccountSection() {
         </div></div>
         {note && <div className="card__foot"><p className="t-support" role="status" data-testid="admin-security-note">{note}</p></div>}
       </div>
+      {profileOpen && <MemberProfileDrawer onClose={() => setProfileOpen(false)} onCreated={async () => { await session.refresh(); }} />}
     </div>
+  );
+}
+
+/* Create my member profile (architecture V2 §5.2): the same account gains its
+   own member profile. Not impersonation and not a way to see anyone else's
+   data; the member application still needs its own sign-in. */
+function MemberProfileDrawer({ onClose, onCreated }: { onClose: () => void; onCreated: () => Promise<void> }) {
+  const [password, setPassword] = useState("");
+  const [understood, setUnderstood] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!understood) { setError("Tick the box to confirm you have read this."); return; }
+    setBusy(true); setError("");
+    try {
+      const result = await createMyMemberProfile(password);
+      setDone(result.message);
+      setPassword("");
+      await onCreated();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Your member profile could not be created.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Drawer eyebrow="Your account" title="Create my member profile" onClose={onClose}
+            desc="A member profile for you personally, on this same account."
+            foot={done ? <button className="btn btn--primary" type="button" onClick={onClose}>Close</button> : <>
+              <button className="btn btn--primary" type="submit" form="memberProfileForm" disabled={busy || !understood || !password} data-testid="member-profile-submit">{busy ? "Creating…" : "Create my member profile"}</button>
+              <button className="btn btn--ghost" type="button" onClick={onClose}>Cancel</button>
+            </>}>
+      {done ? (
+        <div className="stack gap-3" data-testid="member-profile-done">
+          <p>{done}</p>
+          <p className="t-support">Your administrator access is unchanged. The two applications stay separate: signing in at <code>/login</code> gives you the member application with your own records; <code>/admin/login</code> gives you this console.</p>
+          <Link className="btn btn--secondary" href="/login?next=/app">Go to the member sign-in</Link>
+        </div>
+      ) : (
+        <form id="memberProfileForm" className="stack gap-4" method="post" onSubmit={(event) => void submit(event)}>
+          <ul className="t-support" style={{ paddingLeft: 18, margin: 0 }}>
+            <li>This creates <b>your own</b> member profile. Anything you record in the member application is your personal health data.</li>
+            <li>It is not a way to see or act as any other member, and it gives you nothing in the console you do not already have.</li>
+            <li>You keep one account and one password; the member application has its own sign-in at <code>/login</code>.</li>
+            <li>Your health records follow the same sharing rules as everyone else&rsquo;s: the console sees them only if you choose to share.</li>
+          </ul>
+          <label className="row gap-2" style={{ alignItems: "flex-start" }}>
+            <input type="checkbox" checked={understood} onChange={(event) => setUnderstood(event.target.checked)} data-testid="member-profile-understood" />
+            <span>I understand this creates personal health data about me, and is not impersonation.</span>
+          </label>
+          <Field id="mpPassword" label="Your current password" hint="Confirms it is really you before anything changes.">
+            <input className="input" id="mpPassword" type="password" autoComplete="current-password" required value={password}
+                   onChange={(event) => setPassword(event.target.value)} data-testid="member-profile-password" />
+          </Field>
+          {error && <p className="errorbar" role="alert">{error}</p>}
+        </form>
+      )}
+    </Drawer>
   );
 }
 
@@ -255,6 +372,8 @@ function ProductSection() {
           <div className="rowitem"><span className="rowitem__icon"><Icon name="sprout" size={18} /></span><div><div className="rowitem__title">Companion review queue</div><div className="rowitem__meta">Sensitive replies are held for review in <Link href="/admin/companion/settings">Companion → Settings</Link>, where Sprout&rsquo;s wording and topic rules live.</div></div><Chip label="Companion" tone="live" /></div>
         </div></div>
       </div>
+      <PrivacyProspectsCard />
+      <HealthSharingCard />
     </div>
   );
 }
@@ -390,7 +509,9 @@ function AdministratorsSection() {
                   <tr key={row.user_id}>
                     <td>
                       <div className="person">
-                        <span className="avatar avatar--sm">{initialsOf(row.name)}</span>
+                        {row.photo_version
+                          ? <span className="avatar avatar--sm avatar--photo"><img src={administratorPhotoUrl(row.user_id, row.photo_version)} alt="" crossOrigin="use-credentials" /></span>
+                          : <span className="avatar avatar--sm">{initialsOf(row.name)}</span>}
                         <div style={{ minWidth: 0 }}>
                           <div className="cell-primary">{row.name}{row.is_self && <span className="tag" style={{ marginLeft: 8 }}>you</span>}</div>
                           {row.also_member && <div className="cell-sub">Also a Veye member</div>}

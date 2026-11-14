@@ -42,6 +42,7 @@ export type SignUpInput = {
   postal_code?: string;
   remember: boolean;
   answers?: Answers;
+  prospectClaimToken?: string;
 };
 
 /** Anonymous is a normal answer (`null` per portal), never a failed request. */
@@ -51,12 +52,15 @@ export async function me(): Promise<PortalSessions> {
 
 /** Member sign-up: identity + member profile + a MEMBER portal session. */
 export async function signUp(input: SignUpInput) {
-  const { answers, ...rest } = input;
-  return postJson<{ account: Account; deliveries: Delivery[]; health_number_attempt_id: string | null }>("/api/v1/auth/sign-up", {
+  const { answers, prospectClaimToken, ...rest } = input;
+  return postJson<{ account: Account; deliveries: Delivery[]; health_number_attempt_id: string | null; prospect_link: string }>("/api/v1/auth/sign-up", {
     ...rest,
     phone: rest.phone || null,
     postal_code: rest.postal_code || null,
     health_number_answers: answers ? toApiAnswers(answers) : null,
+    // A saved result from this tab (or the emailed link) is remembered against
+    // the new account; it joins it only once the address is proven.
+    prospect_claim_token: prospectClaimToken || null,
   });
 }
 

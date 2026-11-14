@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Chip, Icon, PageHead, fmtDate } from "@/components/admin/admin-chrome";
+import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
+import { MEMBER_VIEWS } from "@/components/admin/member-views";
 import { listMembers, type MembersPage, type MembersQuery } from "@/lib/admin-console-api";
 
 /* Members — the directory (admin prototype screens/members.js): still a
@@ -40,6 +41,7 @@ export default function MembersPage() {
   return (
     <div className="page">
       <PageHead title="Members" desc={page ? `Everyone using Veye on this local stack — ${page.total} member${page.total === 1 ? "" : "s"}.` : "Everyone using Veye."} crumbs={[{ label: "Home", href: "/admin" }, { label: "Members" }]} />
+      <Subnav items={MEMBER_VIEWS} active="members" />
       {error && <p className="errorbar">{error}</p>}
       <div className="card">
         <div className="findbar">

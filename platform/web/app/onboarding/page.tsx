@@ -8,8 +8,12 @@ import {
   initialAnswers, isAnswered, questionReached, toApiAnswers,
 } from "@/lib/health-number";
 import { apiPath } from "@/lib/api-base";
-import { csrfHeaders, describeDetail } from "@/lib/api";
+import { ApiError, csrfHeaders, describeDetail } from "@/lib/api";
 import { PENDING_ANSWERS_KEY, PREFILL_EMAIL_KEY } from "@/lib/auth-keys";
+import {
+  SAVED_RESULT_TOKEN_KEY, captureAssessment, eraseSavedResult, formatSavedUntil, getSavingPolicy, newIdempotencyKey,
+  type SavedStatus, type SavingPolicy,
+} from "@/lib/prospects-api";
 import { useSession } from "@/components/session";
 
 /* The approved onboarding assessment (build/onboarding.html + js/quiz.js +
@@ -25,7 +29,17 @@ const SEG_END = [32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384];
 const SEG_COL = ["#B7E355", "#ADDC48", "#A5D538", "#9BCA30", "#90BE29", "#85B422",
                  "#7EAA1B", "#709815", "#59731F", "#364A08", "#8AA0A8", "#A5CBD9"];
 
-type ResultView = { result: HealthResult; stored: boolean };
+/** `stored` = saved to a signed-in member's own record. `saved` = kept as a
+ *  visitor's saved result under the retention policy (null when it was only
+ *  previewed). `saveFailed` = the visitor asked to save and it did not happen. */
+type ResultView = {
+  result: Omit<HealthResult, "attempt_id" | "member_id" | "completed_at">;
+  stored: boolean;
+  saved: SavedStatus | null;
+  offered: boolean;
+  confirmation?: string;
+  saveFailed?: string;
+};
 
 export default function Onboarding() {
   const router = useRouter();
@@ -37,6 +51,17 @@ export default function Onboarding() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [gateOpen, setGateOpen] = useState(false);
+  const [policy, setPolicy] = useState<SavingPolicy | null>(null);
+  const [gateNote, setGateNote] = useState("");
+  // One key per opening of the result gate: a double click or a retry saves once.
+  const saveKey = useRef<string | null>(null);
+
+  // Whether saving is offered at all is the API's decision (retention policy
+  // + an encryption key). Unknown or unreachable means "not offered": the gate
+  // then works exactly as the approved prototype does.
+  useEffect(() => {
+    getSavingPolicy().then(setPolicy).catch(() => setPolicy(null));
+  }, []);
 
   const screen = SCREENS[idx];
   const reached = questionReached(idx);
@@ -55,11 +80,14 @@ export default function Onboarding() {
     // first, and the number is calculated (not stored) by the same service -
     // it is attached to the account at sign-up.
     const signedInMember = session.status === "ready" && session.member !== null;
-    if (!signedInMember) { setGateOpen(true); return; }
+    // A fresh key every time the gate opens: a double click or a retry inside
+    // this opening is the same submission, but answers changed after closing
+    // the gate are a new one and must not be answered with the old result.
+    if (!signedInMember) { saveKey.current = newIdempotencyKey(); setGateNote(""); setGateOpen(true); return; }
     await calculate(true);
   }
 
-  async function calculate(store: boolean) {
+  async function calculate(store: boolean, extra?: Partial<ResultView>) {
     setBusy(true); setError("");
     try {
       const response = await fetch(apiPath(store ? "/api/v1/health-number/calculate" : "/api/v1/health-number/preview"), {
@@ -72,7 +100,7 @@ export default function Onboarding() {
         const detail = await response.json().catch(() => null) as { detail?: unknown } | null;
         throw new Error(describeDetail(detail?.detail) ?? "Your Health Number could not be calculated right now. Please try again.");
       }
-      setResult({ result: await response.json(), stored: store });
+      setResult({ result: await response.json(), stored: store, saved: null, offered: Boolean(policy?.saving_enabled), ...extra });
       setPhase("result");
       window.scrollTo(0, 0);
     } catch (reason) {
@@ -80,13 +108,39 @@ export default function Onboarding() {
     } finally { setBusy(false); }
   }
 
-  function gateDone(email: string) {
+  async function gateDone(email: string, agreed: boolean) {
     try {
       sessionStorage.setItem(PREFILL_EMAIL_KEY, email);
       sessionStorage.setItem(PENDING_ANSWERS_KEY, JSON.stringify(answers));
     } catch { /* storage unavailable: sign-up still works, without the pre-fill */ }
-    setGateOpen(false);
-    void calculate(false);
+    const notice = policy?.saving_enabled ? policy.notice : null;
+    if (!agreed || !notice) {
+      setGateOpen(false);
+      void calculate(false);
+      return;
+    }
+    setBusy(true);
+    try {
+      const saved = await captureAssessment({ email, answers, notice, idempotencyKey: saveKey.current ?? newIdempotencyKey() });
+      try { sessionStorage.setItem(SAVED_RESULT_TOKEN_KEY, saved.claim_token); } catch { /* the emailed link still works */ }
+      setGateOpen(false);
+      setResult({ result: saved.result, stored: false, saved: saved.saved, offered: true, confirmation: saved.confirmation_email });
+      setPhase("result");
+      window.scrollTo(0, 0);
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 409 && /notice/i.test(reason.message)) {
+        // The words changed under the visitor: show the current ones and let
+        // them decide again rather than recording agreement to text they did
+        // not read.
+        const fresh = await getSavingPolicy().catch(() => null);
+        setPolicy(fresh);
+        setGateNote(reason.message);
+        return;
+      }
+      // Nothing was saved. Say so, and still show the number.
+      setGateOpen(false);
+      void calculate(false, { saveFailed: reason instanceof Error ? reason.message : "Your result could not be saved." });
+    } finally { setBusy(false); }
   }
 
   function prev() {
@@ -145,7 +199,8 @@ export default function Onboarding() {
           ) : result && <Result view={result} onSignUp={signUp} />}
         </main>
       </div>
-      {gateOpen && <EmailGate onClose={() => setGateOpen(false)} onDone={gateDone} />}
+      {gateOpen && <EmailGate onClose={() => { if (!busy) setGateOpen(false); }} onDone={(email, agreed) => void gateDone(email, agreed)}
+                              policy={policy} busy={busy} note={gateNote} />}
     </>
   );
 }
@@ -154,10 +209,17 @@ export default function Onboarding() {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
 
-function EmailGate({ onClose, onDone }: { onClose: () => void; onDone: (email: string) => void }) {
+function EmailGate({ onClose, onDone, policy, busy, note }: {
+  onClose: () => void; onDone: (email: string, agreed: boolean) => void;
+  policy: SavingPolicy | null; busy: boolean; note: string;
+}) {
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
+  // Unticked by default, and nothing else ticks it: saving is the visitor's
+  // explicit choice, and leaving it unticked still shows the number.
+  const [agreed, setAgreed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const notice = policy?.saving_enabled ? policy.notice : null;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -167,10 +229,11 @@ function EmailGate({ onClose, onDone }: { onClose: () => void; onDone: (email: s
   }, [onClose]);
 
   function go() {
+    if (busy) return;
     const value = email.trim();
     if (!value) { setErr("Please enter your email address."); inputRef.current?.focus(); return; }
     if (!EMAIL_RE.test(value)) { setErr("Please enter a valid email address."); inputRef.current?.focus(); return; }
-    onDone(value);
+    onDone(value, Boolean(notice) && agreed);
   }
 
   return (
@@ -183,8 +246,23 @@ function EmailGate({ onClose, onDone }: { onClose: () => void; onDone: (email: s
         <input ref={inputRef} className={`hn-modal__input${err ? " is-invalid" : ""}`} id="hnEmail" type="email" inputMode="email" autoComplete="email"
                placeholder="you@example.com" value={email} onChange={(event) => { setEmail(event.target.value); setErr(""); }}
                onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); go(); } }} />
-        <p className="hn-modal__err" id="hnErr" role="alert">{err}</p>
-        <button type="button" className="quiz__btn quiz__btn--next hn-modal__cta" onClick={go}>View My Health Number</button>
+        <p className="hn-modal__err" id="hnErr" role="alert">{err || note}</p>
+        {notice && (
+          <>
+            <p className="hn-modal__notice" id="hnNotice" data-testid="save-notice">
+              {notice.text.replace(/See our Privacy Policy\.$/, "")}
+              See our <Link href={notice.privacy_path} target="_blank" rel="noopener">Privacy Policy</Link>.
+            </p>
+            <label className="hn-modal__consent" htmlFor="hnConsent">
+              <input id="hnConsent" type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)}
+                     aria-describedby="hnNotice" data-testid="save-consent" />
+              <span>{notice.consent_label}</span>
+            </label>
+          </>
+        )}
+        <button type="button" className="quiz__btn quiz__btn--next hn-modal__cta" onClick={go} disabled={busy} data-testid="gate-submit">
+          {busy ? "Saving…" : "View My Health Number"}
+        </button>
       </div>
     </div>
   );
@@ -324,9 +402,28 @@ function Question({ screen, answers, update }: { screen: Screen; answers: Answer
 
 function Result({ view, onSignUp }: { view: ResultView; onSignUp: () => void }) {
   const [declined, setDeclined] = useState(false);
+  const [saved, setSaved] = useState<SavedStatus | null>(view.saved);
+  const [erasing, setErasing] = useState(false);
+  const [erased, setErased] = useState("");
   const { result, stored } = view;
   const number = Number(result.displayed_score).toFixed(1);
   const pct = Math.round(result.displayed_score / 10 * 100);
+
+  async function eraseSaved() {
+    let token: string | null = null;
+    try { token = sessionStorage.getItem(SAVED_RESULT_TOKEN_KEY); } catch { /* storage unavailable */ }
+    if (!token || !window.confirm("Delete your saved result and the email address you gave? This cannot be undone.")) return;
+    setErasing(true);
+    try {
+      const done = await eraseSavedResult(token);
+      try { sessionStorage.removeItem(SAVED_RESULT_TOKEN_KEY); sessionStorage.removeItem(PENDING_ANSWERS_KEY); } catch { /* ignore */ }
+      setSaved(null);
+      setErased(done.message);
+    } catch (reason) {
+      setErased(reason instanceof Error ? reason.message : "Your saved result could not be deleted right now.");
+    } finally { setErasing(false); }
+  }
+
   return (
     <div className="result">
       <h2 className="result__title">Your Health Number</h2>
@@ -346,6 +443,26 @@ function Result({ view, onSignUp }: { view: ResultView; onSignUp: () => void }) 
         </div>
       ) : (
         <p className="result__note">Your Health Number stays on this screen &mdash; you can create an account whenever you are ready. <Link href="/">Back to Veye</Link></p>
+      )}
+      {!stored && saved && (
+        <div className="result__saved" role="status" data-testid="saved-status">
+          <strong>Saved {formatSavedUntil(saved)}.</strong>{" "}
+          {view.confirmation === "sent"
+            ? `We emailed ${saved.email_masked} a link to confirm the address is yours.`
+            : `We could not send the confirmation email to ${saved.email_masked} just now; the result is saved all the same.`}{" "}
+          Already a member? <Link href="/login?next=/app/saved-result">Sign in to add it to your account</Link>.{" "}
+          <button className="result__link" type="button" onClick={() => void eraseSaved()} disabled={erasing} data-testid="saved-erase">
+            {erasing ? "Deleting…" : "Delete my saved result"}
+          </button>
+        </div>
+      )}
+      {!stored && !saved && (view.saveFailed || erased) && (
+        <p className="result__saved result__saved--warn" role="status" data-testid="saved-status">
+          {erased || `Not saved — ${view.saveFailed}`}
+        </p>
+      )}
+      {!stored && !saved && !view.saveFailed && !erased && view.offered && (
+        <p className="result__note" data-testid="saved-status">Not saved. Your answers stay in this browser tab only.</p>
       )}
       <p className="result__version">Calculation version {result.calculation_version}</p>
     </div>

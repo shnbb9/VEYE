@@ -185,3 +185,38 @@ button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
 .settings-note button.settings-link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
   color: #446514; text-decoration: underline; }
 .settings-session-more { background: none; padding: 2px 2px 0; color: #7A8A66; font-size: 13px; }
+
+/* The consent screen (architecture V2 §4.4). The two choices are the same
+   size, weight and colour on purpose: neither is the "default" one. */
+.consent { max-width: 760px; }
+.consent__heading { margin: 22px 0 6px; font: 600 17px/1.3 'Teachers', sans-serif; color: #2E4A1A; }
+.consent__heading:first-child { margin-top: 0; }
+.consent__list { margin: 4px 0 8px 20px; padding: 0; color: #384C0C; font-size: 15px; line-height: 1.55; }
+.consent__rich { color: #384C0C; font-size: 15px; line-height: 1.55; }
+.consent__rich p { margin: 0 0 10px; }
+.consent__rich h2, .consent__rich h3 { margin: 14px 0 6px; font-family: 'Teachers', sans-serif; color: #2E4A1A; }
+.consent__rich ul, .consent__rich ol { margin: 0 0 10px 20px; padding: 0; }
+.consent__rich blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid #C9D8B4; }
+.consent__rich a { color: #446514; text-decoration: underline; }
+.consent__details { margin: 16px 0 6px; }
+.consent__details summary { cursor: pointer; color: #446514; font-weight: 600; }
+.consent__meta { opacity: .85; }
+.consent__choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; }
+.consent__choice { min-height: 48px; padding: 12px 16px; border-radius: 999px; border: 1.5px solid #446514;
+  background: #fff; color: #2E4A1A; font: 600 15px 'Teachers', sans-serif; cursor: pointer; }
+.consent__choice:hover { background: #F4F8EC; }
+.consent__choice:focus-visible { outline: 3px solid #446514; outline-offset: 2px; }
+.consent__choice:disabled { opacity: .6; cursor: progress; }
+@media (max-width: 560px) { .consent__choices { grid-template-columns: 1fr; } }
+
+/* Delete my member profile (architecture V2 §6). The destructive action is
+   visually distinct from every other Settings action, and the dialog scrolls
+   on short screens instead of pushing its buttons off the bottom. */
+.settings-outline--danger { color: #9C3A24; border-color: #E9C9BF; }
+.settings-outline--danger:hover { background: #FBF1EE; }
+.delete-card { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.delete-card__label { margin: 12px 0 2px; font-weight: 600; color: #2E4A1A; }
+.delete-card__field { display: block; margin: 14px 0 6px; font-size: 14px; color: #2E4A1A; }
+.delete-card__input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #DDE6C8; border-radius: 10px; font: inherit; }
+.delete-card__input:focus { outline: 2px solid #446514; outline-offset: 1px; }
+.delete-card__submit { background: #9C3A24 !important; }

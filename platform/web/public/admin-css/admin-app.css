@@ -42,3 +42,27 @@
 /* Member 360: the member's own profile photo, when one is uploaded. */
 .avatar--photo { overflow: hidden; padding: 0; }
 .avatar--photo img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+
+/* Privacy & prospects: the five retention choices are radio inputs inside
+   button-styled labels; the input is visually hidden, so the focus ring has
+   to be drawn on the label or keyboard users cannot see where they are. */
+.retention-option:has(input:focus-visible) { outline: 2px solid var(--focus, #2E5A16); outline-offset: 2px; }
+
+/* Rich-text editor (Settings -> Health sharing). The toolbar is buttons; the
+   area is a contentEditable textbox whose output is a document tree, never
+   HTML. */
+.rte { display: grid; gap: 6px; }
+.rte__toolbar { display: flex; flex-wrap: wrap; gap: 4px; }
+.rte__tool { min-width: 34px; height: 32px; padding: 0 8px; border: 1px solid var(--line, #D9DFCF); border-radius: 8px;
+  background: var(--surface, #fff); color: var(--text, #24301A); font: 600 13px/1 inherit; cursor: pointer; }
+.rte__tool:hover { background: var(--surface-2, #F4F6EF); }
+.rte__tool:focus-visible { outline: 2px solid var(--focus, #2E5A16); outline-offset: 1px; }
+.rte__area { min-height: 140px; padding: 12px 14px; border: 1px solid var(--line, #D9DFCF); border-radius: 10px;
+  background: var(--surface, #fff); line-height: 1.55; overflow-wrap: anywhere; }
+.rte__area:focus { outline: 2px solid var(--focus, #2E5A16); outline-offset: 1px; }
+.rte__area p { margin: 0 0 10px; }
+.rte__area h2 { margin: 12px 0 6px; font-size: 18px; }
+.rte__area h3 { margin: 10px 0 6px; font-size: 16px; }
+.rte__area ul, .rte__area ol { margin: 0 0 10px 20px; }
+.rte__area blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--line-strong, #B9C6A6); }
+.preview-frame { width: 100%; min-height: 420px; border: 1px solid var(--line, #D9DFCF); border-radius: 10px; background: #FBF8F1; }

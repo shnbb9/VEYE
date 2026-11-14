@@ -84,6 +84,14 @@ export type HealthPermission = {
   decided_at: string | null;
   revoked_at: string | null;
   events: HealthPermissionEvent[];
+  /* The console's view (architecture V2 §4.2): may it ask now, why not, and
+     what happened to the email that carried the last request. */
+  email_verified?: boolean | null;
+  can_request?: boolean | null;
+  cannot_request_reason?: string | null;
+  requires_reason?: boolean | null;
+  next_request_at?: string | null;
+  delivery?: { status: string; attempts: number; last_error: string | null; sent_at: string | null; next_attempt_at: string | null; to_email: string } | null;
 };
 
 export type MembersPage = { rows: MemberRow[]; total: number; page: number; page_size: number };
@@ -183,8 +191,11 @@ export const getMember360 = (memberId: string) => apiJson<Member360>(`${CONSOLE}
 export const getHealthPermission = (memberId: string) =>
   apiJson<HealthPermission>(`${CONSOLE}/members/${memberId}/health-permission`);
 /* Asking is the console's whole power here. */
-export const requestHealthPermission = (memberId: string) =>
-  postJson<HealthPermission>(`${CONSOLE}/members/${memberId}/health-permission/request`, {});
+export const requestHealthPermission = (memberId: string, reason?: string) =>
+  postJson<HealthPermission>(`${CONSOLE}/members/${memberId}/health-permission/request`, reason ? { reason } : {});
+/* Re-deliver the email of the open request after a refused send; never a second ask. */
+export const resendHealthPermissionEmail = (memberId: string) =>
+  postJson<HealthPermission>(`${CONSOLE}/members/${memberId}/health-permission/resend`, {});
 export const listInstruments = () => apiJson<Instrument[]>(`${CONSOLE}/assessments`);
 export const listAttempts = (key: string, params: { q?: string; page?: number; page_size?: number } = {}) =>
   apiJson<AttemptsPage>(`${CONSOLE}/assessments/${key}/attempts${query(params)}`);
@@ -333,6 +344,8 @@ export type AdministratorRow = {
   also_member: boolean;
   is_self: boolean;
   is_synthetic: boolean;
+  /** Changes when that administrator's own picture changes; null = initials. */
+  photo_version: string | null;
 };
 export type AdministratorsPage = { rows: AdministratorRow[]; total: number; active: number; pending: number };
 export type DeliveryOut = { kind: string; status: string; detail: string | null };
@@ -404,3 +417,20 @@ export type AccountActivity = {
 
 export const listAccountActivity = (limit = 20) =>
   apiJson<AccountActivity[]>(`${CONSOLE}/administrators/activity?limit=${limit}`);
+
+/* ---- the administrator's own picture and member profile (V2 §5) -------------- */
+/* One picture per sign-in account: a person with both kinds of access has the
+   same avatar in both portals. Only the signed-in account's own picture can
+   be changed here. */
+export const myConsolePhotoUrl = (version: string, size: "full" | "thumb" = "thumb") =>
+  apiPath(`/api/v1/admin/account/photo?size=${size}&v=${encodeURIComponent(version)}`);
+export const administratorPhotoUrl = (userId: string, version: string) =>
+  apiPath(`/api/v1/admin/administrators/${userId}/photo?size=thumb&v=${encodeURIComponent(version)}`);
+export async function uploadMyConsolePhoto(file: File) {
+  const body = new FormData();
+  body.append("file", file);
+  return apiJson<import("@/lib/auth-api").Account>("/api/v1/admin/account/photo", { method: "POST", body });
+}
+export const removeMyConsolePhoto = () => apiJson<import("@/lib/auth-api").Account>("/api/v1/admin/account/photo", { method: "DELETE" });
+export const createMyMemberProfile = (password: string) =>
+  postJson<{ member_id: string; created: boolean; message: string }>("/api/v1/admin/account/member-profile", { password, understood: true });
