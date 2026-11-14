@@ -65,8 +65,10 @@ for (const file of files) {
   }
 }
 
-// A parser that found nothing would pass this test forever.
-assert.ok(total >= 8, `expected to find the application's aria-selected uses, found ${total}`);
+// A parser that found nothing would pass this test forever. (7 since 15 Nov
+// 2026: Food Choices' "Build a meal / My food lists" tabs left with the HOW TO
+// builder when the prototype's checklists came back.)
+assert.ok(total >= 7, `expected to find the application's aria-selected uses, found ${total}`);
 
 assert.deepEqual(
   offenders,
