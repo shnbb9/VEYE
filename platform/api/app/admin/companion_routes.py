@@ -31,6 +31,7 @@ from app.companion.routes import message_out
 from app.companion.settings import get_or_create_settings
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
+from app.health_permission.service import HealthPermissionService
 from app.knowledge.models import SCOPES, KnowledgeSource
 from app.knowledge.service import KnowledgeService
 from app.members.models import Member
@@ -133,8 +134,15 @@ def conversation_detail(conversation_id: UUID, db: Session = Depends(get_db)) ->
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found.")
     member, user = _member_user(db, conversation.member_id)
-    latest = health_number_history(db, conversation.member_id)
-    hn = f"{float(latest[0].displayed_score):.1f} — {latest[0].status}" if latest else "Not completed"
+    # The Health Number is a health record: the console sees it only while the
+    # member shares their health records, read fresh on every request (as
+    # Member 360 does through `_apply_sharing`). This card once showed it to
+    # every administrator whatever the member had decided.
+    if HealthPermissionService(db).shares_health_data(conversation.member_id):
+        latest = health_number_history(db, conversation.member_id)
+        hn = f"{float(latest[0].displayed_score):.1f} — {latest[0].status}" if latest else "Not completed"
+    else:
+        hn = "Not shared"
     messages = []
     for m in conversation.messages:
         base = message_out(m)

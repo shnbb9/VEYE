@@ -247,6 +247,22 @@ def test_escalation_flags_the_conversation_and_notifies_the_admin(aditya, admin_
     assert audit[0]["action"] == "conversation.reviewed"
 
 
+def test_the_conversation_card_shows_the_health_number_only_while_the_member_shares(aditya, admin_client):
+    """The console's conversation view carries a member card. Its Health Number
+    is a health record like any other: shown while the member shares their
+    health records, "Not shared" otherwise, and a withdrawal bites on the next
+    request. It used to be shown to every administrator regardless."""
+    conversation = aditya.post("/api/v1/companion/messages", json={"message": "Where do I start with breakfast?"}).json()["conversation_id"]
+    card = lambda: admin_client.get(f"/api/v1/admin/companion/conversations/{conversation}").json()["member"]  # noqa: E731
+
+    shared = card()["health_number"]
+    assert shared not in ("Not shared", "Not completed") and " — " in shared
+
+    assert aditya.post("/api/v1/members/me/health-permission/revoke").status_code == 200
+    assert card()["health_number"] == "Not shared"
+    assert card()["name"] == "Aditya Demo"  # who they are is not a health record
+
+
 def test_conversation_search_looks_past_the_first_message(aditya, admin_client):
     """The search box says "members and messages", and must mean it.
 
