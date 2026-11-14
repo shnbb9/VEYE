@@ -1,0 +1,33 @@
+# Database migrations as a one-off Cloud Run Job — TEMPLATE, never applied here.
+#
+# Migrations never run on container start: three instances would run three at
+# once. Order of a release: build -> push -> run THIS job -> deploy the new
+# revision with no traffic -> shift traffic. Every migration in alembic/versions
+# is additive (new tables, nullable columns) so the old revision keeps serving.
+#   gcloud run jobs replace migrate.job.yaml --region=${REGION} --project=${PROJECT_ID}
+#   gcloud run jobs execute veye-migrate --wait --region=${REGION} --project=${PROJECT_ID}
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: veye-migrate
+  labels: {app: veye, env: "${ENV}"}
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: ${PROJECT_ID}:${REGION}:veye-${ENV}
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          maxRetries: 0          # a failed migration is a person's decision, not a retry
+          timeoutSeconds: 900
+          serviceAccountName: veye-api@${PROJECT_ID}.iam.gserviceaccount.com
+          containers:
+            - image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/veye/api:${IMAGE_SHA}
+              command: ["alembic", "upgrade", "head"]
+              env:
+                - name: VEYE_ENVIRONMENT
+                  value: production
+                - name: VEYE_DATABASE_URL
+                  valueFrom: {secretKeyRef: {name: veye-database-url, key: latest}}

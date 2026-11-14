@@ -1,0 +1,33 @@
+# VEYE web (Next.js) on Cloud Run — TEMPLATE, never applied by this repository.
+#
+# NEXT_PUBLIC_API_URL is inlined at BUILD time, so staging and production are
+# separate builds from the same commit (docker/web.production.Dockerfile
+# refuses to build without it). The service needs no permissions at all.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: veye-web
+  labels:
+    app: veye
+    tier: web
+    env: ${ENV}
+  annotations:
+    run.googleapis.com/ingress: internal-and-cloud-load-balancing
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+    spec:
+      serviceAccountName: veye-web@${PROJECT_ID}.iam.gserviceaccount.com
+      containers:
+        - image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/veye/web-${ENV}:${IMAGE_SHA}
+          ports:
+            - containerPort: 8080
+          resources:
+            limits: {cpu: "1", memory: 512Mi}
+          startupProbe:
+            httpGet: {path: /login, port: 8080}
+            periodSeconds: 5
+            failureThreshold: 12

@@ -1,0 +1,52 @@
+# Scheduled maintenance as a Cloud Run Job — TEMPLATE, never applied here.
+#
+# `python -m app.jobs run all`: the prospect retention purge, outbox retries
+# and pending erasures. Every job is idempotent, so an overlapping or repeated
+# execution does the work once. Exit status is non-zero when any job failed,
+# which marks the execution failed for alerting. Cloud Scheduler triggers it:
+#   gcloud scheduler jobs create http veye-maintenance --schedule="*/15 * * * *" \
+#     --uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/veye-maintenance:run" \
+#     --http-method=POST --oauth-service-account-email=veye-scheduler@${PROJECT_ID}.iam.gserviceaccount.com
+#
+# After ANY database restore, run the erasure ledger replay before traffic:
+#   gcloud run jobs execute veye-maintenance --args="run,replay-erasures" --wait
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: veye-maintenance
+  labels: {app: veye, env: "${ENV}"}
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: ${PROJECT_ID}:${REGION}:veye-${ENV}
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          maxRetries: 1
+          timeoutSeconds: 900
+          serviceAccountName: veye-api@${PROJECT_ID}.iam.gserviceaccount.com
+          containers:
+            - image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/veye/api:${IMAGE_SHA}
+              command: ["python", "-m", "app.jobs"]
+              args: ["run", "all"]
+              env:
+                - name: VEYE_ENVIRONMENT
+                  value: production
+                - name: VEYE_EMAIL_PROVIDER
+                  value: smtp
+                - name: VEYE_MEDIA_OBJECT_STORE
+                  value: gcs
+                - name: VEYE_MEDIA_BUCKET
+                  value: veye-${ENV}-member-media
+                - name: VEYE_DATABASE_URL
+                  valueFrom: {secretKeyRef: {name: veye-database-url, key: latest}}
+                - name: VEYE_SMTP_USERNAME
+                  valueFrom: {secretKeyRef: {name: veye-smtp-username, key: latest}}
+                - name: VEYE_SMTP_PASSWORD
+                  valueFrom: {secretKeyRef: {name: veye-smtp-password, key: latest}}
+                - name: VEYE_TELEMETRY_PSEUDONYM_KEY
+                  valueFrom: {secretKeyRef: {name: veye-telemetry-pseudonym-key, key: latest}}
+                - name: VEYE_PROSPECT_ENCRYPTION_KEYS
+                  valueFrom: {secretKeyRef: {name: veye-prospect-encryption-keys, key: latest}}

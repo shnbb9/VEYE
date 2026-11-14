@@ -1,0 +1,99 @@
+# VEYE API on Cloud Run — TEMPLATE, never applied by this repository.
+#
+# Placeholders: PROJECT_ID, REGION, ENV (staging|production), IMAGE_SHA.
+# One project per environment (docs: platform/docs/PRODUCTION_INFRASTRUCTURE.md).
+# Render with envsubst (or by hand), review, then:
+#   gcloud run services replace api.service.yaml --region=${REGION} --project=${PROJECT_ID}
+# ...only after the owner has created the project, approved the BAA/covered
+# services, and rotated the credentials listed below into Secret Manager.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: veye-api
+  labels:
+    app: veye
+    tier: api
+    env: ${ENV}
+  annotations:
+    # Reachable through the HTTPS load balancer (Cloud Armor in front) only.
+    run.googleapis.com/ingress: internal-and-cloud-load-balancing
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"      # no cold start on a sign-in
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/cpu-throttling: "true"
+        # Private IP to Cloud SQL through the connector; no public IP.
+        run.googleapis.com/cloudsql-instances: ${PROJECT_ID}:${REGION}:veye-${ENV}
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      # Its own identity, least privilege: Cloud SQL Client, Secret Manager
+      # Secret Accessor on the secrets below, Storage Object Admin on the media
+      # bucket ONLY, Vertex AI User only once Gemini is cleared. No JSON keys.
+      serviceAccountName: veye-api@${PROJECT_ID}.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 60
+      containers:
+        - image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/veye/api:${IMAGE_SHA}
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi        # image decoding (profile pictures) needs headroom
+          env:
+            - name: VEYE_ENVIRONMENT
+              value: production   # "staging" builds still run production rules
+            - name: VEYE_WEB_BASE_URL
+              value: https://${WEB_HOST}
+            - name: VEYE_CORS_ORIGINS
+              value: https://${WEB_HOST}
+            - name: VEYE_EMAIL_PROVIDER
+              value: smtp
+            - name: VEYE_SMTP_HOST
+              value: smtp-relay.gmail.com
+            - name: VEYE_SMTP_PORT
+              value: "587"
+            - name: VEYE_EMAIL_FROM
+              value: "Veye <no-reply@${MAIL_DOMAIN}>"   # authenticated domain only
+            - name: VEYE_EMAIL_REPLY_TO
+              value: ${MONITORED_REPLY_TO}              # a mailbox somebody reads
+            - name: VEYE_MEDIA_OBJECT_STORE
+              value: gcs
+            - name: VEYE_MEDIA_BUCKET
+              value: veye-${ENV}-member-media
+            - name: VEYE_KNOWLEDGE_OBJECT_STORE
+              value: gcs
+            - name: VEYE_KNOWLEDGE_BUCKET
+              value: veye-${ENV}-knowledge
+            - name: VEYE_GCP_PROJECT
+              value: ${PROJECT_ID}
+            - name: VEYE_LLM_PROVIDER
+              value: mock             # gemini only after the BAA question is answered in writing
+            - name: VEYE_GEMINI_MEMBER_DATA_CLEARED
+              value: "false"          # stays false until counsel clears it
+            - name: VEYE_AUTH_PROVIDER
+              value: development      # identity-platform once the tenant exists
+            # Scheduling is Cloud Scheduler -> maintenance.job.yaml, not an
+            # in-process loop (several instances would each run it).
+            - name: VEYE_JOBS_INTERVAL_SECONDS
+              value: "0"
+            # ---- secrets: Secret Manager, never in this file ----
+            - name: VEYE_DATABASE_URL
+              valueFrom: {secretKeyRef: {name: veye-database-url, key: latest}}
+            - name: VEYE_SMTP_USERNAME
+              valueFrom: {secretKeyRef: {name: veye-smtp-username, key: latest}}
+            - name: VEYE_SMTP_PASSWORD   # the previously shared one is exposed: rotate first
+              valueFrom: {secretKeyRef: {name: veye-smtp-password, key: latest}}
+            - name: VEYE_TELEMETRY_PSEUDONYM_KEY
+              valueFrom: {secretKeyRef: {name: veye-telemetry-pseudonym-key, key: latest}}
+            - name: VEYE_PROSPECT_ENCRYPTION_KEYS   # kid:base64(32 bytes); first encrypts
+              valueFrom: {secretKeyRef: {name: veye-prospect-encryption-keys, key: latest}}
+          startupProbe:
+            httpGet: {path: /health, port: 8080}
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: {path: /health, port: 8080}
+            periodSeconds: 30
