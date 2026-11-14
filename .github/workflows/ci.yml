@@ -53,10 +53,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: platform/api/pyproject.toml
-      - name: Install the API and its test extras
+          cache-dependency-path: platform/api/requirements/ci.lock
+      - name: Install the API's locked dependencies and test extras
+        # Hashed lock (runtime + [test] + [ai]); pytest imports the app from
+        # the working directory (pyproject `pythonpath`), so the project
+        # itself is not installed.
         working-directory: platform/api
-        run: pip install -e ".[test,ai]"
+        run: pip install --require-hashes -r requirements/ci.lock
       - name: pytest
         working-directory: platform/api
         env:
@@ -147,16 +150,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: platform/api/pyproject.toml
+          cache-dependency-path: platform/api/requirements/dev.lock
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: platform/web/package-lock.json
 
-      - name: Install the API
+      - name: Install the API's locked dependencies
+        # The development image's lock (runtime + [ai]); alembic, python -m
+        # and uvicorn import the app from the working directory.
         working-directory: platform/api
-        run: pip install -e ".[ai]"
+        run: pip install --require-hashes -r requirements/dev.lock
       - name: Migrate and seed
         # Proves the migrations apply to an EMPTY database on every run, which
         # the local stack only ever does the first time.

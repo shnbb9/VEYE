@@ -177,6 +177,28 @@ def test_something_that_is_not_a_zip_is_refused_as_not_a_docx():
     assert "zip archive" in refused.value.detail
 
 
+@pytest.mark.parametrize("body", [
+    # Billion laughs: a few hundred bytes that expand to gigabytes.
+    '<?xml version="1.0"?><!DOCTYPE w [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">'
+    '<!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">]>'
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>&c;</w:t></w:r></w:p></w:body></w:document>',
+    # An external entity pointing at the server's own files.
+    '<?xml version="1.0"?><!DOCTYPE w [<!ENTITY x SYSTEM "file:///etc/passwd">]>'
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>&x;</w:t></w:r></w:p></w:body></w:document>',
+])
+def test_a_document_body_with_entities_is_refused_not_expanded(body):
+    """The body is parsed with defusedxml (bandit B314): a DTD declaring
+    entities has no place in a Word body, so it is refused like malformed XML
+    rather than expanded."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as z:
+        z.writestr("word/document.xml", body)
+    with pytest.raises(ExtractionError) as refused:
+        extract.extract("Hostile.docx", DOCX_TYPE, buffer.getvalue())
+    assert refused.value.status_code == 422
+    assert "could not be parsed" in refused.value.detail
+
+
 def test_a_zip_without_a_document_body_is_refused():
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as z:

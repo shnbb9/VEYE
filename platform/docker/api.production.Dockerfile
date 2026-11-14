@@ -17,21 +17,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /build
 
-# Dependencies resolve from the project metadata first, so a source-only change
-# does not re-resolve the world on every build.
-COPY pyproject.toml README.md* ./
-COPY app ./app
-COPY alembic ./alembic
-COPY alembic.ini ./
+# Dependencies only, from the hashed lock — never resolved from the index at
+# build time. requirements/production.lock is the runtime set plus the
+# production extras: `[gemini]` (the chosen provider) and `[gcs]` (member
+# media); `[ai]` (Groq, Langfuse) is development tooling and is deliberately
+# absent. `--require-hashes` makes pip refuse any file that is not exactly
+# what was locked, so two builds of one commit carry the same packages
+# (defect U-4: unpinned ranges once failed a build on a transient index
+# fault and could silently differ between builds). The source is not needed
+# here: the runtime stage runs it from /app.
+COPY requirements/production.lock ./requirements/production.lock
 
 # A virtualenv rather than --user, so exactly one directory is copied forward
 # and the runtime image carries no build tooling at all.
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-# The production extras only. `[ai]` (Groq, Langfuse) is development tooling
-# and is deliberately absent: Gemini is the chosen provider and `[gemini]`
-# brings it. `[gcs]` is member media.
-RUN pip install ".[gemini,gcs]"
+RUN pip install --require-hashes -r requirements/production.lock
 
 # ---- runtime -------------------------------------------------------------
 FROM python:3.12-slim AS runtime

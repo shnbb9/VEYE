@@ -31,6 +31,15 @@ function Section($name) {
 Section 'Python dependencies (pip-audit)'
 Push-Location $api
 try {
+  # What the images and CI install: the hashed locks (scripts/lock-api-deps.ps1).
+  # Fully pinned and hashed, so nothing is resolved or installed to audit them.
+  foreach ($lock in 'requirements\production.lock', 'requirements\dev.lock', 'requirements\ci.lock') {
+    Write-Host "-- $lock"
+    & $python -m pip_audit --progress-spinner off --disable-pip -r $lock
+    if ($LASTEXITCODE -ne 0) { $problems++ }
+  }
+  # This laptop's own environment, which can lag behind the locks.
+  Write-Host '-- local virtualenv'
   & $python -m pip_audit --progress-spinner off
   if ($LASTEXITCODE -ne 0) { $problems++ }
   # A broken pin is its own kind of risk: it means the tree resolved to

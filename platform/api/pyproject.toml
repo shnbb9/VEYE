@@ -17,13 +17,18 @@ dependencies = [
   # is the whole point: a hand-rolled JWT parser is where "alg: none" lives.
   "pyjwt[crypto]>=2.10,<3",
   # Reading uploaded PDFs into the knowledge base. Pure Python, no native
-  # build. Word files need nothing: a .docx is a zip of XML and the
-  # standard library reads it.
+  # build.
   "pypdf>=6.1,<7",
+  # A .docx is a zip of XML. Its body is parsed with defusedxml, which
+  # refuses DTDs and entity expansion, rather than the standard library
+  # parser bandit warns about (B314).
+  "defusedxml>=0.7.1,<1",
   "python-multipart>=0.0.20,<1",
   # Profile pictures are decoded and re-encoded, never stored as uploaded:
   # that is what strips EXIF/GPS and refuses files that only look like images.
-  "pillow>=11.0,<13",
+  # 13 or later: 12.3.0 carried 42 published vulnerabilities (pip-audit,
+  # 15 Nov 2026), and this is the code that decodes untrusted uploads.
+  "pillow>=13.0,<14",
   "sqlalchemy==2.0.52",
   "uvicorn[standard]>=0.35,<1",
 ]

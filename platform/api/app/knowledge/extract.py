@@ -36,6 +36,9 @@ import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 
+from defusedxml import ElementTree as SafeET
+from defusedxml.common import DefusedXmlException
+
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 TEXT_CONTENT_TYPES = {"text/plain", "text/markdown", "text/x-markdown"}
@@ -138,8 +141,11 @@ def _extract_docx(data: bytes) -> Extracted:
         if "word/document.xml" not in archive.namelist():
             raise ExtractionError(422, "That .docx has no document body (word/document.xml is missing).")
         try:
-            root = ET.fromstring(archive.read("word/document.xml"))
-        except ET.ParseError as exc:
+            # defusedxml: an uploaded file is untrusted, and a DTD or an entity
+            # in a document body has no business there (billion laughs,
+            # external entities). Refused the same way as malformed XML.
+            root = SafeET.fromstring(archive.read("word/document.xml"))
+        except (ET.ParseError, DefusedXmlException) as exc:
             raise ExtractionError(422, "The .docx body could not be parsed.") from exc
         has_images = any(name.startswith("word/media/") for name in archive.namelist())
 
