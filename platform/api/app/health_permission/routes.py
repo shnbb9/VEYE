@@ -237,7 +237,8 @@ def revoke(principal: CurrentPrincipal = Depends(require_member),
     assert principal.member_id is not None
     try:
         row = HealthPermissionService(db).revoke(principal.member_id, by_user_id=principal.user_id,
-                                                 by_name=principal.display_name)
+                                                 by_name=principal.display_name,
+                                                 terms_label=current_terms(db).label)
     except PermissionError_ as exc:
         _raise(exc)
     db.commit()

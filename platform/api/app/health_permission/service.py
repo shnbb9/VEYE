@@ -132,29 +132,36 @@ class HealthPermissionService:
         self.db.flush()
         return row
 
-    def revoke(self, member_id: UUID, *, by_user_id: UUID, by_name: str) -> MemberHealthPermission:
+    def revoke(self, member_id: UUID, *, by_user_id: UUID, by_name: str,
+               terms_label: str | None = None) -> MemberHealthPermission:
         """Withdraw a permission already given. Nothing is deleted — the record
         of having granted stays, because it is the evidence that the team was
-        once entitled to look."""
+        once entitled to look.
+
+        A withdrawal is not a decision on any terms, so the row keeps the
+        version the member last decided under. It used to be stamped with the
+        built-in v0 label, which — once an administrator had published terms
+        — told every member who withdrew that they had "decided against an
+        earlier version of the terms". The event names the terms in force
+        when it happened (`terms_label`), for the evidence."""
         row = self.for_member(member_id)
         if row.state != STATE_GRANTED:
             raise PermissionError_(409, "There is nothing to withdraw.")
         self._record(row, STATE_REVOKED, actor="member", actor_user_id=by_user_id,
-                     actor_name=by_name, source=SOURCE_MEMBER_APP)
+                     actor_name=by_name, source=SOURCE_MEMBER_APP, label=terms_label)
         row.revoked_at = datetime.now(timezone.utc)
-        row.policy_version = POLICY_VERSION
         self.db.flush()
         return row
 
     # ---- internals -----------------------------------------------------------
     def _record(self, row: MemberHealthPermission, to_state: str, *, actor: str,
                 actor_user_id: UUID | None, actor_name: str, source: str, note: str | None = None,
-                terms=None, request_ref: str | None = None) -> None:
+                terms=None, request_ref: str | None = None, label: str | None = None) -> None:
         snapshot = terms.snapshot() if terms is not None else {}
         self.db.add(MemberHealthPermissionEvent(
             permission_id=row.id, member_id=row.member_id, from_state=row.state, to_state=to_state,
             actor=actor, actor_user_id=actor_user_id, actor_name=actor_name, source=source,
-            policy_version=terms.label if terms is not None else POLICY_VERSION, note=note,
+            policy_version=terms.label if terms is not None else (label or POLICY_VERSION), note=note,
             terms_version=terms.version if terms is not None else None,
             terms_hash=terms.hash if terms is not None else None,
             scope=snapshot.get("categories"), purpose=snapshot.get("purpose"),

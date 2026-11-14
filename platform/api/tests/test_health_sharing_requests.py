@@ -338,6 +338,32 @@ def test_new_terms_do_not_rewrite_an_earlier_decision(admin_client):
         assert latest.recipient == "The Veye care team" and latest.terms_version == 1
 
 
+def test_withdrawing_keeps_the_terms_the_decision_was_made_under(admin_client):
+    """A withdrawal is not a decision on any terms. It used to stamp the
+    built-in v0 label on the row, so once an administrator had published terms
+    every member who withdrew was told they had "decided against an earlier
+    version of the terms" — found by the V2 prototype comparison."""
+    draft = {"summary": {"blocks": [{"type": "paragraph", "children": [{"type": "text", "text": "Published summary.", "marks": []}]}]},
+             "details": {"blocks": []}, "purpose": "To review your program with you each month.",
+             "recipient": "The Veye care team"}
+    assert admin_client.put("/api/v1/admin/settings/health-sharing/terms/draft", json=draft).status_code == 200
+    admin_client.post("/api/v1/admin/settings/health-sharing/terms/preview", json=draft)
+    assert admin_client.post("/api/v1/admin/settings/health-sharing/terms/publish").status_code == 200
+
+    m = member("withdraw.terms@demo.veye.test")
+    assert decide_sharing(m).status_code == 200
+    shared = m.get("/api/v1/members/me/health-permission").json()
+    assert shared["policy_version"] == shared["current_policy_version"] == "health-sharing-terms-v1"
+
+    assert m.post("/api/v1/members/me/health-permission/revoke").status_code == 200
+    after = m.get("/api/v1/members/me/health-permission").json()
+    assert after["state"] == "revoked"
+    assert after["policy_version"] == "health-sharing-terms-v1", "the row keeps the terms the member decided under"
+    assert after["policy_version"] == after["current_policy_version"], "nothing about older terms to say"
+    [withdrawal] = [e for e in after["events"] if e["to_state"] == "revoked"]
+    assert withdrawal["policy_version"] == "health-sharing-terms-v1", "the event names the terms in force"
+
+
 def test_locked_elements_cannot_be_edited_away(admin_client):
     draft = {"summary": {"blocks": []}, "details": {"blocks": []}, "purpose": "x", "recipient": "y",
              "categories": ["nothing"]}
