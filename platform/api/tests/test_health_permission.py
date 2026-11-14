@@ -227,7 +227,7 @@ def test_looking_at_a_members_records_is_audited_without_copying_them(member_cli
     assert member_client.post(GRANT).status_code == 200
     admin_client.get(f"/api/v1/admin/members/{member_id}")          # viewed
 
-    audit = admin_client.get("/api/v1/admin/companion/advanced/audit", params={"limit": 200}).json()
+    audit = admin_client.get("/api/v1/admin/companion/advanced/audit", params={"limit": 200}).json()["rows"]
     health = [e for e in audit if e["action"] in ("health.viewed", "health.withheld")
               and e["entity_id"] == member_id]
     assert {e["action"] for e in health} == {"health.viewed", "health.withheld"}

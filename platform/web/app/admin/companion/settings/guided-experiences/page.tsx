@@ -76,23 +76,36 @@ export default function GuidedExperiencesPage() {
               <div className="table-wrap">
                 <table className="table table--compact">
                   <caption className="sr-only">Versions of {group.title}</caption>
-                  <thead><tr><th>Version</th><th>Status</th><th>Source</th><th>Review</th><th>Steps</th><th>Members</th><th>Last updated</th><th>Published</th><th className="t-right">Actions</th></tr></thead>
+                  <thead><tr><th>Version</th><th>Source</th><th>Steps</th><th>Members</th><th>Published</th><th className="t-right">Actions</th></tr></thead>
                   <tbody>
                     {group.versions.map((version) => (
                       <tr key={version.id}>
-                        <td className="t-num">v{version.version}</td>
-                        <td><span className={`tag${version.status === "Active" ? " tag--ok" : version.status === "Archived" ? " tag--muted" : ""}`}>{version.status}</span></td>
-                        <td>{String(version.content_meta.source ?? version.source ?? "—")}{version.content_meta.source_version ? <span className="t-support"> · {String(version.content_meta.source_version)}</span> : null}</td>
-                        <td>{version.content_meta.client_supplied ? `Client-supplied · clinical review ${String(version.content_meta.clinical_review_status ?? "pending")}` : "—"}</td>
+                        <td className="t-nowrap">v{version.version} <span className={`tag${version.status === "Active" ? " tag--ok" : version.status === "Archived" ? " tag--muted" : ""}`}>{version.status}</span></td>
+                        <td>
+                          <div>{String(version.content_meta.source ?? version.source ?? "—")}{version.content_meta.source_version ? ` · ${String(version.content_meta.source_version)}` : ""}</div>
+                          {version.content_meta.client_supplied
+                            ? <div className="t-support">Client-supplied · clinical review {String(version.content_meta.clinical_review_status ?? "pending")}</div>
+                            : null}
+                        </td>
                         <td className="t-num">{version.node_count}</td>
-                        <td className="t-num">{version.sessions_total}{version.sessions_total ? <span className="t-support"> ({version.sessions_in_progress} in progress · {version.sessions_completed} completed)</span> : null}</td>
-                        <td className="t-nowrap">{fmtDate(version.updated_at)}</td>
-                        <td className="t-nowrap">{version.published_at ? `${fmtDate(version.published_at)}${version.published_by ? ` · ${version.published_by}` : ""}` : "—"}</td>
+                        <td className="t-num">
+                          {version.sessions_total}
+                          {version.sessions_total ? <div className="t-support">{version.sessions_in_progress} in progress · {version.sessions_completed} completed</div> : null}
+                        </td>
+                        <td>
+                          <div className="t-nowrap">{version.published_at ? fmtDate(version.published_at) : "Not published"}</div>
+                          <div className="t-support">
+                            {version.published_at && version.published_by ? `by ${version.published_by}` : null}
+                            {fmtDate(version.updated_at) !== fmtDate(version.published_at)
+                              ? `${version.published_at && version.published_by ? " · " : ""}updated ${fmtDate(version.updated_at)}`
+                              : null}
+                          </div>
+                        </td>
                         <td className="t-right">
                           <div className="row gap-2" style={{ justifyContent: "flex-end" }}>
                             <button className="btn btn--secondary btn--sm" type="button" disabled={busy === version.id} onClick={() => void preview(version)}><Icon name="eye" size={16} /> Preview</button>
                             {version.status === "Draft" && <button className="btn btn--primary btn--sm" type="button" disabled={busy === version.id} onClick={() => void transition(version, "activate")}>Activate</button>}
-                            {version.status === "Active" && <button className="btn btn--ghost btn--sm" type="button" disabled={busy === version.id} onClick={() => void transition(version, "deactivate")}>Deactivate</button>}
+                            {version.status === "Active" && <button className="btn btn--danger-quiet btn--sm" type="button" disabled={busy === version.id} onClick={() => void transition(version, "deactivate")}>Deactivate</button>}
                           </div>
                         </td>
                       </tr>

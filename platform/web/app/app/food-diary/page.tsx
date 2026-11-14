@@ -165,7 +165,7 @@ export default function FoodDiaryPage() {
   return (
     <>
       <h1 className="fd-title">Food Diary</h1>
-      <p className="fdx-blurb">Note the time, macronutrient content, and how you felt before you ate on the left, and your day summary will update on the right.</p>
+      <p className="fdx-blurb">Note the time, macronutrient content, and how you felt before you ate. Your day summary updates as you log.</p>
 
       <div className="fdx-layout">
         {/* ================= left: log a meal ================= */}

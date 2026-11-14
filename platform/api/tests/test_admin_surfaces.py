@@ -58,7 +58,7 @@ def test_knowledge_source_lifecycle_via_admin_api(admin_client):
     detail = admin_client.get(f"/api/v1/admin/companion/knowledge-sources/{sid}").json()
     assert len(detail["documents"]) == 2 and sum(d["is_current"] for d in detail["documents"]) == 1
 
-    actions = [entry["action"] for entry in admin_client.get("/api/v1/admin/companion/advanced/audit").json()]
+    actions = [entry["action"] for entry in admin_client.get("/api/v1/admin/companion/advanced/audit").json()["rows"]]
     for expected in ("knowledge_source.created", "knowledge_source.updated", "knowledge_document.attached", "knowledge_source.activated",
                      "knowledge_source.deactivated", "knowledge_source.archived", "knowledge_source.restored"):
         assert expected in actions
@@ -195,3 +195,65 @@ def test_a_scanned_document_fails_loudly_rather_than_indexing_nothing(admin_clie
     assert doc["extraction_note"] is None
     # And it cannot be approved while it holds nothing.
     assert admin_client.post(f"/api/v1/admin/companion/knowledge-sources/{sid}/activate").status_code == 409
+ == 409
+
+
+def test_audit_log_is_paged_and_reports_the_whole_total(admin_client):
+    """The window must never be mistakable for the whole log.
+
+    The console rendered the most recent hundred entries with nothing on screen
+    to say a hundred was a cap, so an administrator who could not find an older
+    action had no way to tell the list was short. The response now carries the
+    total, and a second page returns different rows rather than repeating the
+    first — these entries share a timestamp to the second, so the ordering needs
+    a tiebreaker or an offset silently re-serves rows it has already sent.
+    """
+    for n in range(5):
+        admin_client.post("/api/v1/admin/companion/knowledge-sources", json=_source_payload(title=f"Paging note {n}"))
+
+    first = admin_client.get("/api/v1/admin/companion/advanced/audit", params={"limit": 2}).json()
+    assert first["page"] == 1 and first["page_size"] == 2 and len(first["rows"]) == 2
+    assert first["total"] >= 5, "the total counts the whole log, not the window"
+    assert first["total"] > len(first["rows"]), "this fixture must produce more rows than one page"
+
+    second = admin_client.get("/api/v1/admin/companion/advanced/audit", params={"limit": 2, "page": 2}).json()
+    assert second["page"] == 2 and second["total"] == first["total"]
+    assert {r["id"] for r in second["rows"]}.isdisjoint({r["id"] for r in first["rows"]})
+
+    # The last page is partial rather than refused, and past the end is empty.
+    beyond = admin_client.get("/api/v1/admin/companion/advanced/audit",
+                              params={"limit": 2, "page": first["total"] // 2 + 5}).json()
+    assert beyond["rows"] == [] and beyond["total"] == first["total"]
+
+
+def test_feedback_excerpt_marks_a_reply_it_has_cut():
+    """A reviewer must be able to tell a short reply from a shortened one.
+
+    The Feedback table shows the first 160 characters of what Sprout said. It
+    used to be a bare slice: no ellipsis, and a word could be cut in half, so a
+    truncated reply read as a reply that simply stopped there — on the one
+    screen whose purpose is judging whether the reply was good.
+    """
+    from app.admin.companion_routes import EXCERPT_CHARS, _reply_excerpt
+
+    class _Message:
+        def __init__(self, content): self.content = content
+
+    short = "A Health Number of 1 means good health."
+    assert _reply_excerpt(_Message(short)) == short, "a reply that fits is passed through untouched"
+    assert _reply_excerpt(None) == ""
+    assert _reply_excerpt(_Message("")) == ""
+
+    long = "word " * 200
+    cut = _reply_excerpt(_Message(long))
+    assert cut.endswith("…") and len(cut) <= EXCERPT_CHARS + 1
+    assert not cut[:-1].endswith(" "), "no trailing space before the ellipsis"
+    assert "wor…" not in cut, "the cut falls on a space, so no word is halved"
+
+    # A single unbroken token has no space to fall back to, and is still marked.
+    blob = "x" * 400
+    assert _reply_excerpt(_Message(blob)) == "x" * EXCERPT_CHARS + "…"
+
+    # Exactly at the boundary is not a truncation.
+    exact = "y" * EXCERPT_CHARS
+    assert _reply_excerpt(_Message(exact)) == exact and "…" not in _reply_excerpt(_Message(exact))

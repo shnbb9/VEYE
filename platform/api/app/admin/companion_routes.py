@@ -140,6 +140,28 @@ def review_conversation(conversation_id: UUID, payload: ReviewRequest, principal
     return summary_out(db, conversation)
 
 
+EXCERPT_CHARS = 160
+
+
+def _reply_excerpt(message) -> str:
+    """The first part of Sprout's reply, and an ellipsis when there is more.
+
+    A bare `content[:160]` ends mid-sentence with no mark, so a reviewer judging
+    whether the reply was any good cannot tell a short answer from a cut one.
+    The cut is moved back to the last space so a word is never halved.
+    """
+    if message is None:
+        return ""
+    content = message.content or ""
+    if len(content) <= EXCERPT_CHARS:
+        return content
+    head = content[:EXCERPT_CHARS]
+    space = head.rfind(" ")
+    if space > EXCERPT_CHARS // 2:
+        head = head[:space]
+    return head.rstrip(" ,;:-–—") + "…"
+
+
 @router.get("/feedback", response_model=list[FeedbackRowOut])
 def feedback(filter: str = Query(default="all", pattern="^(all|unreviewed|reviewed)$"), db: Session = Depends(get_db)) -> list[FeedbackRowOut]:
     query = db.query(CompanionFeedback).options(selectinload(CompanionFeedback.message))
@@ -154,7 +176,7 @@ def feedback(filter: str = Query(default="all", pattern="^(all|unreviewed|review
             id=fb.id, conversation_id=fb.conversation_id, message_id=fb.message_id,
             member_name=user.display_name if user else (member.display_name if member else "Member"), rating=fb.rating,
             reason=fb.reason, comment=fb.comment, submitted_at=fb.submitted_at, reviewed_at=fb.reviewed_at, reviewed_by=fb.reviewed_by,
-            reply_excerpt=(fb.message.content[:160] if fb.message else ""),
+            reply_excerpt=_reply_excerpt(fb.message),
         ))
     return rows
 
@@ -172,7 +194,7 @@ def review_feedback(feedback_id: UUID, principal: CurrentPrincipal = Depends(req
     return FeedbackRowOut(id=fb.id, conversation_id=fb.conversation_id, message_id=fb.message_id,
                           member_name=user.display_name if user else (member.display_name if member else "Member"), rating=fb.rating,
                           reason=fb.reason, comment=fb.comment, submitted_at=fb.submitted_at, reviewed_at=fb.reviewed_at,
-                          reviewed_by=fb.reviewed_by, reply_excerpt=(fb.message.content[:160] if fb.message else ""))
+                          reviewed_by=fb.reviewed_by, reply_excerpt=_reply_excerpt(fb.message))
 
 
 def settings_out(row) -> SettingsOut:

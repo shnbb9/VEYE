@@ -17,6 +17,7 @@ from app.admin.models import AdminAuditEntry
 from app.admin.schemas import (
     AiMonitoringOut,
     AuditEntryOut,
+    AuditPage,
     DiagnosticHitOut,
     DiagnosticQueryIn,
     ProviderStatusOut,
@@ -170,8 +171,24 @@ def provider_status(db: Session = Depends(get_db), runtime: Runtime = Depends(ge
     )
 
 
-@router.get("/audit", response_model=list[AuditEntryOut])
-def audit(limit: int = Query(default=100, ge=1, le=500), db: Session = Depends(get_db)) -> list[AuditEntryOut]:
-    rows = db.query(AdminAuditEntry).order_by(AdminAuditEntry.created_at.desc()).limit(limit).all()
-    return [AuditEntryOut(id=r.id, actor_name=r.actor_name, action=r.action, entity_type=r.entity_type, entity_id=r.entity_id,
-                          details=r.details, created_at=r.created_at) for r in rows]
+@router.get("/audit", response_model=AuditPage)
+def audit(
+    limit: int = Query(default=100, ge=1, le=500),
+    page: int = Query(default=1, ge=1),
+    db: Session = Depends(get_db),
+) -> AuditPage:
+    """Return one window of the audit log, and the size of the whole log.
+
+    `total` is counted rather than inferred from the window: a screen that only
+    receives rows cannot tell a full page from the end of the log, which is how
+    a hundred-entry cap came to be rendered as if it were everything.
+    """
+    total = db.query(func.count(AdminAuditEntry.id)).scalar() or 0
+    rows = (db.query(AdminAuditEntry)
+            .order_by(AdminAuditEntry.created_at.desc(), AdminAuditEntry.id.desc())
+            .offset((page - 1) * limit).limit(limit).all())
+    return AuditPage(
+        rows=[AuditEntryOut(id=r.id, actor_name=r.actor_name, action=r.action, entity_type=r.entity_type,
+                            entity_id=r.entity_id, details=r.details, created_at=r.created_at) for r in rows],
+        total=total, page=page, page_size=limit,
+    )

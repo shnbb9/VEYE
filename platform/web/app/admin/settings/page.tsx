@@ -185,7 +185,7 @@ function AccountSection() {
                 with nothing to explain it is exactly what the control audit
                 forbids, and the line above already says you are alone here. */}
             {sessions && sessions.some((s) => !s.current) ? (
-              <button className="btn btn--ghost btn--sm" type="button" data-testid="admin-revoke-others"
+              <button className="btn btn--secondary btn--sm" type="button" data-testid="admin-revoke-others"
                       disabled={busy === "sessions"} onClick={() => void endOtherSessions()}>
                 {busy === "sessions" ? "Signing out…" : "Sign out everywhere else"}
               </button>
@@ -193,7 +193,7 @@ function AccountSection() {
           </div>
 
           <div className="rowitem"><span className="rowitem__icon rowitem__icon--off"><Icon name="shield" size={18} /></span><div><div className="rowitem__title">Two-step verification</div><div className="rowitem__meta">Built, not live. Google Cloud Identity Platform token verification and the TOTP requirement for this console are implemented and tested; SMS is deliberately not accepted. What remains is the cloud project, the tenant and the browser sign-in half.</div></div><Chip label="Ready, not live" tone="info" /></div>
-          <div className="rowitem"><span className="rowitem__icon"><Icon name="log-out" size={18} /></span><div><div className="rowitem__title">Sign out</div><div className="rowitem__meta">Ends this console session only; a member session in the same browser stays.</div></div><button className="btn btn--ghost btn--sm" type="button" onClick={() => void session.signOut("admin", "/admin/login?flash=signed-out")}>Sign out</button></div>
+          <div className="rowitem"><span className="rowitem__icon"><Icon name="log-out" size={18} /></span><div><div className="rowitem__title">Sign out</div><div className="rowitem__meta">Ends this console session only; a member session in the same browser stays.</div></div><button className="btn btn--secondary btn--sm" type="button" onClick={() => void session.signOut("admin", "/admin/login?flash=signed-out")}>Sign out</button></div>
         </div></div>
         {note && <div className="card__foot"><p className="t-support" role="status" data-testid="admin-security-note">{note}</p></div>}
       </div>
@@ -419,7 +419,7 @@ function AdministratorsSection() {
                           </button>
                         </>
                       ) : row.is_active ? (
-                        <button className="btn btn--ghost btn--sm" type="button" disabled={busy !== null || row.is_self}
+                        <button className="btn btn--danger-quiet btn--sm" type="button" disabled={busy !== null || row.is_self}
                                 title={row.is_self ? "You cannot deactivate your own account" : undefined}
                                 onClick={() => void act(row, "deactivate")} data-testid={`deactivate-${row.email}`}>
                           {busy === `${row.user_id}:deactivate` ? "Working…" : "Deactivate"}

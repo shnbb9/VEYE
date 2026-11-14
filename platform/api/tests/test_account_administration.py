@@ -172,7 +172,7 @@ def test_deactivating_an_administrator_ends_their_session_at_once(admin_client, 
 
 def test_administrator_actions_are_audited_and_need_the_console(admin_client, client):
     _invite(admin_client)
-    actions = [e["action"] for e in admin_client.get("/api/v1/admin/companion/advanced/audit").json()]
+    actions = [e["action"] for e in admin_client.get("/api/v1/admin/companion/advanced/audit").json()["rows"]]
     assert "administrator.invited" in actions
     # A member session cannot see or use any of it.
     assert sign_up(client).status_code == 201

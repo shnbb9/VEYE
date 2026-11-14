@@ -135,7 +135,7 @@ export default function KnowledgeSourcesPage() {
                   </div>
                   <div className="rowitem__side row gap-2 wrap">
                     <Chip label={source.status} />
-                    {source.status !== "Archived" && <button className="btn btn--ghost btn--sm" type="button" onClick={() => setEditing({ id: source.id, input: { title: source.title, type: source.type, scope_key: source.scope_key, description: source.description, reference_label: source.reference_label ?? "", effective_date: source.effective_date } })}>View / edit</button>}
+                    {source.status !== "Archived" && <button className="btn btn--secondary btn--sm" type="button" onClick={() => setEditing({ id: source.id, input: { title: source.title, type: source.type, scope_key: source.scope_key, description: source.description, reference_label: source.reference_label ?? "", effective_date: source.effective_date } })}>View / edit</button>}
                     {source.status === "Archived"
                       ? <button className="btn btn--ghost btn--sm" type="button" disabled={busy === source.id} onClick={() => void transition(source, "restore")}>Restore</button>
                       : <>

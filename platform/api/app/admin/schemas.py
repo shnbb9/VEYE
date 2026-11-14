@@ -311,3 +311,18 @@ class AuditEntryOut(BaseModel):
     entity_id: str | None
     details: dict
     created_at: datetime
+
+
+class AuditPage(BaseModel):
+    """The audit log is read a window at a time, and says so.
+
+    The console used to take the most recent hundred entries and render them
+    with nothing to say a hundred was a limit, so an administrator looking for
+    an older action saw a complete-looking list that did not contain it. The
+    total travels with the rows for exactly that reason.
+    """
+
+    rows: list[AuditEntryOut]
+    total: int
+    page: int
+    page_size: int

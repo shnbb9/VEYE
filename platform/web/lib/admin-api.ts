@@ -215,6 +215,7 @@ export type ProviderStatus = {
 };
 
 export type AuditEntry = { id: string; actor_name: string; action: string; entity_type: string; entity_id: string | null; details: Record<string, unknown>; created_at: string };
+export type AuditPage = { rows: AuditEntry[]; total: number; page: number; page_size: number };
 
 export const getOverview = () => apiJson<Overview>(`${BASE}/overview`);
 export const listConversations = (filter: "needs_review" | "reviewed" | "all", q = "") =>
@@ -251,7 +252,7 @@ export const getRetrievalDiagnostics = () => apiJson<RetrievalDiagnostics>(`${BA
 export const runDiagnosticQuery = (query: string, scopes: string[]) => postJson<DiagnosticHit[]>(`${BASE}/advanced/retrieval-diagnostics/query`, { query, scopes, limit: 5 });
 export const getSafetyAnalytics = (days = 30) => apiJson<SafetyAnalytics>(`${BASE}/advanced/safety-analytics?days=${days}`);
 export const getProviderStatus = () => apiJson<ProviderStatus>(`${BASE}/advanced/provider-status`);
-export const getAudit = () => apiJson<AuditEntry[]>(`${BASE}/advanced/audit`);
+export const getAudit = (page = 1, limit = 100) => apiJson<AuditPage>(`${BASE}/advanced/audit?page=${page}&limit=${limit}`);
 
 /* ---- Guided Experiences (Companion → Settings → Guided Experiences) -------- */
 export type GuidedFlowVersion = {

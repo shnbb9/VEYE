@@ -14,26 +14,34 @@
               color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 .btn--primary { background: var(--green-primary); color: var(--text-on-dark); }
-.btn--primary:hover { background: var(--green-deep); }
+.btn--primary:hover:not(:disabled) { background: var(--green-deep); }
 .btn--secondary { background: var(--surface-card); color: var(--ink-heading); border-color: var(--line-strong); }
-.btn--secondary:hover { background: var(--surface-softer); border-color: var(--green-medium); }
+.btn--secondary:hover:not(:disabled) { background: var(--surface-softer); border-color: var(--green-medium); }
 .btn--ghost { background: transparent; color: var(--text-body); }
-.btn--ghost:hover { background: var(--surface-card); color: var(--ink-heading); }
+.btn--ghost:hover:not(:disabled) { background: var(--surface-card); color: var(--ink-heading); }
 .btn--danger { background: var(--status-significant); color: #fff; }
-.btn--danger:hover { background: #BE4C39; }
+.btn--danger:hover:not(:disabled) { background: #BE4C39; }
 .btn--danger-quiet { background: var(--surface-card); color: #A8402D; border-color: #E8C4BB; }
-.btn--danger-quiet:hover { background: var(--tint-significant); }
+.btn--danger-quiet:hover:not(:disabled) { background: var(--tint-significant); }
 .btn--sm { height: 32px; padding: 0 var(--s-3); font-size: var(--fs-table); }
 .btn--lg { height: 46px; padding: 0 var(--s-6); font-size: var(--fs-body-lg); }
 .btn--block { width: 100%; }
 .btn--icon { width: 40px; padding: 0; }
 .btn--icon.btn--sm { width: 32px; }
 
-.btn:disabled, .btn[aria-disabled="true"] {
-  opacity: .55; cursor: not-allowed; pointer-events: none;
-}
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 /* A control disabled for permission reasons explains itself rather than going
-   silently inert — see .lock-note. */
+   silently inert — see .lock-note.
+   `pointer-events: none` used to be on the rule above, and it defeated both of
+   the declarations beside it: no hover means no `not-allowed` cursor and no
+   title tooltip, so "You cannot deactivate your own account" and "Attach an
+   ingested document first" were written and could never be read. A native
+   `disabled` button already ignores clicks, so nothing is needed there; an
+   aria-disabled one is not inert by itself and still needs it. */
+.btn[aria-disabled="true"] { pointer-events: none; }
+/* The variants' :hover rules are guarded with :not(:disabled): now that a
+   disabled button receives pointer events again, an unguarded hover would
+   light it up as though it were live. */
 .btn[data-locked] { cursor: not-allowed; }
 
 .btn-group { display: inline-flex; gap: var(--s-2); flex-wrap: wrap; }

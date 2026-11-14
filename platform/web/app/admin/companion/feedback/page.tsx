@@ -53,7 +53,7 @@ export default function FeedbackPage() {
                       <td className="t-nowrap">{fmtDate(row.submitted_at)}</td>
                       <td>{row.reviewed_at ? <span className="t-support">Reviewed by {row.reviewed_by}</span> : <Chip label="Unreviewed" tone="attention" />}</td>
                       <td className="t-nowrap">
-                        <Link className="btn btn--ghost btn--sm" href={`/admin/companion/conversations?conversation=${row.conversation_id}`}>Open</Link>
+                        <Link className="btn btn--secondary btn--sm" href={`/admin/companion/conversations?conversation=${row.conversation_id}`}>Open</Link>
                         {!row.reviewed_at && <button className="btn btn--secondary btn--sm" type="button" disabled={busy === row.id} onClick={() => void review(row)}>Mark reviewed</button>}
                       </td>
                     </tr>

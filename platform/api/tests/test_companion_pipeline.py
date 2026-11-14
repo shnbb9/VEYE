@@ -243,7 +243,7 @@ def test_escalation_flags_the_conversation_and_notifies_the_admin(aditya, admin_
     reviewed = admin_client.post(f"/api/v1/admin/companion/conversations/{response['conversation_id']}/review", json={"note": "Coach followed up."})
     assert reviewed.status_code == 200 and reviewed.json()["reviewed_by"] == "Cara Hogue"
     assert admin_client.get("/api/v1/admin/companion/conversations?filter=needs_review").json() == []
-    audit = admin_client.get("/api/v1/admin/companion/advanced/audit").json()
+    audit = admin_client.get("/api/v1/admin/companion/advanced/audit").json()["rows"]
     assert audit[0]["action"] == "conversation.reviewed"
 
 

@@ -130,7 +130,7 @@ def test_care_studio_lifecycle_and_member_read(admin_client, client):
     assert client.get("/api/v1/care/mood").status_code == 404
     # member portal sessions cannot administer content
     assert client.get("/api/v1/admin/care/items").status_code == 401
-    actions = [e["action"] for e in admin_client.get("/api/v1/admin/companion/advanced/audit").json()]
+    actions = [e["action"] for e in admin_client.get("/api/v1/admin/companion/advanced/audit").json()["rows"]]
     assert {"care.create", "care.publish", "care.update", "care.archive", "care.restore"} <= set(actions)
 
 

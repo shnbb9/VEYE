@@ -1132,7 +1132,9 @@
     /* The full wordmark is 113px and the collapsed rail is ~71px, so the logo
        hung 68px past the edge and the sidebar scrolled sideways. Contain it. */
     .sidebar-logo-img { max-width: 100%; height: auto; }
-    .sidebar-logo { padding: 20px 26px; }
+    /* 26px either side left 20px for a 124x33 wordmark -- it rendered 20x5
+       and was unreadable. 10px gives it 52px and still clears the rail. */
+    .sidebar-logo { padding: 20px 10px; }
     .nav-link { justify-content: center; padding: 11px 8px; }
     .nav-link.active::before { left: -8px; }
     .grid { grid-template-columns: 1fr; }
@@ -2068,6 +2070,7 @@
     margin-top: 4px;
     font-weight: 600;
     letter-spacing: 0.4px;
+    white-space: nowrap;
   }
   .msg-row.user .msg-time { text-align: right; }
 
@@ -4949,6 +4952,11 @@
     display: flex;
     justify-content: center;
   }
+  /* An author `display` beats the user agent's `[hidden] { display: none }`, so
+     `hidden={!hasDays}` on this wrapper did nothing and "Continue to Food Diary"
+     sat under the empty state, next to its own "Go to Food Diary". Same guard as
+     .msg-feedback[hidden] above. */
+  .days-continue-wrap[hidden] { display: none; }
   .days-continue {
     display: inline-flex;
     align-items: center;

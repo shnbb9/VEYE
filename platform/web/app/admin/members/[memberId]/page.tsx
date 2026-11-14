@@ -309,7 +309,7 @@ function Member360View() {
       )}
 
       {tab === "companion" && (
-        <div className="grid grid--2">
+        <div className="stack gap-5">
           <div className="card">
             <div className="card__head"><div><h2 className="card__title"><Icon name="sprout" /> Guided experiences</h2><p className="t-support">Sprout's guided flows and where this member is in each.</p></div></div>
             <div className="card__body card__body--flush">
@@ -317,7 +317,7 @@ function Member360View() {
                 <div className="table-wrap"><table className="table table--compact">
                   <thead><tr><th scope="col">Flow</th><th scope="col">Version</th><th scope="col">Status</th><th scope="col">Step</th><th scope="col">Updated</th></tr></thead>
                   <tbody>{member.guided_sessions.map((s, i) => (
-                    <tr key={`${s.flow_key}-${i}`}><td>{s.flow_title}</td><td>v{s.flow_version}</td><td><Chip label={s.status.replace("_", " ")} tone={s.status === "completed" ? "live" : s.status === "skipped" ? "archived" : "draft"} /></td><td className="mono">{s.current_node}</td><td>{fmtDate(s.updated_at)}</td></tr>
+                    <tr key={`${s.flow_key}-${i}`}><td>{s.flow_title}</td><td>v{s.flow_version}</td><td><Chip label={s.status.replace("_", " ")} tone={s.status === "completed" ? "live" : s.status === "skipped" ? "archived" : "draft"} /></td><td className="mono">{s.current_node}</td><td className="t-nowrap">{fmtDate(s.updated_at)}</td></tr>
                   ))}</tbody>
                 </table></div>
               ) : <p className="t-support" style={{ padding: 20 }}>No guided session yet.</p>}
@@ -331,7 +331,7 @@ function Member360View() {
                 <div className="table-wrap"><table className="table table--compact">
                   <thead><tr><th scope="col">Started</th><th scope="col">Last message</th><th scope="col">Messages</th><th scope="col">Review</th><th scope="col"><span className="sr-only">Open</span></th></tr></thead>
                   <tbody>{member.conversations.map((c) => (
-                    <tr key={c.id}><td>{fmtDate(c.started_at)}</td><td>{fmtDate(c.last_message_at)}</td><td>{c.message_count}</td><td>{c.flagged ? <Chip label={c.reviewed_at ? "reviewed" : "needs review"} tone={c.reviewed_at ? "live" : "attention"} /> : <span className="t-muted">—</span>}</td><td style={{ textAlign: "right" }}><Link className="btn btn--secondary btn--sm" href={`/admin/companion/conversations?conversation=${c.id}`}>Open</Link></td></tr>
+                    <tr key={c.id}><td className="t-nowrap">{fmtDate(c.started_at)}</td><td className="t-nowrap">{fmtDate(c.last_message_at)}</td><td>{c.message_count}</td><td>{c.flagged ? <Chip label={c.reviewed_at ? "reviewed" : "needs review"} tone={c.reviewed_at ? "live" : "attention"} /> : <span className="t-muted">—</span>}</td><td style={{ textAlign: "right" }}><Link className="btn btn--secondary btn--sm" href={`/admin/companion/conversations?conversation=${c.id}`}>Open</Link></td></tr>
                   ))}</tbody>
                 </table></div>
               ) : <p className="t-support" style={{ padding: 20 }}>No conversation yet.</p>}
@@ -429,7 +429,7 @@ function AccountActions({ member, onChanged }: { member: Member360; onChanged: (
               </div>
             </div>
             {account.is_active ? (
-              <button className="btn btn--ghost btn--sm" type="button" disabled={busy !== null} data-testid="account-deactivate"
+              <button className="btn btn--danger-quiet btn--sm" type="button" disabled={busy !== null} data-testid="account-deactivate"
                       onClick={() => void run("deactivate", `Deactivate ${name}? They are signed out at once and cannot sign in until reactivated.`)}>
                 {busy === "deactivate" ? "Working…" : "Deactivate"}
               </button>

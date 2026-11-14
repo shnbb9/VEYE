@@ -94,6 +94,10 @@ jobs:
         run: node tests/veye-ui-contracts.test.js
       - name: API base helper
         run: node platform/web/tests/api-base.test.js
+      - name: Icon names resolve
+        run: node platform/web/tests/icon-names.test.js
+      - name: hidden attribute is not defeated by CSS
+        run: node platform/web/tests/hidden-attribute.test.js
 
   e2e:
     name: Playwright

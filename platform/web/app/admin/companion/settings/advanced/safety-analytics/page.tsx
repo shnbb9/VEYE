@@ -43,7 +43,7 @@ export default function SafetyAnalyticsPage() {
                           <td className="t-support">{row.flag_reason}</td>
                           <td className="t-nowrap">{fmtDate(row.last_message_at)}</td>
                           <td>{row.reviewed_at ? <Chip label="Reviewed" tone="live" /> : <Chip label="Needs review" tone="attention" />}</td>
-                          <td><Link className="btn btn--ghost btn--sm" href={`/admin/companion/conversations?conversation=${row.id}`}>Open</Link></td>
+                          <td><Link className="btn btn--secondary btn--sm" href={`/admin/companion/conversations?conversation=${row.id}`}>Open</Link></td>
                         </tr>
                       ))}
                     </tbody>
