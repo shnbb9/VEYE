@@ -139,6 +139,20 @@ def test_other_diet_and_source_require_their_write_in():
         HealthNumberAnswers(**answers(source="Other", other_source="  "))
 
 
+def test_the_dashboard_retake_leaves_out_the_referral_question_and_scores_the_same():
+    """Cara: "Take out the last question on the retake, we already know how they
+    found out about us" (Dashboard edits, 20 Aug 2026). Q12 scores 0, so the
+    retake's number is the onboarding number for the same eleven answers."""
+    full = calculate_health_number(HealthNumberAnswers(**answers(tired="yes", sleepWell="no")))
+    retake_payload = answers(tired="yes", sleepWell="no")
+    del retake_payload["source"]
+    retake = calculate_health_number(HealthNumberAnswers(**retake_payload))
+    assert retake.points == full.points
+    assert (retake.displayed_score, retake.status, retake.interpretation) == (full.displayed_score, full.status, full.interpretation)
+    for source in ("Instagram", "Facebook", "On-line search", "Friends or Family", "Recommended by a doctor"):
+        assert calculate_health_number(HealthNumberAnswers(**answers(tired="yes", sleepWell="no", source=source))).points == full.points
+
+
 def test_no_other_plans_remains_exclusive_in_the_api_canonical_shape():
     with pytest.raises(ValidationError, match="cannot be combined"):
         HealthNumberAnswers(**answers(plans=["No other plans", "Keto"]))

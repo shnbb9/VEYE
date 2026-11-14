@@ -115,7 +115,7 @@ export default function MemberDashboard() {
             </div>
 
             <div className="hn-anchor-body">
-              <Link href="/onboarding" className="health-badge-block health-badge-block--xl" aria-label="Open the Health Number assessment">
+              <Link href="/app/progress/health-number?from=dashboard" className="health-badge-block health-badge-block--xl" aria-label="Open the Health Number assessment">
                 <div className="health-badge health-badge--xl"><span className="health-num"><CountUp value={number} /></span></div>
               </Link>
               <div className="hn-anchor-text">
@@ -126,7 +126,7 @@ export default function MemberDashboard() {
                   {health.kind === "untaken" && "Complete the Health Number assessment to see your result."}
                   {taken && health.latest.interpretation}
                 </p>
-                <Link className="hn-anchor-cta" href="/onboarding">
+                <Link className="hn-anchor-cta" href="/app/progress/health-number?from=dashboard&start=1">
                   {taken ? "Retake the assessment " : "Take the assessment "}
                   <span className="arrow arrow--ring" aria-hidden="true">
                     <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="14" cy="14" r="13"/><path d="M6.5 14h14.2M16.6 9.9L20.8 14l-4.2 4.1"/></svg>

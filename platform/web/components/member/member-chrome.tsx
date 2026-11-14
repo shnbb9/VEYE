@@ -76,7 +76,15 @@ function SigningIn() {
 
 function MemberFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const active: NavKey | null = activeNavKey(pathname);
+  // The prototype keeps the sidebar on the screen the member came from: the
+  // Health Number opened from the dashboard leaves Dashboard highlighted
+  // (openSubView never moves the active link). Read from the address after
+  // each navigation, so no search-param hook holds up the frame.
+  const [fromDashboard, setFromDashboard] = useState(false);
+  useEffect(() => {
+    setFromDashboard(new URLSearchParams(window.location.search).get("from") === "dashboard");
+  }, [pathname]);
+  const active: NavKey | null = pathname === "/app/progress/health-number" && fromDashboard ? "dashboard" : activeNavKey(pathname);
   const toast = useToastState();
   const session = useSession();
 

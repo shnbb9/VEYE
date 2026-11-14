@@ -142,6 +142,12 @@ export async function getHealthNumberHistory(): Promise<HealthNumberHistory> {
   return apiJson<HealthNumberHistory>(`/api/v1/members/${ME}/health-number`);
 }
 
+/** A signed-in member's retake, scored and stored by the API (nothing is
+ *  calculated in the browser). */
+export async function calculateHealthNumber(answers: Record<string, unknown>): Promise<HealthResult> {
+  return postJson<HealthResult>("/api/v1/health-number/calculate", { answers });
+}
+
 export async function getBodyCompositionHistory(): Promise<BodyCompositionHistory> {
   return apiJson<BodyCompositionHistory>(`/api/v1/members/${ME}/body-composition`);
 }

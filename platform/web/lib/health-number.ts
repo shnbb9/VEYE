@@ -112,3 +112,70 @@ export type HealthResult = {
   status: string; bucket: string; category: string; category_rule: string;
   interpretation: string; calculation_version: string; completed_at: string;
 };
+
+/* ---- The dashboard retake --------------------------------------------------
+   The prototype's HEALTH_QUIZ_QUESTIONS (build/dashboard.html, view
+   quiz-health): one question per step and eleven steps, because Q12 "How did
+   you find out about Veye?" is asked at onboarding only (client, Dashboard
+   edits 20 Aug 2026: "Take out the last question on the retake, we already
+   know how they found out about us"; it scores 0). Option labels are the
+   same scoring keys as onboarding, from the same lists above. */
+
+export type RetakeYesNoKey = "meditate" | "tired" | "gainWeight" | "abdomenWeight" | "sleepEnough" | "sleepWell";
+export type RetakeQuestion =
+  | { key: "goals" | "plans"; type: "multi"; title: string; options: readonly string[]; otherWriteIn: string; exclusive?: string }
+  | { key: "activity"; type: "single"; title: string; options: readonly string[] }
+  | { key: RetakeYesNoKey; type: "yesno"; title: string }
+  | { key: "sleepHours"; type: "numeric"; title: string; placeholder: string }
+  | { key: "diet"; type: "single"; title: string; options: readonly string[]; otherWriteIn: string };
+
+export const RETAKE_QUESTIONS: readonly RetakeQuestion[] = [
+  { key: "goals", type: "multi", title: "What are your goals?", otherWriteIn: "Tell us your goal", options: [...goals, "Other"] },
+  { key: "plans", type: "multi", title: "Have you tried other food plans?", exclusive: NO_OTHER_PLANS, otherWriteIn: "Enter the plan you tried", options: [...plans, "Other", NO_OTHER_PLANS] },
+  { key: "activity", type: "single", title: "Select your activity level", options: activities },
+  { key: "meditate", type: "yesno", title: "Do you meditate?" },
+  { key: "tired", type: "yesno", title: "Are you tired or do you have poor mental focus during the day?" },
+  { key: "gainWeight", type: "yesno", title: "Do you gain weight quickly?" },
+  { key: "abdomenWeight", type: "yesno", title: "Is most of your excess weight (if any) around your abdomen?" },
+  { key: "sleepEnough", type: "yesno", title: "Do you feel you get enough sleep?" },
+  { key: "sleepWell", type: "yesno", title: "Do you sleep well?" },
+  { key: "sleepHours", type: "numeric", title: "How many hours do you sleep per night?", placeholder: "Type your answer here…" },
+  { key: "diet", type: "single", title: "What is your dietary preference?", otherWriteIn: "Enter your dietary preference", options: [...diets, "Other"] },
+];
+
+/** The prototype lists No before Yes on the retake. */
+export const RETAKE_YES_NO: readonly { label: string; value: YesNo }[] = [{ label: "No", value: "no" }, { label: "Yes", value: "yes" }];
+
+export type RetakeAnswer = string | string[] | null;
+
+/** Whether a step can be left. Beyond the prototype's own check, a written-in
+ *  dietary preference and 0-24 sleep hours are required because the API
+ *  refuses anything else (onboarding asks the same of its screens). */
+export function retakeAnswered(question: RetakeQuestion, answer: RetakeAnswer, other: string): boolean {
+  switch (question.type) {
+    case "multi": return Array.isArray(answer) && answer.length > 0;
+    case "yesno": return answer === "yes" || answer === "no";
+    case "numeric": return typeof answer === "string" && sleepHoursValid(answer);
+    case "single":
+      if (typeof answer !== "string" || !answer) return false;
+      return question.key === "diet" && answer === "Other" ? other.trim() !== "" : true;
+  }
+}
+
+/** The request body for POST /api/v1/health-number/calculate — no `source`. */
+export function retakeToApi(answers: readonly RetakeAnswer[], other: readonly string[]) {
+  const at = (key: RetakeQuestion["key"]) => RETAKE_QUESTIONS.findIndex((question) => question.key === key);
+  const value = (key: RetakeQuestion["key"]) => answers[at(key)];
+  const written = (key: RetakeQuestion["key"]) => (other[at(key)] ?? "").trim();
+  const payload: Record<string, unknown> = {
+    goals: value("goals"), plans: value("plans"), activity: value("activity"),
+    meditate: value("meditate"), tired: value("tired"), gainWeight: value("gainWeight"), abdomenWeight: value("abdomenWeight"),
+    sleepEnough: value("sleepEnough"), sleepWell: value("sleepWell"),
+    sleepHours: Number(value("sleepHours")),
+    diet: value("diet"),
+  };
+  if ((value("goals") as string[]).includes("Other") && written("goals")) payload.other_goal = written("goals");
+  if ((value("plans") as string[]).includes("Other") && written("plans")) payload.other_plan = written("plans");
+  if (value("diet") === "Other") payload.other_diet = written("diet");
+  return payload;
+}

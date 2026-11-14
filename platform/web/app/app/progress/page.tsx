@@ -213,7 +213,7 @@ function HealthNumberCard({ state }: { state: Loaded<HealthNumberHistory> }) {
       {!taken && <p className="hn-card__desc" role={state.error ? "alert" : undefined}>{state.error || "Take the Health Number assessment to see your result and what it means."}</p>}
       <div className="hn-card__actions">
         {taken && <Link className="module-cta module-cta--ghost" href="/app/progress/health-number">History</Link>}
-        <Link className="module-cta" href="/onboarding">{taken ? "Retake" : "Take the quiz"} <ArrowCircle /></Link>
+        <Link className="module-cta" href="/app/progress/health-number?start=1">{taken ? "Retake" : "Take the quiz"} <ArrowCircle /></Link>
       </div>
     </aside>
   );

@@ -32,10 +32,6 @@ a.module-cta--ghost { color: #446514; }
 }
 
 
-/* Health Number history screen: the prototype renders it inside the retake
-   result card; here it is its own route, so the card needs its own top margin. */
-.hn-history-page { max-width: 720px; }
-.hn-history-page .wizard-result-card { margin-top: 0; }
 
 /* ---- Session-aware chrome ------------------------------------------------- */
 /* Log out is a real action (it ends the API session), so it is a <button>

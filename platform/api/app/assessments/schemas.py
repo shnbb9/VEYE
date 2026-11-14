@@ -28,7 +28,11 @@ class HealthNumberAnswers(BaseModel):
     sleepWell: YesNo
     sleepHours: float = Field(ge=0, le=24)
     diet: Diet
-    source: Source
+    # Asked at onboarding only. The dashboard retake leaves it out on the
+    # client's instruction (Dashboard edits, 20 Aug 2026: "Take out the last
+    # question on the retake, we already know how they found out about us").
+    # It scores 0 whatever the answer, so leaving it out changes no number.
+    source: Source | None = None
     # Write-ins document what the member selected. They do not alter points.
     other_goal: str | None = Field(default=None, max_length=240)
     other_plan: str | None = Field(default=None, max_length=240)
