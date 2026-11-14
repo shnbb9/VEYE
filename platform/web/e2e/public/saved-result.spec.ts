@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ADMIN, API_URL, freshMember } from "../fixtures/accounts";
-import { adminSignIn, answerOnboarding, expectAdminHome, linkFrom, memberApi, open, toPath, waitForMail } from "../fixtures/helpers";
+import { adminSignIn, answerOnboarding, expectAdminHome, linkFrom, memberApi, open, signUpMember, toPath, waitForMail } from "../fixtures/helpers";
 
 /* A visitor saves their result before signing up (architecture V2 §§2–3):
    the owner switches saving on, the gate shows the notice and an unticked
@@ -116,6 +116,49 @@ test.describe("saving a result before sign-up", () => {
       expect(captured, "nothing was sent to the saving route").toBe(false);
       const check = await admin.request.get(`${API_URL}/api/v1/admin/prospects?q=${encodeURIComponent(visitor.email)}`);
       expect((await check.json()).total).toBe(0);
+    } finally {
+      await setRetention(admin, "retention-never");
+    }
+  });
+
+  test("a member who saved while signed out adds it on the claim page, by choice and once", async ({ browser }) => {
+    const admin = await adminPage(browser);
+    const member = freshMember("journey");
+    try {
+      await setRetention(admin, "retention-days30");
+      // The member already has a verified account…
+      const home = await (await browser.newContext()).newPage();
+      await signUpMember(home, member);
+      const verify = await waitForMail(member.email, "Verify your Veye email address");
+      await open(home, toPath(linkFrom(verify.text, "verify-email")));
+      await expect(home.getByText("Your email address is verified.")).toBeVisible();
+
+      // …takes the assessment signed out in another browser, and follows the
+      // result screen's own "sign in to add it" link.
+      const tab = await (await browser.newContext()).newPage();
+      const saved = tab.waitForResponse((r) => r.url().endsWith("/api/v1/prospects/assessment"));
+      await finishQuiz(tab, member.email, true);
+      expect((await saved).status()).toBe(201);
+      await tab.getByTestId("saved-status").getByRole("link", { name: "Sign in to add it to your account" }).click();
+      await expect(tab).toHaveURL(/\/login\?next=/);
+      await tab.getByLabel("Your Email").fill(member.email);
+      await tab.getByPlaceholder("Your Password").fill(member.password);
+      await tab.getByRole("button", { name: "Login" }).click();
+      await expect(tab).toHaveURL(/\/app\/saved-result$/);
+      await expect(tab.getByTestId("saved-result-claim-status")).toContainText("is waiting");
+
+      // Being signed in with the same address adds nothing by itself.
+      type History = { history: unknown[] };
+      expect((await memberApi<History>(tab, "/api/v1/members/me/health-number")).history).toHaveLength(0);
+      const claimed = tab.waitForResponse((r) => r.url().endsWith("/api/v1/members/me/saved-results/claim"));
+      await tab.getByTestId("saved-result-claim-add").click();
+      expect((await claimed).status()).toBe(200);
+      await expect(tab.getByTestId("saved-result-claim-added")).toContainText("now part of your Health Number history");
+      expect((await memberApi<History>(tab, "/api/v1/members/me/health-number")).history).toHaveLength(1);
+
+      // The tab's capability is spent: nothing is waiting any more.
+      await open(tab, "/app/saved-result");
+      await expect(tab.getByTestId("saved-result-claim")).toContainText("There is no saved result waiting in this browser tab");
     } finally {
       await setRetention(admin, "retention-never");
     }
