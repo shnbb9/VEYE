@@ -73,6 +73,10 @@ const nextConfig: NextConfig = {
   // The Docker preview is intentionally reachable on the local loopback host
   // as well as localhost; permit its development client to hydrate there.
   allowedDevOrigins: ["127.0.0.1"],
+  /* The development server's "N" button is not part of the approved design,
+     and reviewers open the 3012 development server, not a production build.
+     Compile and runtime errors are still shown (devIndicators.md). */
+  devIndicators: false,
   async headers() {
     return [
       {
