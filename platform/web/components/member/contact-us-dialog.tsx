@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { useModalDialog } from "@/components/use-modal-dialog";
+import { ModalPortal } from "@/components/member/modal-portal";
 import { sendMemberRequest, type MemberRequest } from "@/lib/member-api";
 
 /* Contact Us from inside the member application: a short message that lands
@@ -19,12 +21,11 @@ export function ContactUsDialog({ open, supportEmail, supportPhone, requests, on
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  // Escape used to be the whole of it, so Tab out of this dialog landed on the
+  // dashboard cards behind the scrim. The hook adds the trap, the scroll lock
+  // and the return of focus to whatever opened it.
+  const card = useRef<HTMLFormElement>(null);
+  useModalDialog(open, card, onClose, "#contactSubject");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -46,9 +47,9 @@ export function ContactUsDialog({ open, supportEmail, supportPhone, requests, on
   const threads = (requests ?? []).filter((r) => r.kind !== "join_beta" || r.replies.length > 0);
 
   return (
-    <div className={`modal-overlay${open ? " open" : ""}`} id="contactUsModal" aria-hidden={!open} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <ModalPortal id="contactUsModal" open={open} onBackdrop={onClose}>
       {open && (
-        <form className="modal-card modal-note contact-card" role="dialog" aria-modal="true" aria-labelledby="contactHeading" onSubmit={(event) => void submit(event)} data-testid="contact-dialog">
+        <form className="modal-card modal-note contact-card" ref={card} role="dialog" aria-modal="true" aria-labelledby="contactHeading" onSubmit={(event) => void submit(event)} data-testid="contact-dialog">
           <button className="modal-close" type="button" aria-label="Close" onClick={onClose}>&times;</button>
           <span className="modal-eyebrow">Contact Us</span>
           <h3 id="contactHeading">Send Veye a message</h3>
@@ -91,7 +92,7 @@ export function ContactUsDialog({ open, supportEmail, supportPhone, requests, on
           )}
         </form>
       )}
-    </div>
+    </ModalPortal>
   );
 }
 

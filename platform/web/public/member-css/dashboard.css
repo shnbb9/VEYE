@@ -1717,7 +1717,11 @@
     100% { transform: scale(1); opacity: 1; }
   }
   .note-input-wrap { position: relative; margin-bottom: 18px; }
-  #noteText {
+  /* Keyed to the wrapper, not to #noteText: Contact Us reuses .note-input-wrap
+     for its message field, and an id selector left that one as a bare browser
+     textarea — grey hairline border, square corners, system font — directly
+     under a styled Subject input in the same dialog. */
+  .note-input-wrap textarea {
     width: 100%;
     border: 1.5px solid var(--border-soft);
     border-radius: 14px;
@@ -1731,7 +1735,7 @@
     background: var(--cream-soft);
     transition: border-color 0.25s ease, background 0.25s ease;
   }
-  #noteText:focus {
+  .note-input-wrap textarea:focus {
     outline: none;
     border-color: var(--olive-medium);
     background: white;

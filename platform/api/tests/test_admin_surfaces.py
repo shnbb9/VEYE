@@ -195,7 +195,6 @@ def test_a_scanned_document_fails_loudly_rather_than_indexing_nothing(admin_clie
     assert doc["extraction_note"] is None
     # And it cannot be approved while it holds nothing.
     assert admin_client.post(f"/api/v1/admin/companion/knowledge-sources/{sid}/activate").status_code == 409
- == 409
 
 
 def test_audit_log_is_paged_and_reports_the_whole_total(admin_client):

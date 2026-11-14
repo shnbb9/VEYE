@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/member/member-chrome";
+import { useModalDialog } from "@/components/use-modal-dialog";
+import { ModalPortal } from "@/components/member/modal-portal";
 import { getMood, localDateKey, logMood, removeMood, type Mood, type MoodEntry, type MoodOverview } from "@/lib/member-api";
 
 /* The approved Mood Tracker (build/dashboard.html, #view-mood): a monthly
@@ -51,11 +53,11 @@ export default function MoodPage() {
   }, [monthKey]);
   useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { setPicker(null); setNoteModal(null); } };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  const pickerCard = useRef<HTMLDivElement>(null);
+  // Escape, the focus trap, the scroll lock and focus back to the day that
+  // opened it. The note modal arms the same hook, so Escape inside it returns
+  // to the picker rather than dismissing both.
+  useModalDialog(!!picker && !noteModal, pickerCard, () => setPicker(null), ".emoji-btn");
 
   const byDay = useMemo(() => new Map((data?.entries ?? []).map((entry) => [entry.entry_date, entry])), [data]);
   const stats = data?.stats;
@@ -209,9 +211,9 @@ export default function MoodPage() {
       </div>
 
       {/* Mood picker */}
-      <div className={`modal-overlay${picker ? " open" : ""}`} id="moodPickerModal" aria-hidden={!picker} onClick={(event) => { if (event.target === event.currentTarget) setPicker(null); }}>
+      <ModalPortal id="moodPickerModal" open={!!picker} onBackdrop={() => setPicker(null)}>
         {picker && (
-          <div className="modal-card modal-picker" role="dialog" aria-modal="true" aria-labelledby="pickerHeading">
+          <div className="modal-card modal-picker" ref={pickerCard} role="dialog" aria-modal="true" aria-labelledby="pickerHeading">
             <button className="modal-close" type="button" aria-label="Close" onClick={() => setPicker(null)}>&times;</button>
             <span className="modal-eyebrow">Mood Check-in</span>
             <h3 id="pickerHeading">{picker.dateKey === todayKey ? "How are you feeling today?" : `How were you feeling on ${formatShort(parseKey(picker.dateKey))}?`}</h3>
@@ -226,13 +228,13 @@ export default function MoodPage() {
             </div>
           </div>
         )}
-      </div>
+      </ModalPortal>
 
       {/* Note entry */}
-      <div className={`modal-overlay${noteModal ? " open" : ""}`} id="moodNoteModal" aria-hidden={!noteModal} onClick={(event) => { if (event.target === event.currentTarget) setNoteModal(null); }}>
+      <ModalPortal id="moodNoteModal" open={!!noteModal} onBackdrop={() => setNoteModal(null)}>
         {noteModal && <NoteModal modal={noteModal} todayKey={todayKey} saving={saving} onChange={(note) => setNoteModal({ ...noteModal, note })}
                                  onCancel={() => setNoteModal(null)} onSave={() => void save(noteModal.dateKey, noteModal.mood, noteModal.note)} />}
-      </div>
+      </ModalPortal>
     </>
   );
 }
@@ -243,8 +245,10 @@ function NoteModal({ modal, todayKey, saving, onChange, onCancel, onSave }: {
 }) {
   const mood = MOODS[modal.mood];
   const date = parseKey(modal.dateKey);
+  const card = useRef<HTMLDivElement>(null);
+  useModalDialog(true, card, onCancel, "#noteText");
   return (
-    <div className="modal-card modal-note" role="dialog" aria-modal="true" aria-labelledby="noteHeading">
+    <div className="modal-card modal-note" ref={card} role="dialog" aria-modal="true" aria-labelledby="noteHeading">
       <button className="modal-close" type="button" aria-label="Close" onClick={onCancel}>&times;</button>
       <div className="note-emoji-big" id="noteEmojiBig">{mood.emoji}</div>
       <span className="modal-eyebrow" id="noteDate">{modal.dateKey === todayKey ? `Today · ${formatShort(date)}` : formatLong(date)}</span>
