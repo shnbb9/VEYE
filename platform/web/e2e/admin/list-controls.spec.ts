@@ -143,7 +143,15 @@ test.describe("Console list controls", () => {
        every row shown under a view or a kind really belongs to it. */
     for (const view of ["Open", "All", "Resolved"]) {          // VIEWS, in order
       const tab = page.getByRole("tab", { name: view, exact: true });
-      await settled(page, "/api/v1/admin/requests", () => tab.click());
+      // Clicking the tab already selected changes no state, so there is no
+      // refetch to wait for. "Open" is the default view, so whether that is
+      // true depends on what ran before — which made this test order-dependent
+      // until it asked.
+      if (await tab.getAttribute("aria-selected") === "true") {
+        await tab.click();
+      } else {
+        await settled(page, "/api/v1/admin/requests", () => tab.click());
+      }
       await expect(tab).toHaveAttribute("aria-selected", "true");
       const rows = await list.count();
       // Either rows or a stated empty state — never a blank panel.
@@ -156,7 +164,10 @@ test.describe("Console list controls", () => {
     }
 
     // The kind filter: every row left on screen carries the chosen kind.
-    await settled(page, "/api/v1/admin/requests", () => page.getByRole("tab", { name: "All", exact: true }).click());
+    const allTab = page.getByRole("tab", { name: "All", exact: true });
+    if (await allTab.getAttribute("aria-selected") !== "true") {
+      await settled(page, "/api/v1/admin/requests", () => allTab.click());
+    }
     const kind = page.getByLabel("Kind");
     const options = await kind.locator("option").evaluateAll(
       (nodes) => nodes.map((node) => ({ value: (node as HTMLOptionElement).value, label: node.textContent ?? "" })));
@@ -192,3 +203,143 @@ test.describe("Console list controls", () => {
     await expectPagerAgreesWithTotal(page, shown, total);
   });
 });
+
+/* The same controls on a narrow screen.
+ *
+ * `responsive.spec.ts` asserts no overflow, no heading skipped and a named
+ * rail at four widths. None of that says the filters can still be USED: at
+ * 768 the rail collapses to icons, the findbar wraps, and the members table
+ * hides its low-priority columns, so a sort header can disappear and a select
+ * can end up under something. These drive them.
+ */
+for (const width of [768, 390]) {
+  test.describe(`Console list controls at ${width}px`, () => {
+    test.use({ viewport: { width, height: 900 } });
+    test.beforeEach(async ({ page }) => {
+      await open(page, "/admin/login");
+      await adminSignIn(page, ADMIN.email, ADMIN.password);
+      await expectAdminHome(page);
+    });
+
+    test("every Members filter is still reachable and still filters", async ({ page }) => {
+      await open(page, "/admin/members");
+      await expect(page.getByTestId("members-table")).toBeVisible();
+      const all = await rowKeys(page, "members-table");
+
+      for (const [label, option] of [["Member status", "active"], ["Onboarding status", "complete"],
+                                     ["Last activity", "week"]] as const) {
+        const control = page.getByLabel(label);
+        // Reachable: Playwright's actionability checks fail if it is covered,
+        // off-screen or zero-sized at this width.
+        await control.click({ trial: true, timeout: 5000 });
+        await settled(page, "/api/v1/admin/members", () => control.selectOption(option));
+        const rows = await rowKeys(page, "members-table");
+        for (const row of rows) expect(all, `${label}=${option} at ${width}px produced an unexpected row`).toContain(row);
+        await settled(page, "/api/v1/admin/members", () => control.selectOption("any"));
+      }
+      expect(await rowKeys(page, "members-table")).toEqual(all);
+    });
+
+    test("the sort headers that survive this width still sort", async ({ page }) => {
+      await open(page, "/admin/members");
+      await expect(page.getByTestId("members-table")).toBeVisible();
+      const all = await rowKeys(page, "members-table");
+      let exercised = 0;
+      for (const label of ["Member", "Joined", "Health Number", "Last active"]) {
+        const header = page.getByRole("button", { name: `Sort by ${label}` });
+        if (await header.count() === 0) continue;          // column dropped at this width
+        if (!(await header.isVisible())) continue;
+        await header.click({ trial: true, timeout: 5000 });
+        await settled(page, "/api/v1/admin/members", () => header.click());
+        expect((await rowKeys(page, "members-table")).slice().sort(),
+               `sorting by ${label} at ${width}px lost or added a row`).toEqual(all.slice().sort());
+        exercised += 1;
+      }
+      // "Member" carries no priority attribute, so it is never dropped.
+      expect(exercised, `no sort header was usable at ${width}px`).toBeGreaterThan(0);
+    });
+  });
+}
+
+/* Controls hidden by CSS whose replacement was never built.
+ *
+ * Two rules in the console stylesheets took working controls off the screen
+ * and handed off to an element nothing renders:
+ *
+ *   `.findbar__filters { display: none }` below 900px, handing off to
+ *   `.findbar__drawerbtn` — so the member directory had no status, onboarding
+ *   or activity filter at all on a tablet or a phone.
+ *
+ *   a bare `.search { display: none }` below 640px, written for the top bar
+ *   (which has no search field) and handing off to `.topbar__searchbtn`. It
+ *   reached the find bar on five screens instead, leaving each with no way to
+ *   search.
+ *
+ * Neither looked wrong: the elements were still in the DOM, still
+ * `visibility: visible`, still `pointer-events: auto` — with a 0x0 box,
+ * because their parent was display:none. Only asking whether they can be
+ * clicked finds that.
+ */
+const SEARCHABLE: { path: string; search: string }[] = [
+  { path: "/admin/members", search: "#mSearch" },
+  { path: "/admin/requests", search: "#rqSearch" },
+  { path: "/admin/content", search: "#cSearch" },
+  { path: "/admin/companion/conversations", search: "#cvSearch" },
+];
+
+for (const width of [1440, 768, 390]) {
+  test.describe(`Console controls remain usable at ${width}px`, () => {
+    test.use({ viewport: { width, height: 900 } });
+    test.beforeEach(async ({ page }) => {
+      await open(page, "/admin/login");
+      await adminSignIn(page, ADMIN.email, ADMIN.password);
+      await expectAdminHome(page);
+    });
+
+    test("every find-bar search field can be typed into", async ({ page }) => {
+      const broken: string[] = [];
+      for (const { path, search } of SEARCHABLE) {
+        await open(page, path);
+        await expect(page.locator("#main-content")).toBeVisible();
+        const field = page.locator(search).first();
+        if (await field.count() === 0) { broken.push(`${path} — no search field found at all`); continue; }
+        const box = await field.boundingBox();
+        if (!box || box.width < 40 || box.height < 20) {
+          broken.push(`${path} — the search field is ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : "unmeasurable"}`);
+          continue;
+        }
+        try {
+          await field.fill("probe", { timeout: 5000 });
+          await expect(field).toHaveValue("probe");
+          await field.fill("");
+        } catch (reason) {
+          broken.push(`${path} — could not type into it: ${String(reason).split("\n")[0].slice(0, 70)}`);
+        }
+      }
+      expect(broken, `search fields unusable at ${width}px`).toEqual([]);
+    });
+
+    test("every Members filter can be opened and chosen from", async ({ page }) => {
+      await open(page, "/admin/members");
+      await expect(page.getByTestId("members-table")).toBeVisible();
+      const unusable: string[] = [];
+      for (const [label, option] of [["Member status", "active"], ["Onboarding status", "complete"],
+                                     ["Last activity", "week"]] as const) {
+        const control = page.getByLabel(label);
+        const box = await control.boundingBox();
+        if (!box || box.width < 40 || box.height < 20) {
+          unusable.push(`${label} is ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : "unmeasurable"}`);
+          continue;
+        }
+        try {
+          await control.click({ trial: true, timeout: 5000 });
+          await settled(page, "/api/v1/admin/members", () => control.selectOption(option));
+          await settled(page, "/api/v1/admin/members", () => control.selectOption("any"));
+        } catch (reason) {
+          unusable.push(`${label}: ${String(reason).split("\n")[0].slice(0, 70)}`);
+        }
+      }
+      expect(unusable, `Members filters unusable at ${width}px`).toEqual([]);
+    });
+  });
+}

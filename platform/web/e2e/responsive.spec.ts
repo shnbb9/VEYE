@@ -25,6 +25,50 @@ const ADMIN_PAGES = ["/admin", "/admin/members", "/admin/assessments", "/admin/c
  *  Health Number card was the first one below the title) and Resources went
  *  h1 -> h3 five times before reaching its h2. A reader navigating by heading
  *  is told there is a level in between that does not exist. */
+/** Every visible control must be addressable by a name.
+ *
+ *  A control whose label is hidden by CSS at some width keeps its box and
+ *  loses its accessible name, and nothing on screen looks wrong. That is how
+ *  the public site's only call to action became a 34x16 empty pill below 920px
+ *  and how the console's nine rail links announced nothing between 761 and
+ *  1024 — neither of which any test saw, because nothing asked at a width
+ *  where the label was hidden.
+ *
+ *  `aria-hidden` controls are excluded: they are hidden from assistive
+ *  technology on purpose, decoration a mouse can reach and a reader is told
+ *  to ignore. */
+async function expectEveryControlIsNamed(page: Page, path: string) {
+  const unnamed = await page.evaluate(() => {
+    const out: string[] = [];
+    const describe = (el: Element) => {
+      const cls = typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\s+/)[0] : "";
+      const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 30);
+      return `${el.tagName.toLowerCase()}${cls}${text ? ` (text: ${text})` : ""}`;
+    };
+    for (const el of document.querySelectorAll('button, a[href], input:not([type="hidden"]), select, textarea, [role="button"]')) {
+      if (el.closest('[aria-hidden="true"]')) continue;
+      const style = getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+
+      const labelled = (el as HTMLInputElement).labels?.length
+        ? [...(el as HTMLInputElement).labels!].map((l) => l.innerText).join(" ") : "";
+      const by = el.getAttribute("aria-labelledby");
+      const name = (el.getAttribute("aria-label") ?? "").trim()
+        || (el.getAttribute("title") ?? "").trim()
+        || (el as HTMLElement).innerText.trim()
+        || labelled.trim()
+        || (by ? (document.getElementById(by)?.innerText ?? "").trim() : "")
+        || (el.getAttribute("placeholder") ?? "").trim()
+        || ((el as HTMLInputElement).value ?? "").trim();
+      if (!name) out.push(describe(el));
+    }
+    return out;
+  });
+  expect(unnamed, `${path}: control(s) with no accessible name`).toEqual([]);
+}
+
 async function expectHeadingOrder(page: Page, path: string) {
   const jumps = await page.evaluate(() => {
     const out: string[] = [];
@@ -58,6 +102,7 @@ for (const size of WIDTHS) {
         await open(page, path);
         await expectNoHorizontalOverflow(page);
         await expectHeadingOrder(page, path);
+        await expectEveryControlIsNamed(page, path);
         // The site's only call to action has to be findable by its name at
         // every width. `.nav__cta span { display: none }` hid BOTH spans below
         // 920px — the "Get Started" label and the arrow glyph meant to replace
@@ -82,6 +127,7 @@ for (const size of WIDTHS) {
         await expect(page.locator("main")).toBeVisible();
         await expectNoHorizontalOverflow(page);
         await expectHeadingOrder(page, path);
+        await expectEveryControlIsNamed(page, path);
       }
       expect(errors).toEqual([]);
     });
@@ -107,6 +153,7 @@ for (const size of WIDTHS) {
         await expect(page.locator("#main-content")).toBeVisible();
         await expectNoHorizontalOverflow(page);
         await expectHeadingOrder(page, path);
+        await expectEveryControlIsNamed(page, path);
       }
       expect(errors).toEqual([]);
     });
