@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@400;500;600;700&family=Teachers:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@400;500;600;700&family=Teachers:wght@500;600&display=swap");
 
 :root {
   --ink: #294407;
@@ -43,11 +43,16 @@ html:has(body > .public-site) { background:#fffdf9; }
 /* Teachers at 700, as the approved website draws it. The website prototype
    (build/index.html and its six pages) loads Teachers at 400/500/600 only, so
    the three rules there that ask for 700 — the two Pricing headings and the
-   Privacy page's draft-note label — render with the 600 face. This app also
-   loads a 700 face (line 1) for the member and console screens; on the public
-   site these three take the face the prototype shows. Found by a pixel
+   Privacy page's draft-note label — render with the 600 face. Found by a pixel
    comparison against build/ at 1440px (14 Nov 2026); no other public element
-   asks for Teachers above 600. */
+   asks for Teachers above 600.
+
+   Line 1 no longer loads a Teachers 700 face for every page (15 Nov 2026).
+   Each shell loads what its prototype page loads: sign-in, sign-up, the quiz
+   and the console carry 400-700 in their own links; the website and the
+   member dashboard stop at 600, as build/index.html and build/dashboard.html
+   do. With a 700 face on every page, each dashboard rule asking for 700 or
+   800 drew heavier than the prototype. These three rules stay as a guard. */
 .public-site :is(.pricing__lead, .plans-soon__title, .draft-note p strong) { font-weight:600; }
 
 /* The tablet-width compact menu (761-920px) and the "Get Started" arrow now
