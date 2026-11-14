@@ -10,10 +10,12 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.conftest import MEMBER_PASSWORD, admin_sign_in, sign_in, sign_up
+from tests.conftest import MEMBER_PASSWORD, admin_sign_in, sign_in, sign_up, decide_sharing
 
+# A real 1x1 PNG. The one here before had a bad IDAT checksum; nothing
+# noticed until uploads were decoded rather than sniffed (V2 §5.3).
 PNG_1PX = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
-           b"\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x01\x01\x01\x00\x18\xdd\x8d\xb4\x00\x00\x00\x00IEND\xaeB`\x82")
+           b"\x00\x00\x00\rIDATx\x9ccpI\x15\xf9\x0f\x00\x03k\x01\xbdH\x8ci\xbc\x00\x00\x00\x00IEND\xaeB`\x82")
 
 
 def _second_member(email="maya.demo@demo.veye.test", first="Maya"):
@@ -165,10 +167,15 @@ def test_profile_photo_is_validated_stored_through_object_storage_and_removable(
     version = ok.json()["photo_version"]
     assert version
     photo = member_client.get("/api/v1/members/me/photo")
-    assert photo.status_code == 200 and photo.headers["content-type"] == "image/png" and photo.content == PNG_1PX
+    assert photo.status_code == 200 and photo.headers["content-type"] == "image/png"
+    # Since V2 the upload is decoded and re-encoded (metadata stripped), so the
+    # stored bytes are a rebuilt PNG of the same picture, not the upload itself.
+    from PIL import Image
+    with Image.open(io.BytesIO(photo.content)) as stored:
+        assert stored.format == "PNG" and stored.size == (1, 1)
     # the console sees the same bytes for that member; another member never does
     member_id = member_client.get("/api/v1/auth/me").json()["member"]["member_id"]
-    assert admin_client.get(f"/api/v1/admin/members/{member_id}/photo").content == PNG_1PX
+    assert admin_client.get(f"/api/v1/admin/members/{member_id}/photo").content == photo.content
     assert admin_client.get("/api/v1/admin/members", params={"q": "aditya"}).json()["rows"][0]["has_photo"] is True
     other = _second_member()
     assert other.get("/api/v1/members/me/photo").status_code == 404
@@ -222,11 +229,11 @@ def test_member_360_shows_mood_diary_and_requests_for_that_member_only(member_cl
     member_client.post("/api/v1/members/me/food-diary", json={"entry_date": today, "meal_time": "08:00", "description": "Porridge"})
     member_client.post("/api/v1/members/me/requests", json={"kind": "contact_us", "message": "Hello from Aditya"})
     # The console only ever sees health records a member has chosen to share.
-    assert member_client.post("/api/v1/members/me/health-permission/grant").status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     other = _second_member()
     other.put("/api/v1/members/me/mood", params={"today": today}, json={"entry_date": today, "mood": "angry"})
     # Each member shares for themselves; one granting never opens another's.
-    assert other.post("/api/v1/members/me/health-permission/grant").status_code == 200
+    assert decide_sharing(other).status_code == 200
     rows = {r["email"]: r for r in admin_client.get("/api/v1/admin/members").json()["rows"]}
     aditya = admin_client.get(f"/api/v1/admin/members/{rows['aditya.demo@demo.veye.test']['member_id']}").json()
     maya = admin_client.get(f"/api/v1/admin/members/{rows['maya.demo@demo.veye.test']['member_id']}").json()

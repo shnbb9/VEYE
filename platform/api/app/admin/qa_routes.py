@@ -30,6 +30,7 @@ from app.notifications.models import Notification, NotificationOutbox, Notificat
 from app.care.models import CareContentItem
 from app.content.models import ContentEntry
 from app.members.service import MemberProfileService
+from app.prospects.models import ProspectAssessment, ProspectEvent, ProspectToken
 from app.requests.models import MemberRequest
 from app.seed.users import DEMO_ACCOUNTS
 
@@ -55,6 +56,7 @@ class CleanupOut(BaseModel):
     requests_removed: int = 0
     content_removed: int = 0
     care_removed: int = 0
+    saved_results_removed: int = 0
 
 
 @router.post("/cleanup-synthetic-members", response_model=CleanupOut)
@@ -119,9 +121,19 @@ def cleanup_synthetic_members(payload: CleanupIn, principal: CurrentPrincipal = 
         if E2E_CARE_TITLE.match(item.title):
             db.delete(item)
             care_removed += 1
-    if removed or requests_removed or content_removed or care_removed:
+    # Saved results the suite made under the synthetic domain. Flagged at
+    # capture, because a claimed, expired or deleted record no longer holds
+    # the address that would identify it. Events and tokens are explicit so
+    # SQLite (no cascade) and PostgreSQL behave the same.
+    synthetic_ids = [pid for (pid,) in db.query(ProspectAssessment.id).filter(ProspectAssessment.is_synthetic.is_(True)).all()]
+    if synthetic_ids:
+        db.query(ProspectEvent).filter(ProspectEvent.prospect_id.in_(synthetic_ids)).delete(synchronize_session=False)
+        db.query(ProspectToken).filter(ProspectToken.prospect_id.in_(synthetic_ids)).delete(synchronize_session=False)
+        db.query(ProspectAssessment).filter(ProspectAssessment.id.in_(synthetic_ids)).delete(synchronize_session=False)
+    if removed or requests_removed or content_removed or care_removed or synthetic_ids:
         record_audit(db, principal, "qa.cleanup_synthetic_members", "user_account", None,
-                     {"removed": len(removed), "requests_removed": requests_removed, "content_removed": content_removed, "care_removed": care_removed})
+                     {"removed": len(removed), "requests_removed": requests_removed, "content_removed": content_removed,
+                      "care_removed": care_removed, "saved_results_removed": len(synthetic_ids)})
     db.commit()
     return CleanupOut(removed=sorted(removed), skipped_protected=sorted(protected), requests_removed=requests_removed,
-                      content_removed=content_removed, care_removed=care_removed)
+                      content_removed=content_removed, care_removed=care_removed, saved_results_removed=len(synthetic_ids))

@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from app.core.idempotency import Idempotency, IdempotencyRecord, Replay, prune_idempotency_records
 from app.db.session import SessionLocal
 from app.main import app
-from tests.conftest import sign_up
+from tests.conftest import sign_up, decide_sharing
 
 ASK = "/api/v1/companion/messages"
 
@@ -234,7 +234,7 @@ def test_two_first_requests_for_a_tip_do_not_collide(member_client):
     from app.companion.models import MemberPersonalTip
     from app.companion.personal_tip import PersonalTipService
 
-    assert member_client.post("/api/v1/members/me/health-permission/grant").status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     from datetime import date, timedelta
 
     today = date.today()

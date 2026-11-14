@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.health_permission.models import POLICY_VERSION
 from app.main import app
-from tests.conftest import MEMBER_PASSWORD, sign_up
+from tests.conftest import MEMBER_PASSWORD, sign_up, verify_member_email, decide_sharing
 
 GRANT = "/api/v1/members/me/health-permission/grant"
 DECLINE = "/api/v1/members/me/health-permission/decline"
@@ -76,7 +76,7 @@ def test_the_console_is_sent_no_health_records_until_the_member_shares(member_cl
     assert withheld["account"]["email"] == "aditya.demo@demo.veye.test"
     assert withheld["requests"] == [] or isinstance(withheld["requests"], list)
 
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     shared = admin_client.get(f"/api/v1/admin/members/{member_id}").json()
     assert shared["shares_health_data"] is True
     assert shared["sharing_state"] == "granted"
@@ -87,7 +87,7 @@ def test_the_console_is_sent_no_health_records_until_the_member_shares(member_cl
 def test_withdrawing_re_locks_the_records_on_the_very_next_request(member_client, admin_client):
     _save_a_health_number(member_client)
     member_id = _member_id(admin_client, "aditya.demo@demo.veye.test")
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     assert len(admin_client.get(f"/api/v1/admin/members/{member_id}").json()["health_number"]) >= 1
 
     assert member_client.post(REVOKE).status_code == 200
@@ -100,13 +100,14 @@ def test_withdrawing_re_locks_the_records_on_the_very_next_request(member_client
 
 def test_declining_shares_nothing_and_is_not_the_same_as_never_being_asked(member_client, admin_client):
     member_id = _member_id(admin_client, "aditya.demo@demo.veye.test")
+    verify_member_email(member_client)
     assert admin_client.post(f"/api/v1/admin/members/{member_id}/health-permission/request").status_code == 200
     requested = member_client.get(MINE).json()
     assert requested["state"] == "requested"
     assert requested["shares_health_data"] is False
     assert requested["requested_by_name"]
 
-    declined = member_client.post(DECLINE)
+    declined = decide_sharing(member_client, "decline")
     assert declined.status_code == 200
     assert declined.json()["state"] == "declined"
     assert admin_client.get(f"/api/v1/admin/members/{member_id}").json()["health_number"] == []
@@ -116,6 +117,7 @@ def test_the_console_can_ask_but_can_never_decide(member_client, admin_client):
     """The asymmetry is the whole design: there is no admin route that sets a
     member's permission, and the member's own routes refuse an admin session."""
     member_id = _member_id(admin_client, "aditya.demo@demo.veye.test")
+    verify_member_email(member_client)
     assert admin_client.post(f"/api/v1/admin/members/{member_id}/health-permission/request").status_code == 200
 
     # No admin route grants. The member's routes are member-only.
@@ -126,29 +128,39 @@ def test_the_console_can_ask_but_can_never_decide(member_client, admin_client):
     assert sorted(admin_paths) == [
         "/api/v1/admin/members/{member_id}/health-permission",
         "/api/v1/admin/members/{member_id}/health-permission/request",
+        # V2 §4.2: re-deliver the email of the open request. Asserted below
+        # to change nothing about the member's decision.
+        "/api/v1/admin/members/{member_id}/health-permission/resend",
     ], "the console gained a route that can decide for a member"
+    before = admin_client.get(f"/api/v1/admin/members/{member_id}/health-permission").json()
+    admin_client.post(f"/api/v1/admin/members/{member_id}/health-permission/resend")
+    after = admin_client.get(f"/api/v1/admin/members/{member_id}/health-permission").json()
+    assert (after["state"], len(after["events"])) == (before["state"], len(before["events"])) == ("requested", 1)
 
 
 def test_asking_again_after_a_refusal_is_allowed_but_asking_a_sharer_is_not(member_client, admin_client):
     member_id = _member_id(admin_client, "aditya.demo@demo.veye.test")
-    assert member_client.post(DECLINE).status_code == 200
-    assert admin_client.post(f"/api/v1/admin/members/{member_id}/health-permission/request").status_code == 200
+    assert decide_sharing(member_client, "decline").status_code == 200
+    ask = f"/api/v1/admin/members/{member_id}/health-permission/request"
+    assert admin_client.post(ask).status_code == 422, "re-asking after a no needs a reason"
+    assert admin_client.post(ask, json={"reason": "They asked for help with their results"}).status_code == 200
 
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     again = admin_client.post(f"/api/v1/admin/members/{member_id}/health-permission/request")
     assert again.status_code == 409
 
 
 def test_nothing_to_withdraw_is_refused_rather_than_silently_accepted(member_client):
     assert member_client.post(REVOKE).status_code == 409
-    assert member_client.post(DECLINE).status_code == 200
+    assert decide_sharing(member_client, "decline").status_code == 200
     assert member_client.post(REVOKE).status_code == 409
 
 
 def test_every_transition_is_kept_as_evidence_with_its_wording_and_source(member_client, admin_client):
     member_id = _member_id(admin_client, "aditya.demo@demo.veye.test")
+    verify_member_email(member_client)
     admin_client.post(f"/api/v1/admin/members/{member_id}/health-permission/request")
-    member_client.post(GRANT)
+    decide_sharing(member_client)
     member_client.post(REVOKE)
 
     events = member_client.get(MINE).json()["events"]
@@ -172,7 +184,7 @@ def test_the_members_list_withholds_the_health_number_and_says_why(member_client
     assert row["shares_health_data"] is False
     assert row["sharing_label"]
 
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     row = admin_client.get("/api/v1/admin/members", params={"q": "aditya.demo@demo.veye.test"}).json()["rows"][0]
     assert row["health_number"] is not None
     assert row["shares_health_data"] is True
@@ -194,7 +206,7 @@ def test_the_attempts_screen_is_not_a_way_around_member_360(member_client, admin
     before = admin_client.get("/api/v1/admin/assessments/health_number/attempts").json()
     assert all(r["member_id"] != _member_id(admin_client, "aditya.demo@demo.veye.test") for r in before["rows"])
 
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     after = admin_client.get("/api/v1/admin/assessments/health_number/attempts").json()
     assert any(r["member_id"] == _member_id(admin_client, "aditya.demo@demo.veye.test") for r in after["rows"])
 
@@ -205,7 +217,7 @@ def test_one_members_permission_never_opens_another_members_records(member_clien
     other = TestClient(app)
     assert sign_up(other, email="private@demo.veye.test", first_name="Private").status_code == 201
 
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     private_id = _member_id(admin_client, "private@demo.veye.test")
     assert admin_client.get(f"/api/v1/admin/members/{private_id}").json()["shares_health_data"] is False
     assert admin_client.get(f"/api/v1/admin/members/{private_id}").json()["health_number"] == []
@@ -218,13 +230,20 @@ def test_a_member_can_only_ever_read_and_change_their_own_permission(member_clie
     nothing to attempt — the absence is the guarantee."""
     member_paths = [p for p in app.openapi()["paths"]
                     if "health-permission" in p and p.startswith("/api/v1/members")]
-    assert all("{" not in p for p in member_paths), "a member route accepts an id from the client"
+    # One exception, by design (V2 §4.4): the emailed request reference. It is
+    # not an id of a member or of anyone's row; it is compared only with the
+    # signed-in member's own open request, and anything else is a 404
+    # (tests/test_health_sharing_requests.py proves another member's is).
+    by_reference = {"/api/v1/members/me/health-permission/request/{ref}"}
+    assert all("{" not in p for p in member_paths if p not in by_reference), "a member route accepts an id from the client"
+    stranger = member_client.get("/api/v1/members/me/health-permission/request/not-a-real-reference")
+    assert stranger.status_code == 404
 
 
 def test_looking_at_a_members_records_is_audited_without_copying_them(member_client, admin_client):
     member_id = _member_id(admin_client, "aditya.demo@demo.veye.test")
     admin_client.get(f"/api/v1/admin/members/{member_id}")          # withheld
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     admin_client.get(f"/api/v1/admin/members/{member_id}")          # viewed
 
     audit = admin_client.get("/api/v1/admin/companion/advanced/audit", params={"limit": 200}).json()["rows"]
@@ -268,7 +287,7 @@ def test_a_members_export_carries_what_they_were_given_as_well_as_what_they_ente
                              json={"body": "Yes, every result is kept."}).status_code == 200
     assert admin_client.post(f"/api/v1/admin/requests/{request_id}/status",
                              json={"status": "resolved", "resolution_note": "Internal only."}).status_code == 200
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     assert member_client.post(REVOKE).status_code == 200
 
     export = member_client.get("/api/v1/members/me/export").json()
@@ -347,7 +366,7 @@ def test_granting_includes_them_at_once_and_revoking_removes_them_again(member_c
                       json={"entry_date": today, "mood": "calm"})
 
     assert _overview(admin_client)["completions"]["health_number"] == 0
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
 
     after = _overview(admin_client)
     assert after["completions"]["health_number"] >= 1
@@ -371,7 +390,7 @@ def test_one_member_sharing_does_not_expose_another_in_the_aggregates(member_cli
     from tests.conftest import sign_up
 
     _save_a_health_number(member_client)
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
 
     quiet = TestClient(app)
     assert sign_up(quiet, email="quiet@demo.veye.test", first_name="Quiet").status_code == 201

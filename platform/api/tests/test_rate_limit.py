@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from app.core.rate_limit import LIMITS, RateLimitEvent, RateLimiter, prune_rate_limit_events
 from app.db.session import SessionLocal
 from app.main import app
-from tests.conftest import sign_up
+from tests.conftest import sign_up, decide_sharing
 
 TIP = "/api/v1/companion/personal-tip"
 ASK = "/api/v1/companion/messages"
@@ -106,7 +106,7 @@ def test_a_cached_personal_tip_costs_nothing_against_the_limit(member_client):
     """Reading a tip is free; only writing one is limited. A dashboard refresh
     must not burn a member's allowance."""
     _clear("personal_tip")
-    assert member_client.post("/api/v1/members/me/health-permission/grant").status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     for _ in range(LIMITS["personal_tip"].per_subject + 5):
         assert member_client.get(TIP).status_code == 200
 
@@ -200,10 +200,30 @@ def test_an_unknown_bucket_is_not_silently_unlimited():
     assert set(LIMITS) == {
         "companion_message", "personal_tip", "signup", "forgot_password",
         "resend_verification", "public_request", "photo_upload",
+        # Architecture V2: saved results, re-authentication, template tests.
+        "prospect_capture", "prospect_token", "prospect_recover", "prospect_recover_address",
+        "reauthenticate", "template_test",
     }
     for name, limit in LIMITS.items():
         assert limit.bucket == name, f"{name} declares itself as {limit.bucket}"
         assert limit.per_subject > 0 and limit.window_minutes > 0
+
+
+def test_every_bucket_the_code_enforces_is_declared():
+    """The typo this guard exists for: `enforce("prospect_captrue")` would be
+    unlimited without a word. Every literal bucket name passed to `enforce`
+    or `check` anywhere in the application must be one LIMITS declares."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "app"
+    used: dict[str, list[str]] = {}
+    for path in root.rglob("*.py"):
+        for name in re.findall(r"\.(?:enforce|check)\(\s*\"([a-z_]+)\"", path.read_text(encoding="utf-8")):
+            used.setdefault(name, []).append(path.relative_to(root).as_posix())
+    assert used, "found no enforce() calls at all; the scan is broken"
+    undeclared = {name: where for name, where in used.items() if name not in LIMITS}
+    assert undeclared == {}, f"rate-limit buckets used but never declared: {undeclared}"
 
 
 def test_the_scale_raises_a_limit_for_an_environment_but_can_never_lower_one(member_client):

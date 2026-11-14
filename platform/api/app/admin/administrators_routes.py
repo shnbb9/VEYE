@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.admin.audit import AccountActivityRow, account_activity, record_audit
 from app.auth.dependencies import get_auth_service
 from app.auth.models import AuthToken, UserAccount
+from app.members.service import photo_version
 from app.auth.principal import CurrentPrincipal, require_admin
 from app.auth.schemas import DeliveryOut, EmailAddress
 from app.auth.service import PURPOSE_ADMIN_INVITE, AuthError, AuthService
@@ -57,6 +58,7 @@ class AdministratorRow(BaseModel):
     also_member: bool               # the same person also uses the member application
     is_self: bool                   # the administrator reading this page
     is_synthetic: bool
+    photo_version: str | None = None  # their own picture (V2 §5.3); None shows initials
 
 
 class AdministratorsOut(BaseModel):
@@ -131,6 +133,7 @@ def _row(db: Session, user: UserAccount, principal: CurrentPrincipal, runtime: R
         active_sessions=len(admin_sessions), is_active=user.is_active,
         deactivated_at=_aware(user.deactivated_at), also_member=user.member_id is not None,
         is_self=user.id == principal.user_id, is_synthetic=user.is_synthetic,
+        photo_version=photo_version(user),
     )
 
 

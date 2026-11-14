@@ -57,6 +57,19 @@ PUBLIC_ROUTES: set[tuple[str, str]] = {
     ("POST", "/api/v1/health-number/preview"),
     # Contact Us / Help / Join Beta from the public site.
     ("POST", "/api/v1/requests"),
+    # A visitor saving their result before sign-up (architecture V2 §2). The
+    # capture needs an explicit consent; the other four take a bearer token in
+    # the body and answer identically whether or not anything exists.
+    ("GET", "/api/v1/prospects/policy"),
+    ("POST", "/api/v1/prospects/assessment"),
+    ("POST", "/api/v1/prospects/status"),
+    ("POST", "/api/v1/prospects/confirm"),
+    ("POST", "/api/v1/prospects/erase"),
+    ("POST", "/api/v1/prospects/recover"),
+    # Where a deletion stands, for the person whose session the deletion ended
+    # (V2 §6). The reference is a random UUID shown to them and in the receipt;
+    # the answer is a state and dates, nothing about the person.
+    ("GET", "/api/v1/erasure-requests/{request_id}"),
 }
 
 ROUTES = _routes()

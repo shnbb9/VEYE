@@ -24,6 +24,7 @@ from app.companion.personal_tip import (
 from app.companion.providers.llm import LLMResponse
 from app.core.runtime import configure_runtime, get_runtime
 from app.db.session import SessionLocal
+from tests.conftest import decide_sharing
 
 TIP = "/api/v1/companion/personal-tip"
 GRANT = "/api/v1/members/me/health-permission/grant"
@@ -67,13 +68,13 @@ def _with_history(member_client):
                           json={"entry_date": day, "mood": "calm"})
         member_client.post("/api/v1/members/me/food-diary",
                            json={"entry_date": day, "meal_time": "08:00", "description": "Porridge"})
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
 
 
 # ---- when there is nothing to say -------------------------------------------
 
 def test_a_member_with_no_history_gets_the_fallback_not_an_invention(member_client, scripted):
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     body = member_client.get(TIP).json()
     assert body["generated"] is False
     assert body["source"] == "fallback"
@@ -258,14 +259,14 @@ def test_the_tip_belongs_to_one_member(member_client, scripted):
     from fastapi.testclient import TestClient
 
     from app.main import app
-    from tests.conftest import sign_up
+    from tests.conftest import sign_up, decide_sharing
 
     _with_history(member_client)
     mine = member_client.get(TIP).json()["text"]
 
     other = TestClient(app)
     assert sign_up(other, email="tipless@demo.veye.test", first_name="Tipless").status_code == 201
-    assert other.post(GRANT).status_code == 200
+    assert decide_sharing(other).status_code == 200
     theirs = other.get(TIP).json()
     assert theirs["generated"] is False
     assert theirs["text"] != mine
@@ -295,7 +296,7 @@ def test_the_fallback_matches_the_reason_rather_than_guessing(member_client, scr
     from app.companion.personal_tip import FALLBACK, FALLBACK_NO_TIP, FALLBACK_NOT_SHARED
 
     # No history at all.
-    assert member_client.post(GRANT).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
     assert member_client.get(TIP).json()["text"] == FALLBACK
 
     # History, but the provider produced nothing usable. Telling a member with

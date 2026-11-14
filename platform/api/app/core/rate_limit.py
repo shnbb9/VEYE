@@ -82,6 +82,22 @@ LIMITS = {
     "public_request": Limit("public_request", per_subject=10, window_minutes=60),
     # Uploads cost storage and CPU.
     "photo_upload": Limit("photo_upload", per_subject=20, window_minutes=60),
+    # A visitor saving a quiz result: each one stores health answers and sends
+    # an email to the address typed.
+    "prospect_capture": Limit("prospect_capture", per_subject=20, window_minutes=60),
+    # Presenting a saved-result token (status, confirm, delete). A token is 32
+    # random bytes, so this is about load, not guessing.
+    "prospect_token": Limit("prospect_token", per_subject=60, window_minutes=60),
+    # "Email me a new link": per caller, and per address (hashed), so one
+    # mailbox cannot be flooded from many callers either.
+    "prospect_recover": Limit("prospect_recover", per_subject=10, window_minutes=60),
+    "prospect_recover_address": Limit("prospect_recover_address", per_subject=3, window_minutes=60),
+    # Proving the current password again before a sensitive change (creating
+    # one's own member profile, deleting one's member data).
+    "reauthenticate": Limit("reauthenticate", per_subject=10, window_minutes=60, per_address=50),
+    # A test of the sharing-request email goes to the administrator's own
+    # address; a handful an hour is plenty.
+    "template_test": Limit("template_test", per_subject=10, window_minutes=60),
 }
 
 

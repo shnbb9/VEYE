@@ -91,6 +91,11 @@ class GcsObjectStorage:
     def exists(self, key: str) -> bool:
         return bool(self._ensure_bucket().blob(self._blob_name(key)).exists())
 
+    def list_keys(self, prefix: str) -> list[str]:
+        full = f"{self.prefix}/{prefix}" if self.prefix else prefix
+        cut = len(self.prefix) + 1 if self.prefix else 0
+        return sorted(blob.name[cut:] for blob in self._ensure_bucket().list_blobs(prefix=full))
+
     def describe(self) -> dict[str, object]:
         return {
             "provider": self.name,

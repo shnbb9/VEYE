@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.admin.account_routes import router as admin_account_router
+from app.admin.account_routes import peers_router as admin_peer_photos_router, router as admin_account_router
 from app.admin.administrators_routes import router as admin_administrators_router
 from app.admin.advanced_routes import router as admin_advanced_router
 from app.admin.companion_routes import router as admin_companion_router
@@ -33,7 +33,19 @@ from app.requests.routes import (
 from app.guided_flows.admin_routes import router as admin_guided_flows_router
 from app.guided_flows.routes import router as guided_flows_router
 from app.health_permission.routes import admin_router as health_permission_admin_router
+from app.health_permission.routes import settings_router as health_sharing_settings_router
 from app.health_permission.routes import member_router as health_permission_member_router
+from app.erasure.routes import (
+    admin_router as admin_erasure_router,
+    member_router as member_erasure_router,
+    public_router as erasure_status_router,
+)
+from app.prospects.routes import (
+    admin_router as admin_prospects_router,
+    member_router as member_saved_results_router,
+    privacy_router as admin_privacy_settings_router,
+    public_router as prospects_router,
+)
 from app.progress.blood_markers.routes import (
     member_router as blood_markers_member_router,
     router as blood_markers_router,
@@ -57,7 +69,18 @@ async def lifespan(_: FastAPI):
     # Provider absence never stops the API: an unconfigured LLM or a missing
     # Langfuse key becomes an honest status, not a boot failure.
     get_runtime()
+    # The local stand-in for Cloud Scheduler (retention purge, outbox retries,
+    # erasure processing). Off unless VEYE_JOBS_INTERVAL_SECONDS is set.
+    loop = None
+    if settings.jobs_interval_seconds and settings.jobs_interval_seconds > 0:
+        from app.db.session import SessionLocal
+        from app.jobs.runner import JobLoop
+
+        loop = JobLoop(SessionLocal, settings.jobs_interval_seconds)
+        loop.start()
     yield
+    if loop is not None:
+        loop.stop()
 
 
 app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
@@ -115,8 +138,10 @@ app.include_router(admin_advanced_router)
 app.include_router(admin_console_router)
 app.include_router(admin_administrators_router)
 app.include_router(admin_account_router)
+app.include_router(admin_peer_photos_router)
 app.include_router(health_permission_member_router)
 app.include_router(health_permission_admin_router)
+app.include_router(health_sharing_settings_router)
 app.include_router(admin_care_router)
 app.include_router(care_router)
 app.include_router(admin_content_router)
@@ -132,6 +157,13 @@ app.include_router(admin_requests_router)
 app.include_router(settings_router)
 app.include_router(admin_settings_router)
 app.include_router(admin_qa_router)
+app.include_router(prospects_router)
+app.include_router(member_saved_results_router)
+app.include_router(admin_prospects_router)
+app.include_router(admin_privacy_settings_router)
+app.include_router(member_erasure_router)
+app.include_router(erasure_status_router)
+app.include_router(admin_erasure_router)
 
 
 @app.get("/health")

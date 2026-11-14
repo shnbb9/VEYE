@@ -158,6 +158,19 @@ class Settings(BaseSettings):
     media_object_prefix: str = ""
     profile_photo_max_bytes: int = 2_000_000
 
+    # ---- saved results before sign-up (prospects) -------------------------------------
+    # `kid:base64(32 bytes)` entries, comma-separated; the first encrypts, all
+    # decrypt (rotation). Secret Manager in a deployment. Unset locally means a
+    # fixed development key that protects nothing; production refuses to save
+    # anything without a configured key.
+    prospect_encryption_keys: SecretStr | None = None
+
+    # ---- maintenance jobs ---------------------------------------------------------------
+    # The local stand-in for Cloud Scheduler: run every job every N seconds in
+    # the API process. 0 (the default, and always in tests) switches it off; a
+    # deployment schedules `python -m app.jobs run all` instead.
+    jobs_interval_seconds: float = 0
+
     # ---- observability -------------------------------------------------------------
     # Every trace is masked before it reaches any exporter. The database exporter
     # feeds the admin Advanced monitoring screens; Langfuse is optional and only
@@ -172,7 +185,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="VEYE_", extra="ignore")
 
     @field_validator("smtp_username", "smtp_password", "smtp_tls_mode", "email_reply_to",
-                     "gcp_project", "gemini_api_key", "media_bucket", "knowledge_bucket", mode="before")
+                     "gcp_project", "gemini_api_key", "media_bucket", "knowledge_bucket",
+                     "prospect_encryption_keys", mode="before")
     @classmethod
     def _blank_smtp_value_is_unset(cls, value, info):
         # Env files list these names with empty values; empty means "not set".

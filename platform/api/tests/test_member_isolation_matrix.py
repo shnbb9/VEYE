@@ -23,7 +23,9 @@ from fastapi.testclient import TestClient
 from app.main import app
 from tests.route_table import MEMBER_GUARD, OPTIONAL_GUARD, routes as _routes
 
-ROW_REFERENCE_PARAMS = {"meal_id", "day_id", "message_id", "member_ref"}
+# `ref` (V2 §4.4): the emailed health-sharing request reference — matched only
+# against the signed-in member's own open request.
+ROW_REFERENCE_PARAMS = {"meal_id", "day_id", "message_id", "member_ref", "ref"}
 # Path parameters that are not references to a stored row: a content group, a
 # guided-flow key, a care kind, a calendar date. None of them can address
 # another member's data, because the member is still taken from the session.
@@ -51,6 +53,9 @@ COVERED_HERE = {
     ("GET", "/api/v1/members/{member_ref}/simple-quiz"),
 }
 COVERED_ELSEWHERE = {
+    # test_health_sharing_requests.py::test_the_emailed_link_only_identifies_the_request —
+    # another member, holding an open request of their own, gets 404 for this one.
+    ("GET", "/api/v1/members/me/health-permission/request/{ref}"),
     # test_phase1_beta.py::test_mood_and_diary_are_isolated_between_members
     ("PUT", "/api/v1/members/me/food-diary/{meal_id}"),
     ("DELETE", "/api/v1/members/me/food-diary/{meal_id}"),

@@ -43,6 +43,8 @@ class ObjectStorage(Protocol):
 
     def exists(self, key: str) -> bool: ...
 
+    def list_keys(self, prefix: str) -> list[str]: ...
+
     def describe(self) -> dict[str, object]: ...
 
 
@@ -87,6 +89,13 @@ class LocalFileObjectStorage:
     def exists(self, key: str) -> bool:
         return self._path(key).is_file()
 
+    def list_keys(self, prefix: str) -> list[str]:
+        """Every key under `prefix`, sorted. Used by the erasure ledger."""
+        base = self.root / prefix
+        if not base.exists():
+            return []
+        return sorted(p.relative_to(self.root).as_posix() for p in base.rglob("*") if p.is_file())
+
     def describe(self) -> dict[str, object]:
         return {"provider": self.name, "root": str(self.root), "external": False}
 
@@ -115,6 +124,9 @@ class UnconfiguredCloudObjectStorage:
         raise self._refuse()
 
     def exists(self, key: str) -> bool:
+        raise self._refuse()
+
+    def list_keys(self, prefix: str) -> list[str]:
         raise self._refuse()
 
     def describe(self) -> dict[str, object]:

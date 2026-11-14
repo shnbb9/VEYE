@@ -8,7 +8,9 @@ providers with `configure_runtime`."""
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
+from typing import Callable
 
 from app.auth.identity import IdentityVerifier, build_identity_verifier
 from app.auth.provider import DevelopmentSessionAuthProvider
@@ -39,6 +41,10 @@ class Runtime:
     media_store: ObjectStorage
     telemetry: TelemetryRecorder
     langfuse_status: str
+    # "Now", for the rules whose correctness is about time — retention expiry,
+    # token lifetimes. Real UTC time in every deployment; tests replace it to
+    # walk a record past its expiry without waiting fifteen days.
+    clock: Callable[[], datetime] = field(default=lambda: datetime.now(timezone.utc))
 
 
 _runtime: Runtime | None = None

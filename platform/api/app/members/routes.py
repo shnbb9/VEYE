@@ -83,11 +83,11 @@ def remove_photo(principal: CurrentPrincipal = Depends(require_member), db: Sess
 
 
 @router.get("/photo")
-def my_photo(principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+def my_photo(size: str = "full", principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
              service: MemberProfileService = Depends(_service)) -> Response:
     user = _user(db, principal)
     try:
-        data, content_type = service.read_photo(user)
+        data, content_type = service.read_photo(user, "thumb" if size == "thumb" else "full")
     except ProfileError as exc:
         _raise(exc)
     return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=0, must-revalidate"})

@@ -17,12 +17,19 @@ JsonType = JSON().with_variant(JSONB(), "postgresql")
 
 class Notification(Base):
     """One notification event for one user. Delivery is tracked separately in
-    the outbox so the provider can be swapped without touching this record."""
+    the outbox so the provider can be swapped without touching this record.
+
+    `user_id` is empty only for a message to somebody who has no account: the
+    confirmation sent to a visitor who saved a quiz result. `idempotency_key`
+    makes "send this exactly once" a database fact rather than a hope — an
+    automatic health-sharing request that two concurrent verifications both
+    try to queue is refused by the unique constraint the second time."""
 
     __tablename__ = "notifications"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user_accounts.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("user_accounts.id", ondelete="CASCADE"), index=True, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True, unique=True)
     kind: Mapped[str] = mapped_column(String(48), nullable=False)
     channel: Mapped[str] = mapped_column(String(16), nullable=False, default="email")
     subject: Mapped[str] = mapped_column(String(240), nullable=False)
@@ -47,7 +54,15 @@ class NotificationPreference(Base):
 
 class NotificationOutbox(Base):
     """Delivery attempt record. `status` is honest: "sent" only after the
-    provider accepted the message, "failed" with the error otherwise."""
+    provider accepted the message, "failed" with the error otherwise.
+
+    queued   written in the same transaction as the change it reports, not yet tried
+    sending  claimed by a dispatcher (a row stuck here is reclaimed after a while)
+    retry    tried and refused; `next_attempt_at` says when to try again
+    sent     the provider accepted it
+    failed   refused, and out of attempts — visible as failed, never as sent
+    skipped  the recipient's preference switched this kind off
+    """
 
     __tablename__ = "notification_outbox"
 
@@ -55,10 +70,11 @@ class NotificationOutbox(Base):
     notification_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("notifications.id", ondelete="CASCADE"), index=True, nullable=False)
     to_email: Mapped[str] = mapped_column(String(320), nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")  # queued | sent | failed | skipped
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

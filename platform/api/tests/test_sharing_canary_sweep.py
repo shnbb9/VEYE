@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from tests.route_table import ADMIN_GUARD, SAFE_METHODS, concrete, routes
+from tests.conftest import decide_sharing, verify_member_email
 
 # Strings and figures that could not arise from the seed, a default, or any
 # other member. Short enough to survive a truncated excerpt.
@@ -135,9 +136,11 @@ def test_the_sweep_can_actually_see_the_records_once_the_member_shares(admin_cli
     member = _member_with_every_health_slice()
     try:
         member_id = member.get("/api/v1/auth/me").json()["member"]["member_id"]
+        # A member is asked only once their address is verified (V2 §4.3).
+        verify_member_email(member)
         asked = admin_client.post(f"/api/v1/admin/members/{member_id}/health-permission/request", json={})
         assert asked.status_code in (200, 201), asked.text
-        granted = member.post("/api/v1/members/me/health-permission/grant", json={})
+        granted = decide_sharing(member)
         assert granted.status_code in (200, 201), granted.text
 
         visible, answered = _sweep(admin_client, member_id)

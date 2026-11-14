@@ -27,6 +27,10 @@ from app.food import models as food_models  # noqa: F401
 from app.food_choices import models as food_choice_models  # noqa: F401
 from app.meal_plans import models as meal_plan_models  # noqa: F401
 from app.product_settings import models as product_setting_models  # noqa: F401
+from app.policies import models as policy_models  # noqa: F401
+from app.prospects import models as prospect_models  # noqa: F401
+from app.jobs import models as job_models  # noqa: F401
+from app.erasure import models as erasure_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

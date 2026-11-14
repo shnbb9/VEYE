@@ -30,6 +30,7 @@ from app.auth.schemas import (
     SignUpRequest,
     SignUpResponse,
     TokenRequest,
+    VerifyEmailResponse,
 )
 from app.auth.service import AuthError, AuthService, SignUpInput
 from app.auth.housekeeping import after_successful_sign_in
@@ -77,11 +78,21 @@ def sign_up(
     if payload.health_number_answers is not None:
         attempt, _ = record_health_number_attempt(db, user.member_id, payload.health_number_answers)
         attempt_id = attempt.id
+    # A saved result from the onboarding tab is only remembered as PENDING
+    # here: registering with an address proves nothing about owning it, so the
+    # saved record joins this account when the address is verified (below).
+    prospect_link = "none"
+    if payload.prospect_claim_token:
+        from app.prospects.routes import cipher_for
+        from app.prospects.service import ProspectService
+
+        prospect_link = ProspectService(db, cipher=cipher_for(runtime.settings), now=runtime.clock).link_at_signup(
+            payload.prospect_claim_token, user=user, attempt_id=attempt_id)
     db.commit()
     db.refresh(user)
     set_session_cookie(response, issued, runtime)
     return SignUpResponse(account=account_out(user, PORTAL_MEMBER), deliveries=[DeliveryOut(**d.__dict__) for d in deliveries],
-                          health_number_attempt_id=attempt_id)
+                          health_number_attempt_id=attempt_id, prospect_link=prospect_link)
 
 
 def _portal_sign_in(portal: str, payload: SignInRequest, request: Request, response: Response, db: Session,
@@ -246,14 +257,34 @@ def me(
     return PortalSessionsResponse(member=member, admin=admin)
 
 
-@router.post("/verify-email", response_model=SessionResponse)
-def verify_email(payload: TokenRequest, db: Session = Depends(get_db), auth: AuthService = Depends(get_auth_service)) -> SessionResponse:
+@router.post("/verify-email", response_model=VerifyEmailResponse)
+def verify_email(payload: TokenRequest, db: Session = Depends(get_db), auth: AuthService = Depends(get_auth_service),
+                 runtime: Runtime = Depends(get_runtime)) -> VerifyEmailResponse:
     try:
         user = auth.verify_email(payload.token)
     except AuthError as exc:
         _raise(exc)
+    # The address is proven now, which is the last thing a pending saved
+    # result (V2 §2.3) was waiting for. Completing it never writes a second
+    # attempt: the account already holds its own copy from sign-up.
+    from app.prospects.routes import cipher_for
+    from app.prospects.service import ProspectService
+
+    added = ProspectService(db, cipher=cipher_for(runtime.settings), now=runtime.clock).finalize_for_verified_account(user)
+    # Automatic health-sharing requests (V2 §4.2) fire here and only here: a
+    # verified address is the condition, so sign-up, a reload or a resent
+    # verification email never trigger one. At most once per member per
+    # notification policy version; queued now, sent after the commit.
+    from app.health_permission.requests import SharingRequests
+    from app.notifications.service import NotificationService
+
+    notifications = NotificationService(db, runtime.email)
+    asked = SharingRequests(db, notifications, web_base_url=runtime.settings.web_base_url,
+                            now=runtime.clock).automatic(user)
     db.commit()
-    return SessionResponse(account=account_out(user))
+    if asked is not None:
+        notifications.dispatch(asked.outbox_id)
+    return VerifyEmailResponse(account=account_out(user), saved_results_added=len(added))
 
 
 @router.post("/resend-verification", response_model=DeliveryOut)

@@ -13,7 +13,7 @@ import smtplib
 import ssl
 from dataclasses import dataclass, field, replace
 from email.message import EmailMessage as MimeMessage
-from email.utils import make_msgid, parseaddr
+from email.utils import formataddr, make_msgid, parseaddr
 from typing import Protocol
 
 from pydantic import SecretStr
@@ -35,6 +35,10 @@ class EmailMessage:
     text: str
     html: str | None = None
     headers: dict[str, str] = field(default_factory=dict)
+    # A display name for this message only ("VEYE Team"). The ADDRESS is
+    # always the configured, authenticated sender: a message may change how
+    # it is signed, never who it claims to come from.
+    from_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -66,7 +70,11 @@ def apply_reply_to(message: EmailMessage, reply_to: str | None) -> EmailMessage:
 
 def _build_mime(message: EmailMessage, sender: str, domain: str) -> tuple[MimeMessage, str]:
     mime = MimeMessage()
-    mime["From"] = sender
+    if message.from_name:
+        name = " ".join(message.from_name.split())[:80]  # split() also removes CR/LF
+        mime["From"] = formataddr((name, parseaddr(sender)[1]))
+    else:
+        mime["From"] = sender
     mime["To"] = message.to
     mime["Subject"] = message.subject
     message_id = make_msgid(domain=domain)

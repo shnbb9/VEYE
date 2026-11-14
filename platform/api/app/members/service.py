@@ -32,6 +32,7 @@ from app.progress.body_composition.models import BodyCompositionAttempt
 from app.progress.health_assessment.models import HealthAssessmentAttempt
 from app.progress.simple_quiz.models import SimpleQuizAttempt
 from app.requests.models import MemberRequest
+from app.storage.images import ImageRejected, normalise_photo, thumb_key
 from app.storage.object_storage import ObjectNotFound, ObjectStorage
 
 log = logging.getLogger("veye.members")
@@ -94,54 +95,65 @@ class MemberProfileService:
         return user
 
     # ---- photo -------------------------------------------------------------------
+    # One picture per sign-in account. A person who holds both a member profile
+    # and administrator access has ONE avatar, shown in both portals; either
+    # portal may change it, and each portal changes only its own signed-in
+    # account's picture (architecture V2 §5.3).
     def set_photo(self, user: UserAccount, data: bytes, declared_type: str | None) -> UserAccount:
-        if not data:
-            raise ProfileError(422, "Choose an image file.")
-        if len(data) > self.photo_max_bytes:
-            raise ProfileError(413, f"The photo is too large. Please use an image under {self.photo_max_bytes // 1_000_000} MB.")
-        content_type = sniff_photo_type(data)
-        if content_type is None or (declared_type and declared_type.split(";")[0].strip() not in PHOTO_TYPES):
+        if declared_type and declared_type.split(";")[0].strip() not in PHOTO_TYPES:
             raise ProfileError(415, "Please choose a JPG, PNG or WebP image.")
-        ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[content_type]
+        try:
+            photo = normalise_photo(data, max_bytes=self.photo_max_bytes)
+        except ImageRejected as exc:
+            raise ProfileError(exc.status_code, exc.detail) from exc
         now = datetime.now(timezone.utc)
-        key = f"profile-photos/{user.id}/{now.strftime('%Y%m%dT%H%M%S%f')}.{ext}"
+        key = f"profile-photos/{user.id}/{now.strftime('%Y%m%dT%H%M%S%f')}.{photo.extension}"
         old_key = user.photo_object_key
-        self.media.put(key, data, content_type)
+        # Variants first, the pointer last: a failure mid-way leaves the old
+        # photo in place rather than a pointer to bytes that were never written.
+        self.media.put(thumb_key(key), photo.thumb, photo.content_type)
+        self.media.put(key, photo.full, photo.content_type)
         user.photo_object_key = key
-        user.photo_content_type = content_type
+        user.photo_content_type = photo.content_type
         user.photo_updated_at = now
         self.db.flush()
         if old_key and old_key != key:
+            self._delete_quietly(old_key)
+        return user
+
+    def _delete_quietly(self, key: str) -> None:
+        for target in (key, thumb_key(key)):
             try:
-                self.media.delete(old_key)
+                self.media.delete(target)
+            except ObjectNotFound:
+                pass
             except Exception as exc:
                 # The new photo is already in place, so a stale file is not an
                 # error worth failing on — but it is worth saying, or an object
                 # store quietly refusing every delete looks like nothing at all.
-                log.warning("could not remove the previous profile photo: %s: %s",
+                log.warning("could not remove a previous profile photo object: %s: %s",
                             type(exc).__name__, str(exc)[:200])
-        return user
 
     def remove_photo(self, user: UserAccount) -> UserAccount:
         if user.photo_object_key:
-            try:
-                self.media.delete(user.photo_object_key)
-            except Exception as exc:
-                log.warning("could not remove the profile photo bytes: %s: %s",
-                            type(exc).__name__, str(exc)[:200])
+            self._delete_quietly(user.photo_object_key)
         user.photo_object_key = None
         user.photo_content_type = None
         user.photo_updated_at = datetime.now(timezone.utc)
         self.db.flush()
         return user
 
-    def read_photo(self, user: UserAccount) -> tuple[bytes, str]:
+    def read_photo(self, user: UserAccount, size: str = "full") -> tuple[bytes, str]:
         if not user.photo_object_key or not user.photo_content_type:
             raise ProfileError(404, "No profile photo.")
+        key = thumb_key(user.photo_object_key) if size == "thumb" else user.photo_object_key
         try:
-            return self.media.get(user.photo_object_key), user.photo_content_type
-        except ObjectNotFound as exc:
-            raise ProfileError(404, "No profile photo.") from exc
+            return self.media.get(key), user.photo_content_type
+        except ObjectNotFound:
+            if size == "thumb":
+                # A photo saved before variants existed has no thumbnail.
+                return self.read_photo(user, "full")
+            raise ProfileError(404, "No profile photo.")
 
     # ---- export ------------------------------------------------------------------
     def export(self, user: UserAccount) -> dict[str, Any]:

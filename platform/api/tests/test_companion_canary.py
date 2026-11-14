@@ -34,6 +34,7 @@ from app.companion.policy import PolicyEngine
 from app.core.runtime import configure_runtime, get_runtime
 from app.db.session import SessionLocal
 from app.observability.telemetry import InMemoryTraceExporter, TelemetryRecorder
+from tests.conftest import decide_sharing, verify_member_email
 
 MOOD_NOTE_CANARY = "qqzzx-mood-note-canary"
 MEAL_CANARY = "qqzzx-meal-description-canary"
@@ -74,9 +75,11 @@ def _member_who_wrote_private_text_and_shares(member_client, admin_client):
         assert diary.status_code == 201, diary.text
 
     member_id = member_client.get("/api/v1/auth/me").json()["member"]["member_id"]
+    # A member is asked only once their address is verified (architecture V2 §4.3).
+    verify_member_email(member_client)
     asked = admin_client.post(f"/api/v1/admin/members/{member_id}/health-permission/request", json={})
     assert asked.status_code in (200, 201), asked.text
-    granted = member_client.post("/api/v1/members/me/health-permission/grant", json={})
+    granted = decide_sharing(member_client)
     assert granted.status_code in (200, 201), granted.text
     return member_id
 

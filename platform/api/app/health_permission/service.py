@@ -55,13 +55,26 @@ class HealthPermissionService:
             self.db.flush()
         return row
 
+    def current(self, member_id: UUID) -> MemberHealthPermission | None:
+        """The row if it exists, without creating one (reads that must not
+        write, such as an eligibility check)."""
+        return (self.db.query(MemberHealthPermission)
+                .filter(MemberHealthPermission.member_id == member_id).one_or_none())
+
     def shares_health_data(self, member_id: UUID) -> bool:
         """The single question every protected read asks. Deliberately a fresh
         database read each time — a withdrawal has to bite immediately, and a
         value cached anywhere is a value that outlives the member's decision."""
         row = (self.db.query(MemberHealthPermission)
                .filter(MemberHealthPermission.member_id == member_id).one_or_none())
-        return bool(row and row.shares_health_data)
+        if not (row and row.shares_health_data):
+            return False
+        # A member who asked to be deleted shares nothing from that moment,
+        # even before the purge has removed the permission row.
+        from app.members.models import Member
+
+        member = self.db.get(Member, member_id)
+        return member is not None and member.erasure_requested_at is None
 
     def states_for(self, member_ids: list[UUID]) -> dict[UUID, str]:
         """Bulk read for list screens, so a page of members costs one query."""
@@ -73,38 +86,49 @@ class HealthPermissionService:
         return {member_id: found.get(member_id, STATE_NOT_REQUESTED) for member_id in member_ids}
 
     # ---- transitions ---------------------------------------------------------
-    def request(self, member_id: UUID, *, by_user_id: UUID | None, by_name: str) -> MemberHealthPermission:
-        """An administrator asks. This is the console's whole power here."""
+    def request(self, member_id: UUID, *, by_user_id: UUID | None, by_name: str, actor: str = "administrator",
+                source: str = SOURCE_ADMIN_CONSOLE, note: str | None = None,
+                request_ref: str | None = None) -> MemberHealthPermission:
+        """An administrator asks (or, with automatic mode, Veye asks after a
+        verified sign-up). This is the console's whole power here."""
         row = self.for_member(member_id)
         if row.state == STATE_GRANTED:
             raise PermissionError_(409, "This member already shares their health records.")
         now = datetime.now(timezone.utc)
-        self._record(row, STATE_REQUESTED, actor="administrator", actor_user_id=by_user_id,
-                     actor_name=by_name, source=SOURCE_ADMIN_CONSOLE)
+        self._record(row, STATE_REQUESTED, actor=actor, actor_user_id=by_user_id,
+                     actor_name=by_name, source=source, note=note, request_ref=request_ref)
         row.requested_at = now
         row.requested_by_user_id = by_user_id
         row.requested_by_name = by_name
+        row.request_ref = request_ref
         self.db.flush()
         return row
 
-    def grant(self, member_id: UUID, *, by_user_id: UUID, by_name: str) -> MemberHealthPermission:
+    def grant(self, member_id: UUID, *, by_user_id: UUID, by_name: str, terms=None,
+              request_ref: str | None = None) -> MemberHealthPermission:
+        """`terms` is the version the member was shown (policy.Terms); its
+        label, hash and snapshot are kept on the event, so the evidence says
+        exactly what was agreed to."""
         row = self.for_member(member_id)
         if row.state == STATE_GRANTED:
             return row
         self._record(row, STATE_GRANTED, actor="member", actor_user_id=by_user_id,
-                     actor_name=by_name, source=SOURCE_MEMBER_APP)
+                     actor_name=by_name, source=SOURCE_MEMBER_APP, terms=terms, request_ref=request_ref)
         row.decided_at = datetime.now(timezone.utc)
         row.revoked_at = None
-        row.policy_version = POLICY_VERSION
+        row.policy_version = terms.label if terms is not None else POLICY_VERSION
+        row.request_ref = None
         self.db.flush()
         return row
 
-    def decline(self, member_id: UUID, *, by_user_id: UUID, by_name: str) -> MemberHealthPermission:
+    def decline(self, member_id: UUID, *, by_user_id: UUID, by_name: str, terms=None,
+                request_ref: str | None = None) -> MemberHealthPermission:
         row = self.for_member(member_id)
         self._record(row, STATE_DECLINED, actor="member", actor_user_id=by_user_id,
-                     actor_name=by_name, source=SOURCE_MEMBER_APP)
+                     actor_name=by_name, source=SOURCE_MEMBER_APP, terms=terms, request_ref=request_ref)
         row.decided_at = datetime.now(timezone.utc)
-        row.policy_version = POLICY_VERSION
+        row.policy_version = terms.label if terms is not None else POLICY_VERSION
+        row.request_ref = None
         self.db.flush()
         return row
 
@@ -124,10 +148,17 @@ class HealthPermissionService:
 
     # ---- internals -----------------------------------------------------------
     def _record(self, row: MemberHealthPermission, to_state: str, *, actor: str,
-                actor_user_id: UUID | None, actor_name: str, source: str) -> None:
+                actor_user_id: UUID | None, actor_name: str, source: str, note: str | None = None,
+                terms=None, request_ref: str | None = None) -> None:
+        snapshot = terms.snapshot() if terms is not None else {}
         self.db.add(MemberHealthPermissionEvent(
             permission_id=row.id, member_id=row.member_id, from_state=row.state, to_state=to_state,
             actor=actor, actor_user_id=actor_user_id, actor_name=actor_name, source=source,
-            policy_version=POLICY_VERSION,
+            policy_version=terms.label if terms is not None else POLICY_VERSION, note=note,
+            terms_version=terms.version if terms is not None else None,
+            terms_hash=terms.hash if terms is not None else None,
+            scope=snapshot.get("categories"), purpose=snapshot.get("purpose"),
+            recipient=snapshot.get("recipient"), expiry_rule=snapshot.get("expiry_rule"),
+            request_ref=request_ref,
         ))
         row.state = to_state

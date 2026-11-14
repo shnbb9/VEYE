@@ -23,7 +23,8 @@ it, and no row is ever edited or deleted.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -64,7 +65,12 @@ POLICY_VERSION = "health-sharing-2026-11-09-v2"
 # email: the member has to act in the application, and the source says so.
 SOURCE_MEMBER_APP = "member_app"
 SOURCE_ADMIN_CONSOLE = "admin_console"
-SOURCES = (SOURCE_MEMBER_APP, SOURCE_ADMIN_CONSOLE)
+# Asked by Veye itself, once, after a new member verified their address, when
+# Settings -> Health sharing is in Automatic mode (architecture V2 §4.2).
+SOURCE_AUTOMATIC = "automatic"
+SOURCES = (SOURCE_MEMBER_APP, SOURCE_ADMIN_CONSOLE, SOURCE_AUTOMATIC)
+
+JsonType = JSON().with_variant(JSONB(), "postgresql")
 
 
 class MemberHealthPermission(Base):
@@ -83,6 +89,10 @@ class MemberHealthPermission(Base):
     requested_by_name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The open request's opaque reference (the emailed link carries it; it
+    # identifies the request and grants nothing), and the email that carried it.
+    request_ref: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    request_outbox_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
@@ -117,6 +127,16 @@ class MemberHealthPermissionEvent(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False, default=SOURCE_MEMBER_APP)
     policy_version: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What exactly was agreed to (architecture V2 §4.4): the published terms
+    # version and its hash, and a snapshot of the scope, purpose, recipient
+    # and expiry rule the member read. Empty on a request; set on a decision.
+    terms_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    terms_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scope: Mapped[list | None] = mapped_column(JsonType, nullable=True)
+    purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recipient: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    expiry_rule: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    request_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     permission = relationship("MemberHealthPermission", back_populates="events")

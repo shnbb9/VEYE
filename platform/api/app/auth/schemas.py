@@ -75,12 +75,19 @@ class SignUpRequest(BaseModel):
     # are attached here so the saved Health Number is still calculated and
     # stored by the API.
     health_number_answers: HealthNumberAnswers | None = None
+    # A visitor who SAVED their result before signing up (architecture V2
+    # §2.3) also carries the capability the saving tab was handed. It links
+    # the saved record to this new account as pending; nothing joins until
+    # the address is proven.
+    prospect_claim_token: str | None = Field(default=None, max_length=200)
 
 
 class SignUpResponse(BaseModel):
     account: AccountOut
     deliveries: list[DeliveryOut]
     health_number_attempt_id: UUID | None = None
+    # none | unavailable | pending_verification
+    prospect_link: str = "none"
 
 
 class IdentitySignInRequest(BaseModel):
@@ -102,6 +109,11 @@ class SignInRequest(BaseModel):
 
 class SessionResponse(BaseModel):
     account: AccountOut
+
+
+class VerifyEmailResponse(SessionResponse):
+    # Saved results (V2 §2.3) whose link this verification completed.
+    saved_results_added: int = 0
 
 
 class PortalSessionsResponse(BaseModel):

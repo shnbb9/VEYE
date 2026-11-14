@@ -6,6 +6,9 @@ os.environ["VEYE_ENVIRONMENT"] = "test"
 os.environ["VEYE_EMAIL_PROVIDER"] = "memory"
 os.environ["VEYE_LLM_PROVIDER"] = "mock"
 os.environ["VEYE_KNOWLEDGE_OBJECT_ROOT"] = "./var/test-knowledge-objects"
+# Member photos and the erasure ledger: their own root, emptied after every
+# test, instead of the development media folder.
+os.environ["VEYE_MEDIA_OBJECT_ROOT"] = "./var/test-media-objects"
 os.environ["VEYE_LANGFUSE_ENABLED"] = "false"
 os.environ["VEYE_WEB_BASE_URL"] = "http://web.test"
 
@@ -51,6 +54,7 @@ def clean_database():
     Base.metadata.drop_all(bind=engine)
     reset_runtime()
     shutil.rmtree("./var/test-knowledge-objects", ignore_errors=True)
+    shutil.rmtree("./var/test-media-objects", ignore_errors=True)
 
 
 @pytest.fixture
@@ -74,6 +78,29 @@ def sign_up(client: TestClient, *, email="aditya.demo@demo.veye.test", first_nam
 def sign_in(client: TestClient, email: str, password: str = MEMBER_PASSWORD, remember: bool = True):
     """MEMBER portal sign-in."""
     return client.post("/api/v1/auth/sign-in", json={"email": email, "password": password, "remember": remember})
+
+
+def verify_member_email(client: TestClient) -> None:
+    """Use the verification link the sign-up emailed, as the member would."""
+    import re
+
+    account = client.get("/api/v1/auth/me").json()["member"]
+    if account is None or account["email_verified"]:
+        return
+    sent = [m for m in get_runtime().email.sent if m.to == account["email"] and "verify-email?token=" in m.text]
+    assert sent, f"no verification email for {account['email']}"
+    token = re.search(r"verify-email\?token=([A-Za-z0-9_\-]+)", sent[-1].text).group(1)
+    verified = client.post("/api/v1/auth/verify-email", json={"token": token})
+    assert verified.status_code == 200, verified.text
+
+
+def decide_sharing(client: TestClient, decision: str = "grant", **extra):
+    """Grant or decline Health Data Sharing the way the app does: a verified
+    address, and the decision sent with the terms it was made against."""
+    verify_member_email(client)
+    terms = client.get("/api/v1/members/me/health-permission").json()["terms"]
+    return client.post(f"/api/v1/members/me/health-permission/{decision}",
+                       json={"terms_version": terms["version"], "terms_hash": terms["hash"], **extra})
 
 
 def admin_sign_in(client: TestClient, email: str, password: str, remember: bool = True):
