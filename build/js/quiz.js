@@ -42,6 +42,20 @@
   // result, and signing up is optional from there.
   var phase = 'q';    // 'q' | 'result'
 
+  // Saving a result before sign-up (owner decision, 14 Nov 2026). Offered only
+  // when an owner has switched saving on; this prototype's switch is
+  // ?saving=15|30|45|forever (js/saved-result.js). Without it the gate and the
+  // result are exactly the approved ones. savedView = what the result says
+  // about saving: { saved: record | null, erased: message | '' }.
+  var SAVED = window.VeyeSavedResult;
+  var savingPolicy = SAVED ? SAVED.policyFrom(location.search) : null;
+  var savedView = null;
+  // The application's onboarding additions apply only while saving is on.
+  if (savingPolicy) {
+    var savingStyles = document.getElementById('savingStyles');
+    if (savingStyles) savingStyles.media = 'all';
+  }
+
   function visible() { return QUESTIONS.filter(function (q) { return !q.showIf || q.showIf(state); }); }
 
   /** Highest canonical Health Number question reached at this screen. */
@@ -301,6 +315,63 @@
       if (actions) actions.hidden = true;
       if (note) note.hidden = false;
     });
+
+    // Saved result (only when saving is switched on): delete it, or remember
+    // that "Sign in to add it to your account" should open Add it to your
+    // account once the dashboard loads (the application's
+    // /login?next=/app/saved-result). Tab-scoped, read once by the dashboard.
+    var er = root.querySelector('[data-saved-erase]');
+    if (er) er.addEventListener('click', eraseSaved);
+    var si = root.querySelector('[data-saved-signin]');
+    if (si) si.addEventListener('click', function () {
+      try { sessionStorage.setItem('veye_open_view', 'saved-result'); } catch (e) {}
+    });
+  }
+
+  function eraseSaved() {
+    if (!window.confirm(SAVED.TEXT.eraseConfirm)) return;
+    SAVED.erase();
+    savedView = { saved: null, erased: SAVED.TEXT.erased };
+    var old = root.querySelectorAll('[data-saved]');
+    if (!old.length) return;
+    old[0].insertAdjacentHTML('beforebegin', savedStatusHtml());
+    Array.prototype.forEach.call(old, function (n) { n.parentNode.removeChild(n); });
+  }
+
+  // What the result says about saving — the application's words and classes
+  // (app/onboarding/page.tsx, Result). Nothing at all while saving is off.
+  function savedStatusHtml() {
+    if (!savingPolicy) return '';
+    var view = savedView || { saved: null, erased: '' };
+    var rec = view.saved;
+    if (rec) {
+      return '<div class="result__saved" role="status" data-saved>' +
+          '<strong>Saved ' + esc(SAVED.formatUntil(rec)) + '.</strong> ' +
+          'We emailed ' + esc(rec.emailMasked) + ' a link to confirm the address is yours. ' +
+          'Already a member? <a href="login.html" data-saved-signin>Sign in to add it to your account</a>. ' +
+          '<button class="result__link" type="button" data-saved-erase>Delete my saved result</button>' +
+        '</div>' +
+        // Prototype stand-in for the emailed link (no email is sent), as on
+        // Sign in's password reset: opens the page the link opens.
+        '<p class="result__note" data-saved><a class="result__link" href="saved-result.html">Prototype: open the link from the email</a></p>';
+    }
+    if (view.erased) {
+      return '<p class="result__saved result__saved--warn" role="status" data-saved>' + esc(view.erased) + '</p>';
+    }
+    return '<p class="result__note" data-saved>Not saved. Your answers stay in this browser tab only.</p>';
+  }
+
+  // The storage notice and its UNTICKED box, between the error line and the
+  // button (app/onboarding/page.tsx, EmailGate). Empty while saving is off.
+  function savingNoticeHtml() {
+    if (!savingPolicy) return '';
+    var text = SAVED.noticeText(savingPolicy).replace(/See our Privacy Policy\.$/, '');
+    return '<p class="hn-modal__notice" id="hnNotice">' + esc(text) +
+        'See our <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>' +
+      '<label class="hn-modal__consent" for="hnConsent">' +
+        '<input id="hnConsent" type="checkbox" aria-describedby="hnNotice">' +
+        '<span>' + esc(SAVED.CONSENT_LABEL) + '</span>' +
+      '</label>';
   }
 
   // ---------- result-ready email gate ----------
@@ -331,6 +402,7 @@
         '<label class="hn-modal__label" for="hnEmail">Email Address</label>' +
         '<input class="hn-modal__input" id="hnEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com">' +
         '<p class="hn-modal__err" id="hnErr" role="alert"></p>' +
+        savingNoticeHtml() +
         '<button type="button" class="quiz__btn quiz__btn--next hn-modal__cta" data-hn-go>View My Health Number</button>' +
       '</div>';
     document.body.appendChild(modalEl);
@@ -347,6 +419,12 @@
       // Prototype: held for this session only, to pre-fill the optional sign-up
       // form. No request is made, no account is created, nothing is stored server-side.
       try { sessionStorage.setItem('veye_prefill_email', v); } catch (e) {}
+      // Saving is the visitor's explicit choice: only a ticked box keeps the
+      // result; leaving it unticked still shows the number.
+      if (savingPolicy) {
+        var consent = modalEl.querySelector('#hnConsent');
+        savedView = { saved: consent && consent.checked ? SAVED.capture(v, savingPolicy) : null, erased: '' };
+      }
       closeEmailGate();
       phase = 'result';
       window.scrollTo(0, 0);
@@ -450,6 +528,7 @@
         '<button class="quiz__btn quiz__btn--prev" data-notnow>Not now</button>' +
       '</div>' +
       '<p class="result__note" id="resultNote" hidden>Your Health Number stays on this screen &mdash; you can create an account whenever you are ready. <a href="index.html">Back to Veye</a></p>' +
+      savedStatusHtml() +
     '</div>';
   }
 
@@ -513,6 +592,8 @@
   document.getElementById('quizBack').addEventListener('click', prev);
 
   // QA helper: ?step=N / ?phase=result / ?gate=1 (opens the email modal)
+  // Owner switch (14 Nov 2026): ?saving=15|30|45|forever shows the gate as it
+  // is when saving is on — read above with the other state (savingPolicy).
   var openGateOnLoad = false;
   try {
     var qs = new URLSearchParams(location.search);

@@ -1221,8 +1221,14 @@ group('P · Client presentation finish', () => {
       'Resource actions have no feedback handler');
   });
   check('Profile layout and useful account controls are functional', () => {
-    ['settingsUnits', 'settingsTimezone', 'settingsDownloadBtn'].forEach(id =>
+    // Owner decision, 14 Nov 2026: Your details carries the application's
+    // fields. Measurement units, Time zone and Username are gone (the
+    // application's account has none of them); the demo-data download stays.
+    ['settingsFirstName', 'settingsLastName', 'settingsEmail', 'settingsEmailStatus', 'settingsPhone',
+     'settingsPostal', 'settingsMemberSince', 'settingsSignedInName', 'settingsDownloadBtn'].forEach(id =>
       assert.ok(HTML.dashboard.includes('id="' + id + '"'), 'missing settings control: ' + id));
+    assert.ok(!/id="settings(Units|Timezone|Username)"/.test(HTML.dashboard),
+      "Your details must carry the application's fields only (owner decision, 14 Nov 2026)");
     // 21 Sep 2026 profile fidelity fix: a compact photo column beside a
     // two-column field grid, photo on the first field row, Change photo
     // directly beneath the image, and one identity record for every field.
@@ -1244,8 +1250,10 @@ group('P · Client presentation finish', () => {
       'the Settings email must be filled from profileIdentity()');
     assert.ok(/new Blob\(\[JSON\.stringify\(payload/.test(DASH_SCRIPT),
       'demo-data download is not wired');
-    assert.ok(/prefs\.units/.test(DASH_SCRIPT) && /prefs\.timezone/.test(DASH_SCRIPT),
-      'units or time zone are not restored');
+    assert.ok(/set\('settingsPhone', v\.phone\)/.test(DASH_SCRIPT) && /set\('settingsPostal', v\.zip\)/.test(DASH_SCRIPT),
+      'phone or ZIP are not restored from veye_user');
+    assert.ok(/user\.phone = value\('settingsPhone'\)/.test(DASH_SCRIPT) && /user\.zip = value\('settingsPostal'\)/.test(DASH_SCRIPT),
+      'phone or ZIP are not saved to veye_user');
   });
 });
 

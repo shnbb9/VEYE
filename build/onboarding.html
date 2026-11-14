@@ -11,6 +11,11 @@
 <link rel="stylesheet" href="styles/tokens.css?v=2">
 <link rel="stylesheet" href="styles/base.css">
 <link rel="stylesheet" href="styles/quiz.css?v=66">
+<!-- The application's onboarding additions (a byte copy of
+     platform/web/public/onboarding-css/onboarding-app.css): the saving notice,
+     its box and the saved-result note. Switched on (media="all") by quiz.js only
+     behind ?saving=…, so the approved gate stays exactly as it was. -->
+<link rel="stylesheet" href="styles/onboarding-app.css?v=1" media="not all" id="savingStyles">
 </head>
 <body>
 <div class="quiz">
@@ -39,6 +44,9 @@
 <!-- Shared calculation engine (same file the dashboard uses). Not deferred, so
      it is defined before quiz.js runs. -->
 <script src="js/veye-calculations.js?v=5"></script>
-<script src="js/quiz.js?v=19" defer></script>
+<!-- Saving a result before sign-up (owner decision, 14 Nov 2026): off unless
+     the address carries the owner switch, e.g. onboarding.html?saving=30 -->
+<script src="js/saved-result.js?v=1"></script>
+<script src="js/quiz.js?v=20" defer></script>
 </body>
 </html>

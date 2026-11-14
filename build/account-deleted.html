@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="assets/web/wp/veye-ico.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veye — Member profile deleted</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css?v=2">
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/auth.css?v=5">
+<link rel="stylesheet" href="styles/auth-app.css?v=1">
+</head>
+<body>
+<!-- Where a member lands after deleting their member profile (owner decision,
+     14 Nov 2026; the application's /account-deleted, app/account-deleted/page.tsx).
+     Same frame as Sign in, and the application's own words. The member is
+     signed out by now, so the page needs no session: the reference alone says
+     where the deletion stands — a state and dates, never anything about the
+     person or what was removed. Prototype: the reference and dates come from
+     the receipt the deletion dialog left in this browser (veye_deletion). -->
+<main class="auth">
+  <section class="auth__media">
+    <img class="auth__photo" src="login-people.jpg" alt="">
+    <img class="auth__logo" src="assets/img/veye-logo-white.svg" alt="Veye">
+    <span class="auth__tagline">Nutrition Reimagined</span>
+  </section>
+
+  <section class="auth__panel">
+    <div class="auth__form" id="accountDeleted">
+      <h1 class="auth__title" id="accountDeletedTitle">Deleting your member profile</h1>
+      <a class="btn btn--primary btn--mt" href="index.html">Back to Veye</a>
+    </div>
+  </section>
+</main>
+
+<script src="js/veye-calculations.js?v=5"></script>
+<script src="js/account-pages.js?v=1" defer></script>
+</body>
+</html>

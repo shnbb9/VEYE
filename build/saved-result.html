@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="assets/web/wp/veye-ico.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veye — Your saved result</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css?v=2">
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/auth.css?v=5">
+<link rel="stylesheet" href="styles/auth-app.css?v=1">
+</head>
+<body>
+<!-- Where the emailed link lands (owner decision, 14 Nov 2026; the
+     application's /saved-result, app/saved-result/page.tsx). Opening it proves
+     the mailbox is reachable; it shows nothing about the result itself — no
+     answers and no number — only that a result is saved and until when. Same
+     frame as Sign in, and the application's own words.
+     Prototype: no email is sent. The onboarding result (with the owner switch,
+     onboarding.html?saving=30) links here as "Prototype: open the link from the
+     email"; opened directly with nothing saved, the page shows the
+     application's "That did not work" state. -->
+<main class="auth">
+  <section class="auth__media">
+    <img class="auth__photo" src="login-people.jpg" alt="">
+    <img class="auth__logo" src="assets/img/veye-logo-white.svg" alt="Veye">
+    <span class="auth__tagline">Nutrition Reimagined</span>
+  </section>
+
+  <section class="auth__panel">
+    <div class="auth__form" id="savedResultPage">
+      <h1 class="auth__title">Your saved result</h1>
+    </div>
+  </section>
+</main>
+
+<script src="js/veye-calculations.js?v=5"></script>
+<script src="js/saved-result.js?v=1"></script>
+<script src="js/account-pages.js?v=1" defer></script>
+</body>
+</html>

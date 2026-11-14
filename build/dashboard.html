@@ -6063,6 +6063,11 @@
     .settings-fields input, .settings-fields select, .settings-select select { padding:10px 12px; }
   }
 </style>
+<!-- The application's member-screen additions these screens use (Your
+     details, Sharing, Your data, the deletion dialog, the consent screen and
+     Add it to your account): rules copied unchanged from
+     platform/web/public/member-css/member.css, after this <style> as there. -->
+<link rel="stylesheet" href="styles/member-app.css?v=1">
 </head>
 <body>
 
@@ -7508,19 +7513,30 @@
           </div>
         </header>
         <div class="settings-grid">
+          <!-- Your details — owner decision, 14 Nov 2026: the application's
+               fields, note and photo hint (platform/web/app/app/settings/page.tsx).
+               Prototype: filled from this browser's veye_user (first/last name,
+               phone and ZIP are collected at sign-up) and saved back to it. -->
           <section class="settings-card settings-card--profile fade-in d1">
             <div class="settings-card__head"><div><span class="settings-kicker">Profile</span><h2>Your details</h2></div><span class="settings-card__mark">01</span></div>
-            <div class="settings-profile">
-              <div class="settings-photo-wrap"><div class="settings-photo" id="settingsPhotoPreview" role="img" aria-label="Current profile photo"></div><label class="settings-photo-btn" for="settingsPhotoInput">Change photo</label><input id="settingsPhotoInput" type="file" accept="image/*" hidden><p class="settings-photo-hint">JPG or PNG<br>stored in this browser</p></div>
+            <form class="settings-profile" id="settingsProfileForm">
+              <div class="settings-photo-wrap"><div class="settings-photo" id="settingsPhotoPreview" role="img" aria-label="Current profile photo"></div><label class="settings-photo-btn" for="settingsPhotoInput">Change photo</label><input id="settingsPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden><p class="settings-photo-hint">JPG, PNG or WebP<br>up to 2 MB</p></div>
               <div class="settings-fields">
-                <label>Name<input id="settingsName" type="text" autocomplete="name"></label>
-                <label>Email<input id="settingsEmail" type="email" autocomplete="email"></label>
-                <label>Username<input id="settingsUsername" type="text" autocomplete="username"></label>
-                <label>Measurement units<select id="settingsUnits"><option value="imperial">Imperial (lb, in)</option><option value="metric">Metric (kg, cm)</option></select></label>
-                <label>Time zone<select id="settingsTimezone"><option value="local">Use device time zone</option><option value="America/New_York">Eastern Time</option><option value="America/Chicago">Central Time</option><option value="America/Denver">Mountain Time</option><option value="America/Los_Angeles">Pacific Time</option></select></label>
+                <label>First name<input id="settingsFirstName" type="text" autocomplete="given-name" required maxlength="120"></label>
+                <label>Last name<input id="settingsLastName" type="text" autocomplete="family-name" maxlength="120"></label>
+                <label>Email<input id="settingsEmail" type="email" readonly></label>
+                <label>Email status<input id="settingsEmailStatus" type="text" value="Verified" readonly></label>
+                <label><span>Phone <small>(optional)</small></span><input id="settingsPhone" type="tel" autocomplete="tel" maxlength="40"></label>
+                <label><span>ZIP / postal code <small>(optional)</small></span><input id="settingsPostal" type="text" autocomplete="postal-code" maxlength="20"></label>
+                <label>Member since<input id="settingsMemberSince" type="text" readonly></label>
+                <label>Signed-in name<input id="settingsSignedInName" type="text" readonly></label>
               </div>
-            </div>
-            <div class="settings-profile-actions"><button class="settings-save" id="settingsProfileSave" type="button">Save profile <span aria-hidden="true">&rarr;</span></button></div>
+              <div class="settings-profile-actions settings-profile-actions--form">
+                <p class="settings-help">To change your email address, use <b>Sign-in details</b> below &mdash; we confirm the new address before it replaces this one. Everything else saves to your account.</p>
+                <button class="settings-save" id="settingsProfileSave" type="submit" disabled>Save profile <span aria-hidden="true">&rarr;</span></button>
+              </div>
+            </form>
+            <p class="settings-help settings-note" id="settingsProfileNote" role="status" hidden></p>
           </section>
           <section class="settings-card fade-in d2">
             <div class="settings-card__head"><div><span class="settings-kicker">Preferences</span><h2>Notifications</h2></div><span class="settings-card__mark">02</span></div>
@@ -7534,16 +7550,106 @@
             <p class="settings-help">Choose how often Sprout can surface a helpful prompt. This prototype stores your preference locally.</p>
             <button class="settings-save settings-save--quiet" id="settingsCompanionSave" type="button">Save preference</button>
           </section>
+          <!-- Health data sharing — owner decision, 14 Nov 2026 (the
+               application's card, app/app/settings/page.tsx). Everything after
+               the heading is drawn by renderSharingCard() from this browser's
+               demo state (veye_health_sharing); deciding happens on the
+               consent screen (#view-sharing-request), withdrawing here. -->
+          <section class="settings-card fade-in d4" id="privacy">
+            <div class="settings-card__head">
+              <div><span class="settings-kicker">Your health records</span><h2>Sharing with the Veye team</h2></div>
+              <span class="settings-card__mark">04</span>
+            </div>
+          </section>
           <section class="settings-card fade-in d4">
-            <div class="settings-card__head"><div><span class="settings-kicker">Security</span><h2>Sign-in details</h2></div><span class="settings-card__mark">04</span></div>
+            <div class="settings-card__head"><div><span class="settings-kicker">Security</span><h2>Sign-in details</h2></div><span class="settings-card__mark">05</span></div>
             <p class="settings-help">Update your sign-in details here. Changes are represented in this prototype and would be verified by the live account service.</p>
             <button class="settings-outline" id="settingsPasswordBtn" type="button">Change password <span aria-hidden="true">&rarr;</span></button>
             <button class="settings-outline" id="settingsDownloadBtn" type="button">Download my demo data <span aria-hidden="true">&rarr;</span></button>
             <button class="settings-outline" id="settingsResetBtn" type="button">Reset demo data <span aria-hidden="true">&rarr;</span></button>
             <div class="settings-link-row"><a class="settings-link" href="privacy.html">Privacy</a><a class="settings-link" href="terms.html">Terms</a></div>
           </section>
+          <!-- Your data — owner decision, 14 Nov 2026 (the application's card):
+               a copy of everything, and deleting the member profile, which is
+               not the same as being deactivated. -->
+          <section class="settings-card fade-in d4" id="your-data">
+            <div class="settings-card__head"><div><span class="settings-kicker">Privacy</span><h2>Your data</h2></div><span class="settings-card__mark">06</span></div>
+            <p class="settings-help">Download a copy of everything you have entered and been given. Deleting your member profile removes it and all of its data for good.</p>
+            <a class="settings-outline" href="#" id="settingsExportLink">Download my data (JSON) <span aria-hidden="true">&rarr;</span></a>
+            <button class="settings-outline settings-outline--danger" type="button" id="deleteProfileOpen">Delete my member profile <span aria-hidden="true">&rarr;</span></button>
+          </section>
         </div>
       </div><!-- /view-settings -->
+
+      <!-- ============================================== -->
+      <!-- VIEW: SHARING REQUEST (consent screen)         -->
+      <!-- ============================================== -->
+      <!-- Owner decision, 14 Nov 2026: the application's /app/sharing-request
+           (app/app/sharing-request/page.tsx). Everything the member agrees to
+           is on the page before either button; the two choices weigh the same
+           and nothing is pre-selected. The terms are the application's built-in
+           version 1 (platform/api/app/health_permission/policy.py). Reached
+           from Settings → Sharing with the Veye team. -->
+      <div class="view view-sharing-request" id="view-sharing-request">
+        <header class="settings-hero fade-in">
+          <div>
+            <span class="settings-eyebrow">Your health records</span>
+            <h1 class="fd-title">A request to share your health information</h1>
+            <p>Read what sharing means before you choose. Nothing is shared unless you allow it.</p>
+          </div>
+        </header>
+        <section class="settings-card consent fade-in d1" id="consentCard" aria-labelledby="consentWho">
+          <h2 id="consentWho" class="consent__heading">Who is asking</h2>
+          <p class="settings-help" id="consentWhoText">The Veye team &mdash; the people who run your Veye account.</p>
+          <div class="consent__rich"><p>Sharing lets the Veye team open your saved results when they are helping you, and lets Veye Companion use them to answer you about your own progress. Until you share them, nobody at Veye can see them.</p></div>
+          <h2 class="consent__heading">What would be shared</h2>
+          <ul class="consent__list">
+            <li>Your Health Number and its history</li>
+            <li>Body composition results</li>
+            <li>Blood marker results</li>
+            <li>Your Health Assessment and Simple Quiz answers and results</li>
+            <li>Mood entries and their notes</li>
+            <li>Food diary entries</li>
+          </ul>
+          <p class="settings-help">Veye Companion (Sprout) may use summaries of the same records to answer you about your own progress. It never receives your notes or meal descriptions word for word.</p>
+          <h2 class="consent__heading">Who receives it, and why</h2>
+          <p class="settings-help"><b>The Veye team &mdash; the people who run your Veye account.</b> To help you with your Veye program and to answer your questions about your own progress.</p>
+          <h2 class="consent__heading">For how long</h2>
+          <p class="settings-help">Until you withdraw it. You can withdraw at any time in Settings, and it stops at once: from that moment the team and Sprout no longer see your records. Withdrawing cannot undo what was already seen while sharing was on.</p>
+          <h2 class="consent__heading">What is not covered</h2>
+          <p class="settings-help">Your name, email address and the messages you send to Veye are not covered by this choice and stay visible to the team so they can answer you.</p>
+          <h2 class="consent__heading">If you don&rsquo;t allow it</h2>
+          <p class="settings-help">If you don't allow sharing, nobody at Veye can open your saved results, and Sprout answers without them.</p>
+          <details class="consent__details">
+            <summary>Read the full terms</summary>
+            <div class="consent__rich"><p>The team sees your records only inside the Veye console, only while sharing is on, and every time they open them it is recorded with who looked and when.</p><p>Veye does not sell your records and does not use them for advertising.</p></div>
+          </details>
+          <p class="settings-help consent__meta">Terms version 1 (initial). See also our <a href="privacy.html">Privacy Policy</a>.</p>
+          <div class="consent__choices" id="consentDecision" role="group" aria-label="Your choice"><button class="consent__choice" type="button" data-consent="allow">Allow sharing with the VEYE team</button><button class="consent__choice" type="button" data-consent="deny">Don't allow sharing</button></div>
+          <p class="settings-help"><button class="settings-link" type="button" id="consentBack">Back to Settings</button></p>
+        </section>
+      </div><!-- /view-sharing-request -->
+
+      <!-- ============================================== -->
+      <!-- VIEW: SAVED RESULT (add it to your account)    -->
+      <!-- ============================================== -->
+      <!-- Owner decision, 14 Nov 2026: the application's /app/saved-result
+           (app/app/saved-result/page.tsx) — a Health Number saved before
+           signing up joins the member's own history, by a deliberate click.
+           Reached from the onboarding result ("Sign in to add it to your
+           account") and from saved-result.html; only when an owner has
+           switched saving on (onboarding.html?saving=…). The card body is
+           drawn by renderSavedClaim(). -->
+      <div class="view view-saved-result" id="view-saved-result">
+        <header class="settings-hero fade-in">
+          <div>
+            <span class="settings-eyebrow">Your saved result</span>
+            <h1 class="fd-title">Add it to your account</h1>
+            <p>A Health Number you saved before signing up can join your own history here.</p>
+          </div>
+        </header>
+        <section class="settings-card fade-in d1" id="savedClaimCard"></section>
+      </div><!-- /view-saved-result -->
 
       <!-- ============================================== -->
       <!-- VIEW: SUPPLEMENTS  (WordPress dash5a)          -->
@@ -7904,11 +8010,50 @@
   </div>
 </div>
 
+<!-- Delete my member profile — owner decision, 14 Nov 2026: the application's
+     dialog (platform/web/components/member/delete-profile.tsx), with its words
+     from platform/api/app/erasure/. What goes and what stays come first, then
+     the current password and the word DELETE. Prototype: the password is never
+     read beyond "is it empty", never stored and never sent; deleting removes
+     this browser's demo member data and opens account-deleted.html. -->
+<div class="modal-overlay" id="deleteProfileModal" aria-hidden="true">
+  <form class="modal-card modal-note delete-card" id="deleteProfileForm" role="dialog" aria-modal="true" aria-labelledby="deleteHeading" novalidate>
+    <button class="modal-close" type="button" aria-label="Close" id="deleteProfileClose">&times;</button>
+    <span class="modal-eyebrow">Your data</span>
+    <h3 id="deleteHeading">Delete my member profile</h3>
+    <p class="modal-sub"><strong>This cannot be undone.</strong> Deletion starts straight away and cannot be undone. Download your data first if you want a copy. Copies inside backups are removed as backups expire, and a deletion is re-applied if a backup is ever restored.</p>
+    <p class="delete-card__label">Deleted</p>
+    <ul class="consent__list">
+      <li>Your member profile and everything in it: Health Number, body composition, blood markers, Health Assessment and Simple Quiz results and answers, moods and notes, food diary, meal plans, food choices, guided sessions and conversations with Sprout</li>
+      <li>Messages you sent to Veye from inside the app, and the replies to them</li>
+      <li>Your health-sharing choices and their history</li>
+      <li>Results you saved before signing up and added to your account</li>
+      <li>Your sign-in account, your email address, your sessions and your profile picture</li>
+    </ul>
+    <p class="delete-card__label">Kept</p>
+    <ul class="consent__list">
+      <li>A minimal record that a deletion happened: when, its reference and counts of what was removed &mdash; no health information</li>
+      <li>Entries in Veye's administrator audit log about actions on your account, with your email address removed from them</li>
+    </ul>
+    <label class="delete-card__field" for="deletePassword">Your current password</label>
+    <input class="delete-card__input" id="deletePassword" type="password" autocomplete="current-password">
+    <label class="delete-card__field" for="deleteConfirm">Type <b>DELETE</b> to confirm</label>
+    <input class="delete-card__input" id="deleteConfirm" type="text" autocomplete="off">
+    <p class="chat-error" role="alert" id="deleteError" hidden></p>
+    <div class="modal-actions">
+      <button class="btn-ghost" type="button" id="deleteKeep">Keep my profile</button>
+      <button class="btn-primary delete-card__submit" type="submit" id="deleteSubmit" disabled>Delete permanently</button>
+    </div>
+  </form>
+</div>
+
 <!-- Shared calculation engine: one implementation of every scored instrument,
      also used by the onboarding quiz. Must load before the dashboard script. -->
 <script src="js/veye-calculations.js?v=5"></script>
 <script src="js/veye-guided-flows-data.js?v=1"></script>
 <script src="js/veye-guided-flows.js?v=1"></script>
+<!-- A visitor's saved result (owner decision, 14 Nov 2026), for Add it to your account. -->
+<script src="js/saved-result.js?v=1"></script>
 <script>
   // The dashboard scrolls inside .main. Browsers can restore that nested scroll
   // position when a file:// prototype is reopened, clipping the welcome title.
@@ -9456,14 +9601,46 @@
   // Settings are intentionally local to this HTML prototype: the profile and
   // preference controls behave like the eventual product, without pretending
   // to call an account service that is not present in the demo build.
-  window.initSettings = function () {
+  // Your details carries the application's fields (owner decision, 14 Nov
+  // 2026). The email is read-only and shown as verified; Member since and
+  // Signed-in name describe the SAVED record, so they change only on Save —
+  // as in the application, where they come from the account.
+  function settingsProfileValues() {
     const id = profileIdentity();
-    const name = document.getElementById('settingsName');
+    let user = {};
+    try { user = JSON.parse(localStorage.getItem('veye_user') || '{}') || {}; } catch (e) {}
+    const parts = id.name.split(/\s+/).filter(Boolean);
+    const first = String(user.firstName || parts[0] || '').trim();
+    const last = String(user.lastName || parts.slice(1).join(' ') || '').trim();
+    const since = user.memberSince || user.signedInAt;
+    const sinceDate = since && !isNaN(new Date(since)) ? new Date(since) : new Date();
+    return { id, first, last, phone: String(user.phone || ''), zip: String(user.zip || ''),
+             memberSince: sinceDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+             fullName: (first + ' ' + last).trim() };
+  }
+  function fillSettingsProfile(force) {
+    const v = settingsProfileValues();
+    const set = (elId, value) => { const el = document.getElementById(elId); if (el && (force || !el.value)) el.value = value; };
+    set('settingsFirstName', v.first);
+    set('settingsLastName', v.last);
+    set('settingsPhone', v.phone);
+    set('settingsPostal', v.zip);
     const email = document.getElementById('settingsEmail');
-    const username = document.getElementById('settingsUsername');
-    if (name && !name.value) name.value = id.name;
+    if (force && email) email.value = '';
+    const id = v.id;
     if (email && !email.value) email.value = id.email;
-    if (username && !username.value) username.value = id.username;
+    const since = document.getElementById('settingsMemberSince');
+    if (since) since.value = v.memberSince;
+    const signedIn = document.getElementById('settingsSignedInName');
+    if (signedIn) signedIn.value = v.fullName;
+  }
+  window.initSettings = function () {
+    // Opening Settings shows the saved details with Save switched off until
+    // something changes (the application re-reads the account each visit).
+    fillSettingsProfile(true);
+    setProfileDirty(false);
+    const profileNote = document.getElementById('settingsProfileNote');
+    if (profileNote) profileNote.hidden = true;
     applyProfileIdentity();
     let prefs = {};
     try { prefs = JSON.parse(localStorage.getItem('veye_settings') || '{}') || {}; } catch (e) {}
@@ -9473,10 +9650,7 @@
     });
     const freq = document.getElementById('settingsSuggestionFrequency');
     if (freq && prefs.suggestionFrequency) freq.value = prefs.suggestionFrequency;
-    const units = document.getElementById('settingsUnits');
-    const timezone = document.getElementById('settingsTimezone');
-    if (units && prefs.units) units.value = prefs.units;
-    if (timezone && prefs.timezone) timezone.value = prefs.timezone;
+    renderSharingCard();
   };
 
   /** The daily / personal tips "type in" as the dashboard opens (client request).
@@ -11657,41 +11831,68 @@
     e.preventDefault();
     goTo('settings');
   });
+  // Your details. The note under the card and the toast are the application's
+  // ("Profile saved." / "Profile photo updated."). The photo keeps the
+  // prototype's behaviour — it is kept in this browser — and the hint's limit
+  // (JPG, PNG or WebP up to 2 MB) holds here as it does in the application.
+  function showProfileNote(text, isError) {
+    const note = document.getElementById('settingsProfileNote');
+    if (!note) return;
+    note.textContent = text;
+    note.classList.toggle('settings-note--error', !!isError);
+    note.hidden = false;
+  }
+  function setProfileDirty(dirty) {
+    const save = document.getElementById('settingsProfileSave');
+    if (save) save.disabled = !dirty;
+  }
+  ['settingsFirstName', 'settingsLastName', 'settingsPhone', 'settingsPostal'].forEach(fieldId =>
+    document.getElementById(fieldId)?.addEventListener('input', () => setProfileDirty(true)));
   document.getElementById('settingsPhotoInput')?.addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    if (file.size > 2000000) {
+      showProfileNote('The photo is too large. Please use an image under 2 MB.', true);
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const data = String(reader.result || '');
       localStorage.setItem('veye_profile_photo', data);
       applyProfileIdentity();
+      showProfileNote('Profile photo updated.');
       flashToast('Profile photo updated');
+      e.target.value = '';
     };
     reader.readAsDataURL(file);
   });
-  document.getElementById('settingsProfileSave')?.addEventListener('click', () => {
+  document.getElementById('settingsProfileForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
     let user = {};
     try { user = JSON.parse(localStorage.getItem('veye_user') || '{}') || {}; } catch (err) {}
     const current = profileIdentity();
-    user.name = document.getElementById('settingsName')?.value.trim() || current.name;
-    user.email = document.getElementById('settingsEmail')?.value.trim() || current.email;
-    user.username = document.getElementById('settingsUsername')?.value.trim() || current.username;
-    const parts = user.name.split(/\s+/);
-    user.firstName = parts[0] || '';
-    user.lastName = parts.slice(1).join(' ');
+    const value = (fieldId) => (document.getElementById(fieldId)?.value || '').trim();
+    user.firstName = value('settingsFirstName');
+    user.lastName = value('settingsLastName');
+    user.name = (user.firstName + ' ' + user.lastName).trim();
+    user.email = current.email;
+    if (value('settingsPhone')) user.phone = value('settingsPhone'); else delete user.phone;
+    if (value('settingsPostal')) user.zip = value('settingsPostal'); else delete user.zip;
+    if (!user.memberSince) user.memberSince = user.signedInAt || new Date().toISOString();
     localStorage.setItem('veye_user', JSON.stringify(user));
     applyProfileIdentity();
-    saveSettingsPrefs(false);
-    flashToast('Profile and account preferences saved');
+    fillSettingsProfile(false);
+    setProfileDirty(false);
+    showProfileNote('Profile saved.');
+    flashToast('Profile saved');
   });
   function saveSettingsPrefs(showConfirmation = true) {
     const prefs = {
       emailUpdates: !!document.getElementById('settingsEmailUpdates')?.checked,
       trackerReminders: !!document.getElementById('settingsTrackerReminders')?.checked,
       companionCheckins: !!document.getElementById('settingsCompanionCheckins')?.checked,
-      suggestionFrequency: document.getElementById('settingsSuggestionFrequency')?.value || 'daily',
-      units: document.getElementById('settingsUnits')?.value || 'imperial',
-      timezone: document.getElementById('settingsTimezone')?.value || 'local'
+      suggestionFrequency: document.getElementById('settingsSuggestionFrequency')?.value || 'daily'
     };
     localStorage.setItem('veye_settings', JSON.stringify(prefs));
     if (showConfirmation) flashToast('Preferences saved');
@@ -11699,7 +11900,9 @@
   document.getElementById('settingsCompanionSave')?.addEventListener('click', saveSettingsPrefs);
   ['settingsEmailUpdates','settingsTrackerReminders','settingsCompanionCheckins'].forEach(id => document.getElementById(id)?.addEventListener('change', saveSettingsPrefs));
   document.getElementById('settingsPasswordBtn')?.addEventListener('click', () => flashToast('Password changes will be handled securely after sign-in is connected'));
-  document.getElementById('settingsDownloadBtn')?.addEventListener('click', () => {
+  // One download for both controls: Sign-in details' "Download my demo data"
+  // and Your data's "Download my data (JSON)" — this browser's demo records.
+  function downloadDemoData() {
     const payload = {};
     Object.keys(localStorage).filter(k => k.startsWith('veye_')).forEach(k => { payload[k] = localStorage.getItem(k); });
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -11709,7 +11912,9 @@
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     flashToast('Demo data download prepared');
-  });
+  }
+  document.getElementById('settingsDownloadBtn')?.addEventListener('click', downloadDemoData);
+  document.getElementById('settingsExportLink')?.addEventListener('click', (e) => { e.preventDefault(); downloadDemoData(); });
   document.querySelectorAll('[data-resource]').forEach(btn => btn.addEventListener('click', () => {
     flashToast(btn.dataset.resource + ' is being prepared for the Beta library');
   }));
@@ -11723,6 +11928,269 @@
     // clear the remembered session but keep the saved assessments
     try { localStorage.removeItem('veye_user'); } catch (err) {}
   });
+
+  // ============ 14 Nov 2026 screens (owner decisions) ============
+  // The application's Settings → Sharing with the Veye team and Your data,
+  // its consent screen (/app/sharing-request), deletion dialog and "Add it to
+  // your account" (/app/saved-result). Demo state in this browser only;
+  // nothing is sent. Every member-facing word is the application's
+  // (platform/web/app/app/…, platform/api/app/health_permission/ and
+  // platform/api/app/erasure/).
+
+  // ---- Health data sharing: the member's decision, and only the member's ----
+  // The prototype starts where the application is after Veye asked
+  // automatically on a verified sign-up, so there is a request to review.
+  const SHARING_KEY = 'veye_health_sharing';
+  const SHARING_LABELS = { not_requested: 'Not requested', requested: 'Awaiting your decision',
+    granted: 'Shared with the Veye team', declined: 'Declined', revoked: 'Withdrawn' };
+  const SHARING_EXPLANATION = 'Sharing lets the Veye team open your saved results — your Health Number, body ' +
+    'composition, blood markers, questionnaires, moods and food diary — when they are helping you, and lets ' +
+    'Veye Companion use them to answer you about your own progress. Until you share them, nobody at Veye can see ' +
+    'them and Sprout answers without them. Your name, email and the messages you send are not covered by this and ' +
+    'stay visible to the team so they can answer you. You can withdraw sharing at any time, and it stops at once.';
+  const SHARING_RECIPIENT = 'The Veye team — the people who run your Veye account';
+  const SHARING_AUTOMATIC = 'Veye (automatic)';
+  let consentForRequest = false;  // opened from "Review the request" (the application's ?request=<ref>)
+
+  function saveSharing(s) { try { localStorage.setItem(SHARING_KEY, JSON.stringify(s)); } catch (e) {} }
+  function loadSharing() {
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(SHARING_KEY) || 'null'); } catch (e) {}
+    if (!s || !SHARING_LABELS[s.state] || !Array.isArray(s.events)) {
+      const now = new Date().toISOString();
+      s = { state: 'requested', automatic: true, requestedBy: SHARING_AUTOMATIC, requestedAt: now,
+            events: [{ to: 'requested', actor: SHARING_AUTOMATIC, at: now }] };
+      saveSharing(s);
+    }
+    return s;
+  }
+  const sharingShortDate = iso => iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  function describeSharingEvent(ev) {
+    switch (ev.to) {
+      case 'requested': return (ev.actor || 'The Veye team') + ' asked to see your results';
+      case 'granted': return 'You started sharing your results';
+      case 'declined': return 'You chose not to share';
+      case 'revoked': return 'You stopped sharing';
+      default: return ev.to;
+    }
+  }
+  function showSettingsSection(sectionId) {
+    goTo('settings');
+    setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ block: 'start' }), 60);
+  }
+
+  function renderSharingCard() {
+    const card = document.getElementById('privacy');
+    if (!card) return;
+    const s = loadSharing();
+    const asked = s.state === 'requested';
+    const sharing = s.state === 'granted';
+    let html = '<p class="settings-help"><strong>' + SHARING_LABELS[s.state] + '.</strong> ' +
+        (sharing ? 'The Veye team can open your saved results while they are helping you.'
+                 : 'Nobody at Veye can open your saved results.') + '</p>' +
+      '<p class="settings-help">' + escapeHtml(SHARING_EXPLANATION) + '</p>';
+    if (asked && s.requestedBy) {
+      html += '<p class="settings-help">' + escapeHtml(s.requestedBy) + ' asked on ' + sharingShortDate(s.requestedAt) + '.</p>';
+    }
+    html += '<div class="settings-profile-actions">' +
+      (sharing ? '<button class="settings-outline" type="button" data-sharing-revoke>Stop sharing</button>'
+               : '<a class="settings-save" href="#" data-sharing-review>' + (asked ? 'Review the request' : 'Review and decide') +
+                 ' <span aria-hidden="true">&rarr;</span></a>') +
+      '</div>';
+    if (s.events.length) {
+      html += '<p class="settings-help" style="margin-top: 18px;"><strong>What has happened</strong></p>' +
+        '<ul class="settings-session-list">' +
+        s.events.slice().reverse().map(ev => '<li>' + escapeHtml(describeSharingEvent(ev)) + ' &middot; ' + sharingShortDate(ev.at) + '</li>').join('') +
+        '</ul>';
+    }
+    [...card.children].forEach(n => { if (!n.classList.contains('settings-card__head')) n.remove(); });
+    card.insertAdjacentHTML('beforeend', html);
+    card.querySelector('[data-sharing-review]')?.addEventListener('click', e => { e.preventDefault(); openSharingRequest(asked); });
+    card.querySelector('[data-sharing-revoke]')?.addEventListener('click', withdrawSharing);
+  }
+
+  // Withdrawing is one confirmed click, and takes effect at once.
+  function withdrawSharing() {
+    if (!window.confirm('Stop sharing your saved results with the Veye team? It takes effect at once.')) return;
+    const s = loadSharing();
+    if (s.state !== 'granted') return;
+    const now = new Date().toISOString();
+    s.state = 'revoked';
+    s.revokedAt = now;
+    s.events.push({ to: 'revoked', actor: profileIdentity().name, at: now });
+    saveSharing(s);
+    renderSharingCard();
+    flashToast('Sharing has stopped');
+  }
+
+  function openSharingRequest(forRequest) {
+    consentForRequest = !!forRequest;
+    renderConsent();
+    goTo('sharing-request');
+  }
+  function renderConsent() {
+    const s = loadSharing();
+    const who = document.getElementById('consentWhoText');
+    if (who) {
+      const when = s.requestedAt ? new Date(s.requestedAt).toLocaleDateString() : '';
+      who.textContent = s.state !== 'requested' ? SHARING_RECIPIENT + '.'
+        : s.automatic ? 'Veye asked automatically after you verified your email (' + when + '), on behalf of ' + SHARING_RECIPIENT + '.'
+        : (s.requestedBy || 'The Veye team') + ' asked on ' + when + ', on behalf of ' + SHARING_RECIPIENT + '.';
+    }
+    const area = document.getElementById('consentDecision');
+    if (!area) return;
+    // The application: decided = granted/declined opened without a request;
+    // answered = opened for a request that is no longer open.
+    const decided = (s.state === 'granted' || s.state === 'declined') && !consentForRequest;
+    const answered = consentForRequest && s.state !== 'requested';
+    area.outerHTML = (decided || answered)
+      ? '<p class="settings-help settings-note" id="consentDecision" role="status"><strong>' + SHARING_LABELS[s.state] + '.</strong> ' +
+          (s.state === 'granted'
+            ? 'The Veye team can open your saved results while they are helping you. You can stop at any time in Settings.'
+            : 'Nobody at Veye can open your saved results.') +
+          ' <a href="#" data-consent-settings>Change this in Settings</a>.</p>'
+      : '<div class="consent__choices" id="consentDecision" role="group" aria-label="Your choice">' +
+          '<button class="consent__choice" type="button" data-consent="allow">Allow sharing with the VEYE team</button>' +
+          '<button class="consent__choice" type="button" data-consent="deny">Don\'t allow sharing</button></div>';
+    const fresh = document.getElementById('consentDecision');
+    fresh.querySelectorAll('[data-consent]').forEach(b => b.addEventListener('click', () => decideSharing(b.dataset.consent === 'allow')));
+    fresh.querySelector('[data-consent-settings]')?.addEventListener('click', e => { e.preventDefault(); showSettingsSection('privacy'); });
+  }
+  function decideSharing(allow) {
+    const s = loadSharing();
+    const now = new Date().toISOString();
+    s.state = allow ? 'granted' : 'declined';
+    s.decidedAt = now;
+    s.events.push({ to: s.state, actor: profileIdentity().name, at: now });
+    saveSharing(s);
+    renderConsent();
+    flashToast(allow ? 'Sharing is on' : 'Your results stay private');
+  }
+  document.getElementById('consentBack')?.addEventListener('click', () => showSettingsSection('privacy'));
+
+  // ---- Delete my member profile: what goes and what stays, then proof ----
+  const deleteModal = document.getElementById('deleteProfileModal');
+  const deleteForm = document.getElementById('deleteProfileForm');
+  let deleteBusy = false;
+  // Whether the password box is empty is all the prototype reads of it.
+  const deletePasswordGiven = () => (document.getElementById('deletePassword')?.value || '').length > 0;
+  const deleteWordGiven = () => (document.getElementById('deleteConfirm')?.value || '').trim() === 'DELETE';
+  function syncDeleteSubmit() {
+    const submit = document.getElementById('deleteSubmit');
+    if (submit) submit.disabled = deleteBusy || !deletePasswordGiven() || !deleteWordGiven();
+  }
+  function openDeleteDialog() {
+    if (!deleteModal || !deleteForm) return;
+    deleteForm.reset();
+    document.getElementById('deleteError').hidden = true;
+    syncDeleteSubmit();
+    deleteModal.classList.add('open');
+    deleteModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => document.getElementById('deletePassword')?.focus(), 250);
+  }
+  function closeDeleteDialog() {
+    if (deleteBusy || !deleteModal) return;
+    deleteModal.classList.remove('open');
+    deleteModal.setAttribute('aria-hidden', 'true');
+    document.getElementById('deleteProfileOpen')?.focus();
+  }
+  function newDeletionRef() {
+    if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+    const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+  }
+  document.getElementById('deleteProfileOpen')?.addEventListener('click', openDeleteDialog);
+  document.getElementById('deleteProfileClose')?.addEventListener('click', closeDeleteDialog);
+  document.getElementById('deleteKeep')?.addEventListener('click', closeDeleteDialog);
+  deleteModal?.addEventListener('click', e => { if (e.target === deleteModal) closeDeleteDialog(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && deleteModal?.classList.contains('open')) closeDeleteDialog(); });
+  ['deletePassword', 'deleteConfirm'].forEach(fieldId => document.getElementById(fieldId)?.addEventListener('input', syncDeleteSubmit));
+  deleteForm?.addEventListener('submit', e => {
+    e.preventDefault();
+    const error = document.getElementById('deleteError');
+    if (!deleteWordGiven()) { error.textContent = 'Type DELETE to confirm.'; error.hidden = false; return; }
+    if (!deletePasswordGiven()) return;
+    deleteBusy = true;
+    const submit = document.getElementById('deleteSubmit');
+    submit.disabled = true;
+    submit.textContent = 'Deleting…';
+    ['deleteProfileClose', 'deleteKeep'].forEach(btnId => { const b = document.getElementById(btnId); if (b) b.disabled = true; });
+    // Prototype: the member's demo data is this browser's veye_* records —
+    // the same set "Reset demo data" clears — and this tab's veye_* keys.
+    // Only the receipt the next page reads is kept: a reference and dates.
+    const ref = newDeletionRef();
+    const now = new Date().toISOString();
+    Object.keys(localStorage).filter(k => k.startsWith('veye_')).forEach(k => localStorage.removeItem(k));
+    try { Object.keys(sessionStorage).filter(k => k.startsWith('veye_')).forEach(k => sessionStorage.removeItem(k)); } catch (err) {}
+    try { localStorage.setItem('veye_deletion', JSON.stringify({ ref, state: 'erased', requestedAt: now, completedAt: now })); } catch (err) {}
+    VeyeCalculations.storage.navigate('account-deleted.html?ref=' + encodeURIComponent(ref));
+  });
+
+  // ---- Add it to your account: a saved result joins the member's history ----
+  let savedClaimState = { kind: 'none' };
+  function goHealthNumberHistory() {
+    syncSidebarTo('progress');
+    openSubView('quiz-health', 'progress');
+  }
+  function renderSavedClaim() {
+    const card = document.getElementById('savedClaimCard');
+    const SR = window.VeyeSavedResult;
+    if (!card || !SR) return;
+    const st = savedClaimState;
+    if (st.kind === 'none') {
+      card.innerHTML = '<p class="settings-help">There is no saved result waiting in this browser tab. Open the link from the email we sent when you saved it, or take the assessment again.</p>' +
+        '<a class="settings-outline" href="#" data-saved-go="health">Go to your Health Number</a>';
+    } else if (st.kind === 'ready') {
+      card.innerHTML = '<p class="settings-help">A result saved for <b>' + escapeHtml(st.rec.emailMasked) + '</b> on ' +
+          new Date(st.rec.capturedAt).toLocaleDateString() + ' is waiting. Adding it puts it in your Health Number history with the date you took it.</p>' +
+        '<div class="settings-profile-actions"><button class="settings-save" type="button" data-saved-add>Add it to my account</button></div>';
+    } else if (st.kind === 'added') {
+      card.innerHTML = '<p class="settings-help" role="status">Done. The result is now part of your Health Number history.</p>' +
+        '<a class="settings-outline" href="#" data-saved-go="health">See your Health Number history</a>';
+    } else {
+      card.innerHTML = '<p class="settings-help settings-note settings-note--error" role="alert">' + escapeHtml(st.message) + '</p>' +
+        '<a class="settings-outline" href="#" data-saved-go="dashboard">Back to your dashboard</a>';
+    }
+    card.querySelectorAll('[data-saved-go]').forEach(a => a.addEventListener('click', e => {
+      e.preventDefault();
+      if (a.dataset.savedGo === 'health') goHealthNumberHistory(); else goTo('dashboard');
+    }));
+    card.querySelector('[data-saved-add]')?.addEventListener('click', () => {
+      const rec = SR.read();
+      // As in the application: the capability this tab holds proves only the
+      // tab; for another address the emailed link (which confirmed it) is needed.
+      if (rec && !rec.emailVerified && rec.email && rec.email !== SR.normalise(profileIdentity().email)) {
+        savedClaimState = { kind: 'problem', message: 'This result was saved under a different email address. Open the link we emailed to ' + rec.emailMasked + ' to add it to this account.' };
+      } else {
+        // Nothing is written to the history here: onboarding already keeps the
+        // number in this browser, and a claim never writes a second attempt.
+        savedClaimState = SR.claim() ? { kind: 'added' } : { kind: 'problem', message: SR.TEXT.notAvailable };
+      }
+      renderSavedClaim();
+    });
+  }
+  function openSavedResult() {
+    const SR = window.VeyeSavedResult;
+    const rec = SR ? SR.read() : null;
+    savedClaimState = !rec || rec.status === 'claimed' ? { kind: 'none' }
+      : SR.active(rec) ? { kind: 'ready', rec }
+      : { kind: 'problem', message: SR.TEXT.notAvailable };
+    renderSavedClaim();
+    goTo('saved-result');
+  }
+
+  // Arriving from saved-result.html or the onboarding result ("Sign in to add
+  // it" / "Add it to my account"): open Add it to your account, as the
+  // application's /login?next=/app/saved-result does. One-shot and tab-scoped;
+  // the dashboard still reads nothing from its address.
+  (function () {
+    let next = '';
+    try { next = sessionStorage.getItem('veye_open_view') || ''; sessionStorage.removeItem('veye_open_view'); } catch (err) {}
+    if (next === 'saved-result') openSavedResult();
+  })();
 </script>
 
 </body>
