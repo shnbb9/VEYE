@@ -49,7 +49,7 @@ export function ContactUsDialog({ open, supportEmail, supportPhone, requests, on
   return (
     <ModalPortal id="contactUsModal" open={open} onBackdrop={onClose}>
       {open && (
-        <form className="modal-card modal-note contact-card" ref={card} role="dialog" aria-modal="true" aria-labelledby="contactHeading" onSubmit={(event) => void submit(event)} data-testid="contact-dialog">
+        <form className="modal-card modal-note contact-card" ref={card} role="dialog" aria-modal="true" aria-labelledby="contactHeading" method="post" onSubmit={(event) => void submit(event)} data-testid="contact-dialog">
           <button className="modal-close" type="button" aria-label="Close" onClick={onClose}>&times;</button>
           <span className="modal-eyebrow">Contact Us</span>
           <h3 id="contactHeading">Send Veye a message</h3>

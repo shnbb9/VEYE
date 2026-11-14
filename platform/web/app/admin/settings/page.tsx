@@ -138,7 +138,7 @@ function AccountSection() {
         <div className="card__head"><div><h2 className="card__title">Account security</h2><p className="t-support">Your own password and the places this account is signed in.</p></div></div>
         <div className="card__body card__body--flush"><div className="rows">
           {changing ? (
-            <form className="rowitem rowitem--form" onSubmit={(event) => void savePassword(event)} noValidate>
+            <form className="rowitem rowitem--form" method="post" onSubmit={(event) => void savePassword(event)} noValidate>
               <span className="rowitem__icon"><Icon name="lock" size={18} /></span>
               <div className="stack gap-3" style={{ minWidth: 0 }}>
                 <div className="rowitem__title">Change your password</div>
@@ -220,7 +220,7 @@ function ProductSection() {
       const data = await saveSupportSettings(form);
       setSaved(data);
       setForm({ support_email: data.support_email, support_phone: data.support_phone });
-      setNotice("Support details saved. The member dashboard's Contact Us card and the public Help page read them on their next load.");
+      setNotice("Support details saved. The member dashboard's Contact Us card reads them on its next load, and account emails and request replies carry them from now on.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The settings could not be saved.");
     } finally { setBusy(false); }
@@ -228,8 +228,13 @@ function ProductSection() {
 
   return (
     <div className="hgrid" data-testid="settings-product">
-      <form className="card" onSubmit={(event) => void save(event)}>
-        <div className="card__head"><div><h2 className="card__title">Member support</h2><p className="t-support">The contact details shown on the member dashboard (Contact Us) and offered on the Help page.</p></div></div>
+      <form className="card" method="post" onSubmit={(event) => void save(event)}>
+        {/* Only the places this value actually reaches. It said "and offered on
+            the Help page", which it is not: the public Help page carries its own
+            approved address in static copy and nothing here changes it. An
+            administrator who changed this and believed the public page had
+            followed would have been sending people to an unwatched mailbox. */}
+        <div className="card__head"><div><h2 className="card__title">Member support</h2><p className="t-support">The address on the member dashboard&rsquo;s Contact Us card, and the one Veye&rsquo;s account emails and request replies tell members to write to. The public Help page is not changed from here.</p></div></div>
         <div className="card__body stack gap-5">
           {error && <p className="errorbar">{error}</p>}
           {!saved && !error && <p className="loading-row">Loading…</p>}
@@ -474,7 +479,7 @@ function AdministratorsSection() {
                   <button className="btn btn--ghost" type="button" onClick={() => setInviting(false)}>Cancel</button>
                   {formError && <span className="field__error" style={{ marginLeft: "auto" }}>{formError}</span>}
                 </>}>
-          <form id="inviteAdminForm" className="stack gap-4" onSubmit={(event) => void invite(event)}>
+          <form id="inviteAdminForm" className="stack gap-4" method="post" onSubmit={(event) => void invite(event)}>
             <Field id="invFirst" label="First name">
               <input className="input" id="invFirst" required maxLength={120} value={form.first_name}
                      onChange={(e) => { const v = e.target.value; setForm((c) => ({ ...c, first_name: v })); }} data-testid="invite-first-name" />

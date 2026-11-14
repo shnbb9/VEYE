@@ -33,6 +33,11 @@ async function inviteAndActivate(page: Page, browser: Browser) {
   await theirs.locator('input[name="confirm"]').fill(account.password);
   await theirs.getByTestId("accept-submit").click();
   await expect(theirs.getByTestId("invitation-accepted")).toBeVisible();
+  // The screen sends them on with ?flash=invited, and the console sign-in
+  // dropped it: the last step of being provisioned said nothing at all.
+  await theirs.getByRole("link", { name: "Go to the console sign-in" }).click();
+  await expect(theirs).toHaveURL(/\/admin\/login\?flash=invited/);
+  await expect(theirs.locator(".notice"), "the console sign-in did not confirm the account was ready").toContainText(/administrator account is ready/i);
   await adminSignIn(theirs, account.email, account.password);
   await expectAdminHome(theirs);
   return { account, page: theirs, context };

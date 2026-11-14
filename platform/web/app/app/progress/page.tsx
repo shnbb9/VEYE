@@ -202,7 +202,10 @@ function HealthNumberCard({ state }: { state: Loaded<HealthNumberHistory> }) {
   return (
     <aside className={`hn-card hn-card--${bucket}`}>
       <span className={`module-upd${taken ? "" : " module-upd--none"}`}>{chip}</span>
-      <h3 className="hn-card__label">Your Health Number</h3>
+      {/* h2: the page's only h1 is "My Progress" and the module tiles use no
+          headings at all, so this was an h3 under an h1. The styling is on the
+          class, not the tag. */}
+      <h2 className="hn-card__label">Your Health Number</h2>
       <div className="hn-card__row">
         <span className="hn-card__num">{taken ? displayHealthNumber(latest.displayed_score) : "—"}</span>
         <span className="hn-card__status">{taken ? latest.status : state.error ? "Could not load" : "Not taken yet"}</span>

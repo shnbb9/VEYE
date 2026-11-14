@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.admin.audit import record_audit
@@ -87,11 +87,36 @@ def conversations(filter: str = Query(default="needs_review", pattern="^(needs_r
         query = query.filter(CompanionConversation.flagged.is_(True), CompanionConversation.reviewed_at.is_(None))
     elif filter == "reviewed":
         query = query.filter(CompanionConversation.reviewed_at.is_not(None))
-    rows = [summary_out(db, c) for c in query.order_by(CompanionConversation.last_message_at.desc()).limit(200).all()]
+    # The search runs in the query, not over the page the query returned.
+    #
+    # It used to filter the Python list AFTER `.limit(200)`, over `member_name`
+    # and `first_message` — and `first_message` is the first 160 characters of
+    # the first member message. So a box labelled "Search members and messages"
+    # read one truncated message per conversation, within the most recent 200,
+    # and answered "no conversations" for anything older or anything said later
+    # in a thread. A member's conversation was unfindable and the screen said it
+    # did not exist.
     needle = q.strip().lower()
     if needle:
-        rows = [r for r in rows if needle in r.member_name.lower() or needle in r.first_message.lower()]
-    return rows
+        # autoescape, so a typed "%" or "_" is those characters and not a LIKE
+        # wildcard that would match every conversation.
+        def holds(column):
+            return func.lower(column).contains(needle, autoescape=True)
+
+        # UserAccount.display_name is a Python property over first/last, so the
+        # parts are matched here (and the pair, for a full name typed in full).
+        # Member.display_name is a column.
+        named: set[UUID] = set(db.scalars(
+            select(UserAccount.member_id).where(
+                UserAccount.member_id.is_not(None),
+                or_(holds(UserAccount.first_name), holds(UserAccount.last_name),
+                    holds(UserAccount.first_name + " " + UserAccount.last_name),
+                    holds(UserAccount.email)),
+            )).all())
+        named |= set(db.scalars(select(Member.id).where(holds(Member.display_name))).all())
+        spoken = select(CompanionMessage.conversation_id).where(holds(CompanionMessage.content))
+        query = query.filter(or_(CompanionConversation.member_id.in_(named), CompanionConversation.id.in_(spoken)))
+    return [summary_out(db, c) for c in query.order_by(CompanionConversation.last_message_at.desc()).limit(200).all()]
 
 
 def _decision_out(decision: CompanionPolicyDecision | None) -> PolicyDecisionOut | None:

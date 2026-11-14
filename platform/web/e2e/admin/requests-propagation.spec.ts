@@ -152,6 +152,15 @@ test.describe.serial("Requests & Inbox and content propagation", () => {
     await open(page, "/help");
     await expect(page.locator('.faq__item[data-key="what_is_metabolism"]')).toContainText(`(E2E ${stamp})`);
 
+    // ...and does NOT take the support address from Product settings. The two
+    // addresses are a deliberate client split, carried from the approved
+    // prototype (login + help = help@veye.co; dashboard + terms + privacy =
+    // contact@veye.co). The console used to tell the administrator that saving
+    // here reached "the public Help page", which would have sent members to an
+    // address nobody had been told was live.
+    await expect(page.locator(".help-contact")).toContainText("help@veye.co");
+    await expect(page.locator(".help-contact")).not.toContainText(`support.${stamp}@veye.test`);
+
     // Restore the support address and the FAQ wording so the seed stays recognisable.
     await open(page, "/admin/settings?section=product");
     await page.getByTestId("support-email-input").fill(original);

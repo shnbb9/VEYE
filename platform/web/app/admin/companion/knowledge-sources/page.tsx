@@ -75,7 +75,7 @@ export default function KnowledgeSourcesPage() {
       {notice && <div className="notice notice--quiet" style={{ marginBottom: "var(--s-4)" }}><Icon name="info" size={18} /><div>{notice}</div></div>}
 
       {editing && options && (
-        <form className="card" style={{ marginBottom: "var(--s-5)" }} onSubmit={save}>
+        <form className="card" style={{ marginBottom: "var(--s-5)" }} method="post" onSubmit={save}>
           <div className="card__head"><div><h2 className="card__title">{editing.id ? "View / edit source" : "Add source"}</h2>
             <p className="t-support">Metadata is saved to PostgreSQL. Attaching a document stores the file in the {storage} object store and ingests it for retrieval.</p></div></div>
           <div className="card__body inline-form">

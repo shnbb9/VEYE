@@ -250,3 +250,7 @@
 .pwd__helplink { display: block; text-align: center; margin-top: 12px; color: var(--green-900); }
 .pwd__proto { background: #FDF6E3; border: 1px solid #E4D9B8; border-radius: 10px;
   padding: 11px 14px; font-size: 13.5px; line-height: 1.5; color: #6B5D2E; margin: 0 0 4px; }
+/* A reset link that did not go out. The screen computed this case and then
+   rendered it in the same neutral cream as "delivered", so the one note that
+   needed reading looked like the one that did not. */
+.pwd__proto--warn { background: #FBEDEA; border-color: #E6C3BB; color: #B3402F; }

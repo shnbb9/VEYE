@@ -10,7 +10,7 @@ import {
   type HealthAssessmentHistory,
   type HealthAssessmentHistoryItem,
 } from "@/lib/api";
-import { formatUpd } from "@/lib/member-format";
+import { formatUpd, scrollToTop } from "@/lib/member-format";
 import { BackChevron } from "@/components/member/nav-icons";
 import { usePublishedCopy } from "@/components/member/published-copy";
 
@@ -71,7 +71,7 @@ export default function HealthAssessmentPage() {
   function retake() {
     setAnswers({});
     setMode("form");
-    window.scrollTo(0, 0);
+    scrollToTop();
   }
 
   async function submit() {
@@ -81,7 +81,7 @@ export default function HealthAssessmentPage() {
       const saved = await calculateHealthAssessment(answers);
       setHistory((current) => ({ member_id: saved.member_id, latest: saved, history: [saved, ...(current?.history ?? [])] }));
       setMode("result");
-      window.scrollTo(0, 0);
+      scrollToTop();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We could not save this assessment.");
     } finally { setSaving(false); }

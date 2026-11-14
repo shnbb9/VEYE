@@ -13,6 +13,26 @@ from app.db.base import Base
 
 GROUPS = ("help_faq", "member_copy")
 GROUP_LABELS = {"help_faq": "Help / FAQ", "member_copy": "Member educational copy"}
+
+# The Help page's own category chips, in the order they appear there
+# (web/content/public/help.html). A Help / FAQ entry must name one of them.
+#
+# The category was free text with the five values offered only as a hint, and
+# the public page files anything it does not recognise under "About Veye"
+# without a word to anyone: "Technical issues" instead of "Technical Issues"
+# saved, published and read back correctly in the console while the answer sat
+# under the wrong chip on the Help page. The chips themselves are fixed markup,
+# so a sixth category would not have been reachable at all.
+HELP_FAQ_CATEGORIES = (
+    "About Veye",
+    "Subscription and My Account",
+    "Diet and Nutrition Terminology",
+    "Using the Platform",
+    "Technical Issues",
+)
+# Member copy is not shown in a filtered list, so its category stays a free
+# optional grouping.
+GROUP_CATEGORIES: dict[str, tuple[str, ...]] = {"help_faq": HELP_FAQ_CATEGORIES, "member_copy": ()}
 STATUS_DRAFT = "Draft"
 STATUS_PUBLISHED = "Published"
 STATUS_ARCHIVED = "Archived"

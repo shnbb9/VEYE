@@ -31,7 +31,9 @@ body { margin: 0; }
 /* The approved navigation's five desktop links need more than a tablet-width
    row. Reuse its existing compact-menu treatment before that row would wrap. */
 @media (min-width:761px) and (max-width:920px) {
-  .public-site .nav__links, .public-site .nav__cta span { display:none; }
+  /* Hide the label, keep the arrow glyph: `.nav__cta span` hid both and left
+     an empty 34x16 pill. See the matching note in marketing-css/website.css. */
+  .public-site .nav__links, .public-site .nav__cta > span:not(.nav__cta-box) { display:none; }
   .public-site .nav__burger { display:flex; }
   .public-site .nav__links {
     position:fixed; top:66px; left:0; right:0; background:var(--w-bg);
@@ -41,4 +43,14 @@ body { margin: 0; }
   }
   .public-site .nav__links.open { transform:translateY(0); display:flex; }
   .public-site .nav__links li { padding:12px 0; border-bottom:1px solid rgba(0,0,0,.05); }
+}
+
+/* The <noscript> note in the root layout. It is the only thing a visitor sees
+   if the bundle never arrives, so it carries its own colours rather than
+   relying on a stylesheet one of the shells would have loaded. */
+.noscript-note {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 0; padding: 18px 24px;
+  background: #FBEDEA; border-bottom: 1px solid #E6C3BB; color: #7A2E22;
+  font-family: var(--f-body, "Teachers", sans-serif); font-size: 15px; line-height: 1.5;
 }

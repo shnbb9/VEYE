@@ -255,8 +255,8 @@ def test_qa_cleanup_removes_only_stamped_synthetic_members(admin_client):
     before = admin_client.get("/api/v1/admin/overview").json()["members_total"]
 
     # rows the Playwright console spec leaves behind, plus a hand-written one that must survive
-    assert admin_client.post("/api/v1/admin/content/entries", json={"group": "help_faq", "key": "e2e_entry_mubb7gjx", "title": "Who is Sprout?", "body": "x"}).status_code == 201
-    assert admin_client.post("/api/v1/admin/content/entries", json={"group": "help_faq", "key": "real_question", "title": "Real", "body": "x"}).status_code == 201
+    assert admin_client.post("/api/v1/admin/content/entries", json={"group": "help_faq", "key": "e2e_entry_mubb7gjx", "category": "About Veye", "title": "Who is Sprout?", "body": "x"}).status_code == 201
+    assert admin_client.post("/api/v1/admin/content/entries", json={"group": "help_faq", "key": "real_question", "category": "About Veye", "title": "Real", "body": "x"}).status_code == 201
     assert admin_client.post("/api/v1/admin/care/items", json={"kind": "fitness", "title": "E2E mobility warm-up mubb7gjx", "content_type": "video", "youtube_url": "https://youtu.be/XLlHJ5-vHWw"}).status_code == 201
 
     cleaned = admin_client.post("/api/v1/admin/qa/cleanup-synthetic-members", json={"prefixes": ["e2e", "guided"]})

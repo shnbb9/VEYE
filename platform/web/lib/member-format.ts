@@ -27,3 +27,16 @@ export function displayHealthNumber(value: number): string {
 export function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
+
+/** Back to the top of whatever is actually scrolling.
+ *
+ *  The member shell scrolls `.main` (`overflow-y: auto`), not the document, so
+ *  `window.scrollTo(0, 0)` is a no-op inside /app: every Progress screen called
+ *  it after saving and the member was left looking at the Submit button they
+ *  had just pressed, with the result they had asked for above the fold. The
+ *  window is scrolled too, for the screens that live outside the shell. */
+export function scrollToTop(): void {
+  if (typeof document === "undefined") return;
+  document.querySelector<HTMLElement>(".main")?.scrollTo({ top: 0 });
+  window.scrollTo(0, 0);
+}

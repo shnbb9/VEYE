@@ -61,7 +61,9 @@ function AcceptInvitation() {
 
   return (
     <AuthFrame photo="login">
-      <form className="auth__form" onSubmit={submit} noValidate data-testid="accept-invitation">
+      {/* method="post": an unhydrated submit of a method-less form is a GET,
+          which put the chosen console password in the URL. */}
+      <form className="auth__form" method="post" onSubmit={submit} noValidate data-testid="accept-invitation">
         <h1 className="auth__title">Set your console password</h1>
         {invitation ? (
           <p className="auth__subtitle" data-testid="invitation-for">

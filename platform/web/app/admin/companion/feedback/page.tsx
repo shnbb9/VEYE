@@ -30,9 +30,11 @@ export default function FeedbackPage() {
       <div className="card">
         <div className="card__head">
           <div><h2 className="card__title">Member feedback</h2></div>
-          <div className="modeswitch">
+          {/* aria-selected is ignored on a plain button: it needs a tab role,
+              as Requests has, or the active filter reaches the eye only. */}
+          <div className="modeswitch" role="tablist" aria-label="Which feedback">
             {(["unreviewed", "reviewed", "all"] as Filter[]).map((key) => (
-              <button key={key} className="modeswitch__btn" type="button" aria-selected={filter === key} onClick={() => setFilter(key)}>{key[0].toUpperCase() + key.slice(1)}</button>
+              <button key={key} className="modeswitch__btn" type="button" role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}>{key[0].toUpperCase() + key.slice(1)}</button>
             ))}
           </div>
         </div>

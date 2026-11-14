@@ -53,8 +53,10 @@ function ConfirmEmail() {
             Signing in again keeps the account safe after its address changes — use the new address with the password you already had.
           </p>
         )}
+        {/* Only the successful path carries the flag: a link that did not work
+            changed nothing, and the old address still signs in. */}
         {state !== "working" && (
-          <Link className="btn btn--primary btn--mt" href="/login?flash=email-changed">Go to sign in</Link>
+          <Link className="btn btn--primary btn--mt" href={state === "done" ? "/login?flash=email-changed" : "/login"}>Go to sign in</Link>
         )}
       </div>
     </AuthFrame>

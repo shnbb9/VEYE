@@ -98,6 +98,12 @@ jobs:
         run: node platform/web/tests/icon-names.test.js
       - name: hidden attribute is not defeated by CSS
         run: node platform/web/tests/hidden-attribute.test.js
+      - name: every form declares a method
+        run: node platform/web/tests/form-method.test.js
+      - name: one Help / FAQ category vocabulary
+        run: node platform/web/tests/help-categories.test.js
+      - name: aria-selected has a role that means it
+        run: node platform/web/tests/aria-roles.test.js
 
   e2e:
     name: Playwright

@@ -156,7 +156,7 @@ export default function SettingsPage() {
       <div className="settings-grid">
         <section className="settings-card settings-card--profile fade-in d1">
           <div className="settings-card__head"><div><span className="settings-kicker">Profile</span><h2>Your details</h2></div><span className="settings-card__mark">01</span></div>
-          <form className="settings-profile" data-testid="settings-profile" onSubmit={(event) => void saveProfile(event)}>
+          <form className="settings-profile" data-testid="settings-profile" method="post" onSubmit={(event) => void saveProfile(event)}>
             <div className="settings-photo-wrap">
               <MemberAvatar account={account} className="settings-photo" size="large" testId="settings-photo" />
               <input ref={fileRef} id="settingsPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden
@@ -430,7 +430,7 @@ function SecuritySection({ account, onEmailChangeRequested }: { account: Account
 
       {/* Password */}
       {open === "password" ? (
-        <form className="settings-fields settings-fields--security" onSubmit={(event) => void submitPassword(event)} noValidate>
+        <form className="settings-fields settings-fields--security" method="post" onSubmit={(event) => void submitPassword(event)} noValidate>
           <label>Current password
             <input type="password" autoComplete="current-password" required value={passwords.current}
                    onChange={(e) => { const v = e.target.value; setPasswords((c) => ({ ...c, current: v })); }} data-testid="password-current" /></label>
@@ -470,7 +470,7 @@ function SecuritySection({ account, onEmailChangeRequested }: { account: Account
           </button>
         </p>
       ) : open === "email" ? (
-        <form className="settings-fields settings-fields--security" onSubmit={(event) => void submitEmail(event)} noValidate>
+        <form className="settings-fields settings-fields--security" method="post" onSubmit={(event) => void submitEmail(event)} noValidate>
           <label>New email address
             <input type="email" required value={emailForm.new_email}
                    onChange={(e) => { const v = e.target.value; setEmailForm((c) => ({ ...c, new_email: v })); }} data-testid="email-new" /></label>

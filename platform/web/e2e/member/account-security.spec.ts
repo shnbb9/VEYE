@@ -130,6 +130,15 @@ test.describe("Member account security", () => {
     await page.goto(toPath(linkFrom(mail.text, "confirm-email")));
     // Confirming ends every session: the identity on the account moved.
     await expect(page.getByTestId("confirm-email-message")).toContainText(/your email address is now/i);
+
+    // The screen sends the member on with ?flash=email-changed, and the sign-in
+    // screen dropped it: they arrived at a silent form, prefilled from
+    // localStorage with the address that had just stopped working.
+    await page.getByRole("link", { name: "Go to sign in" }).click();
+    await expect(page).toHaveURL(/\/login\?flash=email-changed/);
+    await expect(page.locator(".auth__notice"), "the sign-in screen said nothing about the change").toContainText(/email address has been changed/i);
+    await expect(page.locator('input[name="email"]'), "the sign-in screen offered back the old address").toHaveValue("");
+
     await memberSignIn(page, member.email, member.password);
     await expect(page.locator(".auth__error, .field__error").first()).toBeVisible();
     await memberSignIn(page, moved, member.password);
@@ -156,6 +165,12 @@ test.describe("Member account security", () => {
     // The cancelled link no longer does anything.
     await page.goto(toPath(linkFrom(mail.text, "confirm-email")));
     await expect(page.getByTestId("confirm-email-message")).toContainText(/not valid|already been used|no pending/i);
+    // A link that did not work changed nothing, so this path must NOT claim the
+    // address moved — it carried ?flash=email-changed for both outcomes.
+    await page.getByRole("link", { name: "Go to sign in" }).click();
+    await expect(page).toHaveURL(/\/login(\?|$)/);
+    await expect(page).not.toHaveURL(/flash=email-changed/);
+    await expect(page.locator(".auth__notice")).toHaveCount(0);
     await open(page, "/app/settings");
     await expect(page.getByTestId("settings-email")).toHaveValue(member.email);
   });

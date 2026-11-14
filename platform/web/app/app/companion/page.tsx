@@ -336,7 +336,7 @@ function CompanionView() {
             ))}
           </div>
 
-          <form className="chat-input" id="chatForm" onSubmit={submit}>
+          <form className="chat-input" id="chatForm" method="post" onSubmit={submit}>
             <div ref={menuRef} style={{ display: "contents" }}>
               <button type="button" className="chat-attach" aria-label="Open quick actions" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="4" x2="10" y2="16" /><line x1="4" y1="10" x2="16" y2="10" /></svg>

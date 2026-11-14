@@ -9,12 +9,22 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.admin.audit import record_audit
 from app.auth.principal import CurrentPrincipal, require_admin
-from app.content.models import GROUP_LABELS, GROUPS, STATUS_ARCHIVED, STATUS_DRAFT, STATUS_PUBLISHED, STATUSES, ContentEntry
+from app.content.models import (
+    GROUP_CATEGORIES,
+    GROUP_LABELS,
+    GROUPS,
+    HELP_FAQ_CATEGORIES,
+    STATUS_ARCHIVED,
+    STATUS_DRAFT,
+    STATUS_PUBLISHED,
+    STATUSES,
+    ContentEntry,
+)
 from app.db.session import get_db
 
 admin_router = APIRouter(prefix="/api/v1/admin/content", tags=["admin-content"], dependencies=[Depends(require_admin)])
@@ -32,6 +42,21 @@ class ContentEntryIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body: str = Field(default="", max_length=20000)
     display_order: int = Field(default=0, ge=0, le=10000)
+
+    @model_validator(mode="after")
+    def _category_must_be_one_of_the_help_chips(self) -> ContentEntryIn:
+        """A Help / FAQ answer has to belong to a chip on the Help page.
+
+        The page has no "uncategorised" chip and files anything it does not
+        recognise under "About Veye" silently, so neither a typo nor a blank
+        may be stored for this group.
+        """
+        if self.group == "help_faq" and self.category not in HELP_FAQ_CATEGORIES:
+            raise ValueError(
+                "A Help / FAQ entry must use one of the Help page's categories: "
+                + ", ".join(HELP_FAQ_CATEGORIES)
+            )
+        return self
 
 
 class ContentEntryOut(BaseModel):
@@ -58,6 +83,9 @@ class ContentGroupSummary(BaseModel):
     published: int
     draft: int
     archived: int
+    # The categories this group accepts, so the console offers them as a choice
+    # rather than repeating the list in a screen as a hint beside a text box.
+    categories: list[str]
 
 
 class PublishedEntry(BaseModel):
@@ -92,6 +120,7 @@ def summary(db: Session = Depends(get_db)) -> list[ContentGroupSummary]:
         published=sum(1 for r in rows if r.group == group and r.status == STATUS_PUBLISHED),
         draft=sum(1 for r in rows if r.group == group and r.status == STATUS_DRAFT),
         archived=sum(1 for r in rows if r.group == group and r.status == STATUS_ARCHIVED),
+        categories=list(GROUP_CATEGORIES.get(group, ())),
     ) for group in GROUPS]
 
 

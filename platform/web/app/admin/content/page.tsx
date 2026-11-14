@@ -51,6 +51,8 @@ function Content() {
   useEffect(() => { load(); }, [load]);
 
   const summaryFor = summary?.find((s) => s.group === group);
+  // The API's own vocabulary for Help / FAQ, so the console cannot drift from it.
+  const helpCategories = summary?.find((s) => s.group === "help_faq")?.categories ?? [];
   const shown = (entries ?? []).filter((e) => !filter.trim() || `${e.title} ${e.category ?? ""} ${e.key}`.toLowerCase().includes(filter.trim().toLowerCase()));
   const categories = Array.from(new Set(shown.map((e) => e.category ?? "")));
 
@@ -160,7 +162,22 @@ function Content() {
             <Field id="ce-group" label="Group"><select className="select" id="ce-group" value={editing.form.group} onChange={(e) => setForm({ group: e.target.value as ContentGroup })}>{CONTENT_GROUPS.map((g) => <option key={g} value={g}>{CONTENT_GROUP_LABELS[g]}</option>)}</select></Field>
             <Field id="ce-title" label={editing.form.group === "help_faq" ? "Question" : "Title"}><input className="input" id="ce-title" value={editing.form.title} onChange={(e) => setForm({ title: e.target.value })} /></Field>
             <Field id="ce-key" label="Key" hint="Stable identifier the product reads; letters, numbers and underscores."><input className="input mono" id="ce-key" value={editing.form.key} onChange={(e) => setForm({ key: e.target.value })} disabled={!!editing.entry} /></Field>
-            <Field id="ce-category" label="Category" hint={editing.form.group === "help_faq" ? "About Veye · Subscription and My Account · Diet and Nutrition Terminology · Using the Platform · Technical Issues" : "Optional grouping."}><input className="input" id="ce-category" value={editing.form.category ?? ""} onChange={(e) => setForm({ category: e.target.value })} /></Field>
+            {/* A choice, not a hint beside a text box. The five values were only
+                suggested, and the Help page files anything it does not
+                recognise under "About Veye" in silence — so a typed
+                "Technical issues" saved and published cleanly here while the
+                answer appeared under the wrong chip. The list comes from the
+                API, which now refuses the rest. */}
+            {helpCategories.length > 0 && editing.form.group === "help_faq" ? (
+              <Field id="ce-category" label="Category" hint="The chip this answer appears under on the Help page.">
+                <select className="select" id="ce-category" value={editing.form.category ?? ""} onChange={(e) => setForm({ category: e.target.value })} data-testid="content-category">
+                  <option value="" disabled>Choose a category…</option>
+                  {helpCategories.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </Field>
+            ) : (
+              <Field id="ce-category" label="Category" hint="Optional grouping."><input className="input" id="ce-category" value={editing.form.category ?? ""} onChange={(e) => setForm({ category: e.target.value })} data-testid="content-category" /></Field>
+            )}
             <Field id="ce-body" label={editing.form.group === "help_faq" ? "Answer" : "Copy"}><textarea className="textarea" id="ce-body" style={{ minHeight: 180 }} value={editing.form.body} onChange={(e) => setForm({ body: e.target.value })} /></Field>
             <Field id="ce-order" label="Display order"><input className="input" id="ce-order" type="number" min={0} value={editing.form.display_order} onChange={(e) => setForm({ display_order: Number(e.target.value) || 0 })} style={{ maxWidth: 120 }} /></Field>
           </div>

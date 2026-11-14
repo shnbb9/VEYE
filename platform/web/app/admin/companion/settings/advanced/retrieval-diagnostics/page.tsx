@@ -40,7 +40,7 @@ export default function RetrievalDiagnosticsPage() {
               <dl className="kv" style={{ marginTop: "var(--s-5)" }}><dt>Sources by status</dt><dd><Counts counts={data.index.sources_by_status} /></dd></dl>
             </div>
           </div>
-          <form className="card" onSubmit={run}>
+          <form className="card" method="post" onSubmit={run}>
             <div className="card__head"><div><h2 className="card__title">Run a diagnostic query</h2><p className="t-support">Searches only Active, approved sources — the same path Sprout uses.</p></div></div>
             <div className="card__body row gap-3 wrap">
               <input className="input" style={{ flex: "1 1 320px" }} placeholder="e.g. what does a lower Health Number mean" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Diagnostic query" />

@@ -66,9 +66,13 @@ function Conversations() {
               <label className="sr-only" htmlFor="cvSearch">Search conversations</label>
               <input className="search__input" id="cvSearch" type="search" placeholder="Search members and messages" value={q} onChange={(event) => setQ(event.target.value)} />
             </div>
-            <div className="modeswitch" style={{ width: "100%", justifyContent: "space-between" }}>
+            {/* aria-selected only means anything on a tab (or option/row/
+                gridcell): on a plain button it is ignored, so which filter was
+                active reached the eye and not assistive technology. Requests
+                already does it this way. */}
+            <div className="modeswitch" role="tablist" aria-label="Which conversations" style={{ width: "100%", justifyContent: "space-between" }}>
               {FILTERS.map((item) => (
-                <button key={item.key} className="modeswitch__btn" type="button" aria-selected={filter === item.key} onClick={() => setFilter(item.key)}>{item.label}</button>
+                <button key={item.key} className="modeswitch__btn" type="button" role="tab" aria-selected={filter === item.key} onClick={() => setFilter(item.key)}>{item.label}</button>
               ))}
             </div>
           </div>

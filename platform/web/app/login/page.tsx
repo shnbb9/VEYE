@@ -30,10 +30,13 @@ function Login() {
 
   useEffect(() => {
     try {
+      // After an email change the remembered address is precisely the one that
+      // has stopped working, so it is cleared rather than offered back.
+      if (flash === "email-changed") { localStorage.removeItem("veye_last_email"); return; }
       const saved = localStorage.getItem("veye_last_email");
       if (saved) setEmail(saved);
     } catch { /* storage unavailable */ }
-  }, []);
+  }, [flash]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -57,12 +60,17 @@ function Login() {
 
   return (
     <AuthFrame photo="login">
-      <form className="auth__form" onSubmit={submit} noValidate>
+      {/* method="post" is not for the handler — which preventDefaults — but for
+          the submit that happens BEFORE it is attached. A form with no method
+          submits as a GET, and this one put the member's email and password in
+          the query string, the address bar and the browser's history. */}
+      <form className="auth__form" method="post" onSubmit={submit} noValidate>
         <h1 className="auth__title">My Account</h1>
         <p className="auth__subtitle">Nice to see you!</p>
         {flash === "signed-out" && <p className="auth__notice">You are signed out of your Veye account.</p>}
         {flash === "reset" && <p className="auth__notice">Your password has been changed. Sign in with your new password.</p>}
         {flash === "verified" && <p className="auth__notice">Your email address is verified. Sign in to continue.</p>}
+        {flash === "email-changed" && <p className="auth__notice">Your email address has been changed. Sign in with the new address and the password you already had.</p>}
 
         <div className="auth__fields">
           <div className="field">
@@ -198,7 +206,7 @@ function PasswordRecovery({ initialEmail, onClose }: { initialEmail: string; onC
       {step === "done" && (
         <div className="pwd__step">
           <p className="pwd__sub">{done.message}</p>
-          {done.note && <p className={`pwd__proto${done.warn ? "" : ""}`}>{done.note}</p>}
+          {done.note && <p className={`pwd__proto${done.warn ? " pwd__proto--warn" : ""}`} role={done.warn ? "alert" : undefined}>{done.note}</p>}
           <button className="btn btn--primary pwd__go" type="button" onClick={onClose}>Back to sign in</button>
         </div>
       )}

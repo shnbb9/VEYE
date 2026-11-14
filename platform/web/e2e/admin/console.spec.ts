@@ -113,7 +113,11 @@ test.describe("Admin console", () => {
     await page.getByRole("button", { name: "New entry" }).click();
     await page.getByLabel("Question").fill("Who is Sprout?");
     await page.getByLabel("Key").fill(key);
-    await page.getByLabel("Category").fill("Using the Platform");
+    // A choice, not free text: the five values were only a hint beside a text
+    // box, and the Help page files anything it does not recognise under
+    // "About Veye" in silence.
+    await page.getByLabel("Category").selectOption("Using the Platform");
+    await expect(page.getByTestId("content-category")).toHaveJSProperty("tagName", "SELECT");
     await page.getByLabel("Answer").fill("Sprout is the Veye Companion.");
     await page.getByTestId("content-save").click();
     const row = page.locator("tr", { hasText: key });

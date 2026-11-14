@@ -10,7 +10,7 @@ import {
   type SimpleQuizHistory,
   type SimpleQuizHistoryItem,
 } from "@/lib/api";
-import { formatUpd } from "@/lib/member-format";
+import { formatUpd, scrollToTop } from "@/lib/member-format";
 import { BackChevron } from "@/components/member/nav-icons";
 import { usePublishedCopy } from "@/components/member/published-copy";
 
@@ -49,7 +49,7 @@ export default function SimpleQuizPage() {
   function retake() {
     setAnswers({});
     setMode("form");
-    window.scrollTo(0, 0);
+    scrollToTop();
   }
 
   async function submit() {
@@ -59,7 +59,7 @@ export default function SimpleQuizPage() {
       const saved = await calculateSimpleQuiz(answers);
       setHistory((current) => ({ member_id: saved.member_id, latest: saved, history: [saved, ...(current?.history ?? [])] }));
       setMode("result");
-      window.scrollTo(0, 0);
+      scrollToTop();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We could not save this quiz.");
     } finally { setSaving(false); }

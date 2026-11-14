@@ -101,8 +101,13 @@ function AdminLogin() {
         </section>
 
         <section className="auth__panel">
+          {/* method="post" is not for the handler — which preventDefaults — but
+              for the submit that happens BEFORE it is attached. A form with no
+              method submits as a GET, and this one put the administrator's
+              email and password in the query string, the address bar and the
+              browser's history. */}
           {mode === "sign-in" && (
-            <form className="auth__form auth-seq" id="signin" onSubmit={submit} noValidate>
+            <form className="auth__form auth-seq" id="signin" method="post" onSubmit={submit} noValidate>
               <div className="auth__brand auth-seq__step" style={{ "--i": 0 } as React.CSSProperties}>
                 <img src="/admin/veye-logo.png" alt="Veye" width={96} height={30} decoding="async" />
                 <span className="auth__kicker">Admin Console</span>
@@ -113,6 +118,7 @@ function AdminLogin() {
                 <p className="auth__lede">Welcome back. Use the email address your invitation was sent to.</p>
                 {flash === "reset" && <p className="notice notice--quiet" style={{ marginTop: 12 }}>Your password has been changed. Sign in with your new password.</p>}
                 {flash === "signed-out" && <p className="notice notice--quiet" style={{ marginTop: 12 }}>You are signed out of the admin console.</p>}
+                {flash === "invited" && <p className="notice notice--quiet" style={{ marginTop: 12 }}>Your administrator account is ready. Sign in with the password you just chose.</p>}
               </div>
 
               <div className="auth__fields auth-seq__step" style={{ "--i": 2 } as React.CSSProperties}>
@@ -152,7 +158,7 @@ function AdminLogin() {
           )}
 
           {mode === "reset" && (
-            <form className="auth__form" onSubmit={sendReset} noValidate>
+            <form className="auth__form" method="post" onSubmit={sendReset} noValidate>
               <div className="auth__brand">
                 <img src="/admin/veye-logo.png" alt="Veye" width={96} height={30} decoding="async" />
                 <span className="auth__kicker">Admin Console</span>

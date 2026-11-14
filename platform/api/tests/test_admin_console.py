@@ -151,13 +151,31 @@ def test_content_entries_lifecycle_and_public_read(admin_client, client):
     entry = created.json()
     assert entry["status"] == "Draft"
     assert len(client.get("/api/v1/content/help_faq").json()) == 22
-    duplicate = admin_client.post("/api/v1/admin/content/entries", json={"group": "help_faq", "key": "what_is_sprout", "title": "dup"})
+    duplicate = admin_client.post("/api/v1/admin/content/entries",
+                                  json={"group": "help_faq", "key": "what_is_sprout", "category": "Using the Platform", "title": "dup"})
     assert duplicate.status_code == 409
+    # A Help / FAQ answer must name one of the Help page's five chips. The
+    # category was free text with those five offered only as a hint, and the
+    # page files anything it does not recognise under "About Veye" in silence,
+    # so a typed "Technical issues" published cleanly under the wrong chip.
+    for bad in ({"category": "Technical issues"}, {"category": "Billing"}, {"category": ""}, {}):
+        refused = admin_client.post("/api/v1/admin/content/entries",
+                                    json={"group": "help_faq", "key": "typo_check", "title": "t", **bad})
+        assert refused.status_code == 422, f"{bad} was accepted: {refused.text}"
+        assert "Help page's categories" in refused.text
+    # member_copy keeps a free optional grouping, and offers none.
+    free = admin_client.post("/api/v1/admin/content/entries",
+                             json={"group": "member_copy", "key": "free_grouping", "category": "Anything at all", "title": "t"})
+    assert free.status_code == 201, free.text
+    groups = {g["group"]: g["categories"] for g in admin_client.get("/api/v1/admin/content/summary").json()}
+    assert groups["help_faq"][0] == "About Veye" and len(groups["help_faq"]) == 5
+    assert groups["member_copy"] == []
     assert admin_client.post(f"/api/v1/admin/content/entries/{entry['id']}/publish").json()["status"] == "Published"
     assert len(client.get("/api/v1/content/help_faq").json()) == 23
     assert admin_client.post(f"/api/v1/admin/content/entries/{entry['id']}/unpublish").json()["status"] == "Draft"
     assert admin_client.post(f"/api/v1/admin/content/entries/{entry['id']}/archive").json()["status"] == "Archived"
-    assert admin_client.put(f"/api/v1/admin/content/entries/{entry['id']}", json={"group": "help_faq", "key": "what_is_sprout", "title": "x"}).status_code == 409
+    assert admin_client.put(f"/api/v1/admin/content/entries/{entry['id']}",
+                            json={"group": "help_faq", "key": "what_is_sprout", "category": "Using the Platform", "title": "x"}).status_code == 409
     assert client.get("/api/v1/admin/content/entries").status_code == 401
 
 

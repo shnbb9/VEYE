@@ -22,8 +22,11 @@ export default function AiMonitoringPage() {
           <div className="card">
             <div className="card__head">
               <div><h2 className="card__title">Last {data.window_days} days</h2><p className="t-support">Environment {data.telemetry.environment} · exporters: {data.telemetry.exporters.join(", ")} · content capture {data.telemetry.capture_content ? "on (development)" : "off"} · Langfuse <Chip label={data.langfuse_status} tone={data.langfuse_status === "enabled" ? "live" : "archived"} /></p></div>
-              <div className="modeswitch">
-                {[7, 30, 90].map((n) => <button key={n} className="modeswitch__btn" type="button" aria-selected={days === n} onClick={() => setDays(n)}>{n} days</button>)}
+              {/* aria-selected is ignored on a plain button: it needs a tab
+                  role, as Requests has, or the chosen window reaches the eye
+                  only. */}
+              <div className="modeswitch" role="tablist" aria-label="Reporting window">
+                {[7, 30, 90].map((n) => <button key={n} className="modeswitch__btn" type="button" role="tab" aria-selected={days === n} onClick={() => setDays(n)}>{n} days</button>)}
               </div>
             </div>
             <div className="card__body">

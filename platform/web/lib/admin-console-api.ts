@@ -295,7 +295,9 @@ export type ContentEntry = ContentEntryInput & {
   published_at: string | null;
   published_by: string | null;
 };
-export type ContentGroupSummary = { group: ContentGroup; label: string; total: number; published: number; draft: number; archived: number };
+/** `categories` is the vocabulary the API accepts for the group: the Help
+ *  page's five chips for help_faq, and empty (free text) for member_copy. */
+export type ContentGroupSummary = { group: ContentGroup; label: string; total: number; published: number; draft: number; archived: number; categories: string[] };
 
 export const getContentSummary = () => apiJson<ContentGroupSummary[]>(`${CONSOLE}/content/summary`);
 export const listContentEntries = (group?: ContentGroup, status?: string) => apiJson<ContentEntry[]>(`${CONSOLE}/content/entries${query({ group, status })}`);

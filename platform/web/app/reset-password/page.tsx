@@ -42,7 +42,9 @@ function ResetPassword() {
 
   return (
     <AuthFrame photo="login">
-      <form className="auth__form" onSubmit={submit} noValidate>
+      {/* method="post": an unhydrated submit of a method-less form is a GET,
+          which put the new password in the URL and dropped the reset token. */}
+      <form className="auth__form" method="post" onSubmit={submit} noValidate>
         <h1 className="auth__title">Choose a new password</h1>
         <p className="auth__subtitle">The link works once and expires soon.</p>
         {!token && <p className="auth__notice auth__notice--warn">This link is missing its reset token. Open the link from your email again, or request a new one from the sign-in screen.</p>}

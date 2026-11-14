@@ -399,7 +399,12 @@ body.site {
 }
 
 @media (max-width: 760px) {
-  .nav__links, .nav__cta span { display: none; }
+  /* `.nav__cta span` hid BOTH spans — the "Get Started" label and the arrow
+     glyph that was meant to stay in its place. The result, measured at 920px
+     and every width below it, was a 34x16 bordered pill with nothing at all
+     inside it: the only call to action on the public site, with no label, no
+     glyph and no accessible name. Hide the label, keep the arrow. */
+  .nav__links, .nav__cta > span:not(.nav__cta-box) { display: none; }
   .nav__burger { display: flex; }
   .nav__links { position: fixed; top: 66px; left: 0; right: 0; background: var(--w-bg); flex-direction: column; gap: 0; padding: 12px 24px; box-shadow: 0 20px 30px rgba(0,0,0,.08); transform: translateY(-120%); transition: transform .25s; margin: 0; }
   .nav__links.open { transform: translateY(0); display: flex; }

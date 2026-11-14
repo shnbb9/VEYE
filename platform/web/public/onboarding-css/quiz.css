@@ -18,8 +18,16 @@
   border-radius: 50%; background: #FEDCB9; opacity: .4; filter: blur(90px); z-index: 0; }
 
 /* Header — Figma places the logo and the progress group at fixed frame coords,
-   so both are taken out of flow and .quiz__main is padded to compensate. */
-.quiz__header { position: absolute; left: 0; top: 22px; width: 100%; height: 0; z-index: 2; }
+   so both are taken out of flow and .quiz__main is padded to compensate.
+   z-index 3, not 2: .quiz__main is a sibling that also carried z-index 2 and
+   comes later in the document, so it won the tie and covered the whole header
+   from y=22 down. Nothing LOOKED wrong — the logo and the progress bar are
+   painted in the padding above the question — but neither the Back button nor
+   the logo could be clicked at all above 1024px, and Playwright's
+   actionability check timed out on both. The only way out of a 12-question
+   assessment was the browser's own Back. (Below 1024px the header is static
+   and was never affected.) */
+.quiz__header { position: absolute; left: 0; top: 22px; width: 100%; height: 0; z-index: 3; }
 .quiz__logo { position: absolute; left: 123px; top: 31.5px; width: 141px; display: block; }
 .quiz__logo img { width: 100%; display: block; }
 /* Figma: progress group x479 y65 455x14; track x506 y67 427x10 */

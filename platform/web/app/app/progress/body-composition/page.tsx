@@ -9,7 +9,7 @@ import {
   type BodyCompositionHistoryItem,
   type BodyCompositionInput,
 } from "@/lib/api";
-import { formatUpd, prefersReducedMotion } from "@/lib/member-format";
+import { formatUpd, prefersReducedMotion, scrollToTop } from "@/lib/member-format";
 import { BackChevron } from "@/components/member/nav-icons";
 
 /* BMI Analysis / Body Composition (build/dashboard.html, #view-bmi): the
@@ -92,7 +92,7 @@ export default function BodyCompositionPage() {
       const saved = await calculateBodyComposition(input);
       setHistory((current) => ({ member_id: saved.member_id, latest: saved, history: [saved, ...(current?.history ?? [])] }));
       setShowResult(true);
-      window.scrollTo(0, 0);
+      scrollToTop();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We could not save this measurement.");
     } finally {

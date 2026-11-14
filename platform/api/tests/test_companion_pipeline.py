@@ -247,6 +247,36 @@ def test_escalation_flags_the_conversation_and_notifies_the_admin(aditya, admin_
     assert audit[0]["action"] == "conversation.reviewed"
 
 
+def test_conversation_search_looks_past_the_first_message(aditya, admin_client):
+    """The search box says "members and messages", and must mean it.
+
+    It filtered the Python list AFTER `.limit(200)`, over the member's name and
+    `first_message` — which is the first 160 characters of the first member
+    message. A word said later in a thread, or in a conversation outside the
+    most recent 200, was answered with "no conversations" rather than a row.
+    """
+    first = aditya.post("/api/v1/companion/messages", json={"message": "Good morning, where do I start?"}).json()
+    conversation = first["conversation_id"]
+    aditya.post("/api/v1/companion/messages",
+                json={"conversation_id": conversation, "message": "And what about kohlrabi for dinner?"})
+
+    def found(query: str) -> list[str]:
+        rows = admin_client.get("/api/v1/admin/companion/conversations", params={"filter": "all", "q": query}).json()
+        return [row["id"] for row in rows]
+
+    assert conversation in found("kohlrabi"), "a word from the second message was not searched"
+    assert conversation in found("where do I start"), "the first message is still searched"
+    assert conversation in found("Aditya"), "the member's first name is still searched"
+    assert conversation in found("Aditya Demo"), "the member's full name is still searched"
+    assert conversation in found("aditya.demo@demo.veye.test"), "the member's address is searched"
+    assert found("kohlrabi") == found("KOHLRABI"), "the search is case-insensitive"
+    assert conversation not in found("rutabaga"), "the search matched something nobody said"
+    # A typed "%" or "_" is those characters, not a LIKE wildcard that would
+    # match every conversation there is.
+    assert found("%") == [], "a typed % behaved as a wildcard"
+    assert found("kohlrab_") == [], "a typed _ behaved as a wildcard"
+
+
 def test_member_b_cannot_use_member_a_conversation(aditya):
     mine = aditya.post("/api/v1/companion/messages", json={"message": "Explain my Health Number"}).json()
     with TestClient(app) as other:

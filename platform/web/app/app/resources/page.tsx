@@ -40,11 +40,15 @@ export default function ResourcesPage() {
             return (
               <article className="res-card" key={card.title}>
                 <div className="res-card__meta"><img className="res-card__icon" src="/assets/web/img/nav-resources.png" alt="" /><span className="res-card__status">{live ? "Published" : "In development"}</span></div>
-                <h3>{card.title}</h3>
+                <h2>{card.title}</h2>
                 <p>{card.item?.description || card.description}</p>
                 {live
                   ? <a className="res-btn" href={live} target="_blank" rel="noopener noreferrer">Discover more <span aria-hidden="true">&rarr;</span></a>
-                  : <button className="res-btn" type="button" aria-disabled="true" onClick={() => toast.flash(`${card.title} is coming soon.`)}>Coming Soon</button>}
+                  /* aria-describedby: the sr-only note below was written for
+                     these buttons and never pointed at from anywhere, so the
+                     explanation sat in the DOM while a screen reader announced
+                     "Coming Soon" with nothing to go on. */
+                  : <button className="res-btn" type="button" aria-disabled="true" aria-describedby="resSoonNote" onClick={() => toast.flash(`${card.title} is coming soon.`)}>Coming Soon</button>}
               </article>
             );
           })}
@@ -54,7 +58,7 @@ export default function ResourcesPage() {
           <h2>Wellness guidance, made practical</h2>
           <p>New articles, lifestyle ideas and expert-led resources will be organised here as the library grows.</p>
           <img src="/assets/web/img/promo-art.png" alt="People celebrating progress with a trophy and upward arrow" />
-          <button className="res-btn" type="button" aria-disabled="true" title="Coming soon" onClick={() => toast.flash("The Veye Library is coming soon.")}>Browse Veye topics <span aria-hidden="true">&rarr;</span></button>
+          <button className="res-btn" type="button" aria-disabled="true" aria-describedby="resSoonNote" title="Coming soon" onClick={() => toast.flash("The Veye Library is coming soon.")}>Browse Veye topics <span aria-hidden="true">&rarr;</span></button>
           <span className="res-card__status">Coming soon</span>
         </aside>
       </div>

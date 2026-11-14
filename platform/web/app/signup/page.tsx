@@ -81,7 +81,9 @@ export default function SignUpPage() {
 
   return (
     <AuthFrame photo="signup">
-      <form className="auth__form" onSubmit={submit} noValidate>
+      {/* method="post": an unhydrated submit of a method-less form is a GET,
+          which put the chosen password in the URL. */}
+      <form className="auth__form" method="post" onSubmit={submit} noValidate>
         <h1 className="auth__title">Get Started</h1>
         <p className="auth__subtitle">Welcome to a healthier you!</p>
         {answers && <p className="auth__notice">Your Health Number from the assessment will be saved to this account.</p>}

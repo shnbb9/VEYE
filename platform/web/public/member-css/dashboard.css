@@ -5779,7 +5779,10 @@
   .res-card__icon { width:42px; height:42px; object-fit:contain; }
   .res-card__status { border-radius:999px; padding:5px 10px; background:#F4F6ED; color:#72825C;
     font:600 11px 'Teachers',sans-serif; letter-spacing:.65px; text-transform:uppercase; }
-  .res-card h3 { font-family:'Teachers',sans-serif; font-weight:500; font-size:27px;
+  /* h2, not h3: the page's only h1 is "Resources", so the cards were an h3
+     under an h1 with no h2 between them -- and the aside's h2 came after all
+     five of them. Same size, correct order. */
+  .res-card h2 { font-family:'Teachers',sans-serif; font-weight:500; font-size:27px;
     line-height:1.15; letter-spacing:.2px; color:#384C0C; margin:0 0 16px; }
   .res-card p { font-family:'Teachers',sans-serif; font-size:17px; line-height:1.52;
     letter-spacing:.18px; color:#465C22; margin:0 0 24px; overflow-wrap:anywhere; }

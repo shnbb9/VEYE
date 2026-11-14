@@ -6,7 +6,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 # Keys with a defined purpose today. Anything else is refused by the API.
-SUPPORT_EMAIL = "support_email"      # printed on the member Contact Us card and the public Help page
+# Printed on the member Contact Us card and dialog, and in the account emails
+# and request replies Veye sends. NOT on the public Help page: that page carries
+# the client-approved help@veye.co in its own copy (as the approved prototype
+# does), and the two addresses are a deliberate split, not a drift.
+SUPPORT_EMAIL = "support_email"
 SUPPORT_PHONE = "support_phone"      # optional; shown beside the email when set
 KEYS = (SUPPORT_EMAIL, SUPPORT_PHONE)
 # The approved prototype's values (dashboard Contact Us = contact@veye.co).

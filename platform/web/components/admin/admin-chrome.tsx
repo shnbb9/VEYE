@@ -140,7 +140,12 @@ function AdminFrame({ children }: { children: ReactNode }) {
             <ul className="rail__list">
               {MAIN_NAV.map((item) => (
                 <li key={item.key}>
-                  <Link className={`nav-link${section === item.key ? " is-active" : ""}`} href={item.href} aria-current={section === item.key ? "page" : undefined} onClick={() => setRailOpen(false)}>
+                  {/* aria-label as well as the span: between 761px and 1024px
+                      the rail is icon-only (`.nav-link span { display: none }`
+                      in responsive.css), and the accessible name went with the
+                      label — nine links and a Sign out button announcing
+                      nothing at all. The member rail already carries one. */}
+                  <Link className={`nav-link${section === item.key ? " is-active" : ""}`} href={item.href} aria-label={item.label} aria-current={section === item.key ? "page" : undefined} onClick={() => setRailOpen(false)}>
                     <Icon name={item.icon} /><span>{item.label}</span>
                   </Link>
                 </li>
@@ -148,7 +153,7 @@ function AdminFrame({ children }: { children: ReactNode }) {
             </ul>
           </div>
           <div className="rail__foot">
-            <button className="rail__collapse" type="button" onClick={() => void signOut()}><Icon name="log-out" /><span>Sign out</span></button>
+            <button className="rail__collapse" type="button" aria-label="Sign out" onClick={() => void signOut()}><Icon name="log-out" /><span>Sign out</span></button>
           </div>
         </nav>
 

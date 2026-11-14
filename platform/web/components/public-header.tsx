@@ -20,7 +20,10 @@ export function PublicHeader({ active }: { active: string }) {
       </ul>
       <div className="nav__right">
         <Link className="nav__user" href="/login" aria-label="Sign in"><img src="/assets/web/svg/user.svg" alt="" /></Link>
-        <Link className="nav__cta" href="/onboarding"><span>Get Started</span><span className="nav__cta-box" /></Link>
+        {/* aria-label, because below 920px the label span is hidden and the
+            link's accessible name went with it: `getByRole("link", { name:
+            /Get Started/i })` matched nothing at 920, 768 or 390. */}
+        <Link className="nav__cta" href="/onboarding" aria-label="Get Started"><span>Get Started</span><span className="nav__cta-box" /></Link>
         <button className="nav__burger" id="navBurger" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><span /><span /><span /></button>
       </div>
     </div></header>

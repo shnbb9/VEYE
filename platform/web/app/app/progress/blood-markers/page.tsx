@@ -13,7 +13,7 @@ import {
   type BloodMarkersPreview,
 } from "@/lib/api";
 import { BLOOD_INFO, BLOOD_INTERP, RANGE_LINES } from "@/lib/blood-markers-copy";
-import { formatUpd } from "@/lib/member-format";
+import { formatUpd, scrollToTop } from "@/lib/member-format";
 import { BackChevron } from "@/components/member/nav-icons";
 
 /* Blood Test Markers (build/dashboard.html, #view-blood): the module card with
@@ -116,7 +116,7 @@ export default function BloodMarkersPage() {
       setForm(EMPTY);
       setPreview(null);
       setTab("history");
-      window.scrollTo(0, 0);
+      scrollToTop();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We could not save these markers.");
     } finally {
