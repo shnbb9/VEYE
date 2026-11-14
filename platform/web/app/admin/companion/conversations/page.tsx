@@ -77,7 +77,11 @@ function Conversations() {
             </div>
           </div>
           <div className="flaglist">
-            {rows === null && <p className="loading-row">Loading…</p>}
+            {/* `&& !error`: the list stays null when the request fails, so
+                without this the screen showed the error bar AND went on saying
+                it was loading, for ever. Members and Settings already read
+                `{!page && !error && …}`. */}
+            {rows === null && !error && <p className="loading-row">Loading…</p>}
             {rows && rows.length === 0 && (
               <div style={{ padding: "var(--s-6)" }}>
                 <EmptyState icon={filter === "needs_review" ? "check-circle" : "search"} title={filter === "needs_review" ? "Nothing waiting for review" : "No conversations match"}

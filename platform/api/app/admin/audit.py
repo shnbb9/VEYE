@@ -50,7 +50,11 @@ def account_activity(db: Session, *, user_id: UUID | None = None, limit: int = 2
     query = (db.query(AdminAuditEntry)
              .filter(AdminAuditEntry.entity_type == "user_account",
                      AdminAuditEntry.action.in_(tuple(ACCOUNT_ACTIONS)))
-             .order_by(AdminAuditEntry.created_at.desc()))
+             # `id` as a tiebreaker: this is a top-N over rows that share a
+             # timestamp to the second, so without it *which* 20 you are shown
+             # is unspecified — one access change can be dropped and another
+             # included, on the screen that exists to record them.
+             .order_by(AdminAuditEntry.created_at.desc(), AdminAuditEntry.id.desc()))
     if user_id is not None:
         query = query.filter(AdminAuditEntry.entity_id == str(user_id))
     rows = query.limit(max(1, min(limit, 200))).all()

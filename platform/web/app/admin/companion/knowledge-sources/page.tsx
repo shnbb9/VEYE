@@ -106,7 +106,10 @@ export default function KnowledgeSourcesPage() {
         </div>
         <div className="card__body card__body--flush">
           <div className="rows">
-            {sources === null && <p className="loading-row">Loading…</p>}
+            {/* `&& !error`: the list stays null when the request fails, so
+                without this the screen showed the error bar AND went on saying
+                it was loading, for ever. */}
+            {sources === null && !error && <p className="loading-row">Loading…</p>}
             {sources?.map((source) => {
               const doc = source.current_document;
               return (

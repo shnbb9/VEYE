@@ -19,11 +19,23 @@ export default function AdminHome() {
   const [overview, setOverview] = useState<ConsoleOverview | null>(null);
   const [companion, setCompanion] = useState<Overview | null>(null);
   const [error, setError] = useState("");
+  const [companionFailed, setCompanionFailed] = useState(false);
 
   useEffect(() => {
     getConsoleOverview().then(setOverview).catch((reason) => setError(reason instanceof Error ? reason.message : "The overview could not be loaded."));
-    getOverview().then(setCompanion).catch(() => setCompanion(null));
+    // The Companion panel is secondary, but silence is not a state: without
+    // this flag its "Loading…" stayed on screen for ever when the request
+    // failed, with no error anywhere to explain it.
+    getOverview().then(setCompanion).catch(() => { setCompanion(null); setCompanionFailed(true); });
   }, []);
+
+  /* A panel whose data failed to arrive stops claiming to load. The error bar
+     at the top of the screen states the problem once; four panels here went on
+     showing "Loading…" indefinitely, because `overview` stays null on failure
+     and nothing re-rendered them. Members and Settings already read
+     `{!page && !error && …}`; this is the same rule for a ternary. */
+  const stillLoading = <p className="loading-row">Loading…</p>;
+  const pending = error ? null : stillLoading;
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const hour = new Date().getHours();
@@ -111,7 +123,7 @@ export default function AdminHome() {
                     );
                   })}
                 </div>
-              ) : <p className="loading-row">Loading…</p>}
+              ) : pending}
             </div>
             <div className="card__foot"><Link className="btn btn--secondary btn--sm" href="/admin/assessments">Open Assessments</Link><Link className="btn btn--ghost btn--sm" href="/admin/insights">Insights <Icon name="chevron-right" size={16} /></Link></div>
           </div>
@@ -130,7 +142,7 @@ export default function AdminHome() {
                     </div>
                   ))}
                 </div>
-              ) : <p className="t-support">No member activity yet.</p> : <p className="loading-row">Loading…</p>}
+              ) : <p className="t-support">No member activity yet.</p> : pending}
             </div>
           </div>
         </div>
@@ -153,7 +165,7 @@ export default function AdminHome() {
                     </li>
                   ))}
                 </ul>
-              ) : <p className="loading-row" style={{ padding: 16 }}>Loading…</p>}
+              ) : error ? null : <p className="loading-row" style={{ padding: 16 }}>Loading…</p>}
             </div>
             <div className="card__foot"><Link className="btn btn--secondary btn--sm" href="/admin/members">Open the directory</Link></div>
           </div>
@@ -170,7 +182,7 @@ export default function AdminHome() {
                   <dt>Language model</dt><dd>{companion.llm_provider}{companion.llm_model ? ` · ${companion.llm_model}` : ""}</dd>
                   <dt>Langfuse</dt><dd><Chip label={companion.langfuse_status} tone={companion.langfuse_status === "enabled" ? "live" : "archived"} /></dd>
                 </dl>
-              ) : <p className="loading-row">Loading…</p>}
+              ) : companionFailed ? <p className="t-support">Companion status could not be loaded.</p> : stillLoading}
             </div>
             <div className="card__foot">
               <Link className="btn btn--primary btn--sm" href="/admin/companion/conversations">Open Conversations</Link>

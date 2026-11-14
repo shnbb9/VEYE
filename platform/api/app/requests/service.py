@@ -157,7 +157,14 @@ class RequestService:
             query = query.filter(func.lower(MemberRequest.name).like(like) | func.lower(MemberRequest.email).like(like)
                                  | func.lower(MemberRequest.subject).like(like) | func.lower(MemberRequest.message).like(like))
         total = query.count()
-        rows = query.order_by(MemberRequest.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        # `id` as a tiebreaker, because this pages with OFFSET/LIMIT: the order
+        # among rows sharing a `created_at` is unspecified, and it is resolved
+        # separately for the page-1 query and the page-2 query — so a request
+        # can appear on both pages, or on neither. The audit log had the same
+        # shape and did exactly that. Requests collide readily: the seed stamps
+        # them with `_days_ago(days, hour=10)`, which zeroes the minute.
+        rows = (query.order_by(MemberRequest.created_at.desc(), MemberRequest.id.desc())
+                .offset((page - 1) * page_size).limit(page_size).all())
         return rows, total
 
     def get(self, request_id: UUID) -> MemberRequest:
