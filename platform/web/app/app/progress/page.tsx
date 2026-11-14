@@ -53,7 +53,7 @@ export default function ProgressPage() {
           <span className="mood-eyebrow">Your Journey</span>
           <h1>My Progress</h1>
           <p>Track your health across five modules. Re-take any time to see how far you&apos;ve come.</p>
-          <Link className="tracker-card__link" href={`/app/companion?flow=${PROGRESS_GUIDE_FLOW}`}>Let Sprout guide you through the trackers</Link>
+          <Link className="progress-hero__guide" href={`/app/companion?flow=${PROGRESS_GUIDE_FLOW}`}>Let Sprout guide you through the trackers</Link>
         </div>
       </header>
 

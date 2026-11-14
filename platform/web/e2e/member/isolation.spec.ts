@@ -40,9 +40,14 @@ test.describe("Multiple members stay isolated", () => {
       await A.page.getByRole("button", { name: "Add Entry" }).click();
       await expect(A.page.getByTestId("diary-meals")).toContainText("A's private breakfast");
 
+      // A request of A's own (Contact Us; the dashboard's Join Beta button was
+      // removed for prototype parity, 14 Nov 2026).
       await open(A.page, "/app");
-      await A.page.getByTestId("beta-join").click();
-      await expect(A.page.getByTestId("beta-status")).toContainText(/Beta request sent/);
+      await A.page.getByTestId("contact-us").click();
+      await A.page.locator("#contactSubject").fill("A's private question");
+      await A.page.locator("#contactMessage").fill("Only A should ever see this.");
+      await A.page.getByTestId("contact-send").click();
+      await expect(A.page.getByTestId("contact-dialog")).toHaveCount(0);
 
       await open(A.page, "/app/settings");
       await A.page.getByTestId("settings-first-name").fill("Alpha");
@@ -54,7 +59,6 @@ test.describe("Multiple members stay isolated", () => {
       await expectMemberDashboard(B.page);
       await expect(B.page.getByRole("heading", { name: `Welcome back ${b.firstName}` })).toBeVisible();
       await expect(B.page.getByTestId("mood-card")).toContainText("not logged yet");
-      await expect(B.page.getByTestId("beta-join")).toBeVisible();
       await open(B.page, "/app/mood");
       await expect(B.page.getByTestId("mood-logged")).toHaveText("0");
       await expect(B.page.getByTestId("mood-day-detail")).not.toContainText("Private to A");

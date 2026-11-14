@@ -296,7 +296,7 @@ function CompanionView() {
                         onRate={row.guided ? undefined : (rating, reason) => void rate(row, rating, reason)} onCopy={copy} />)}
             {thinking && (
               <div className="msg-row bot msg-typing" id="typingIndicator">
-                <div className="msg-avatar">🌱</div>
+                <div className="msg-avatar">🌿</div>
                 <div className="msg-bubble"><span className="dot" /><span className="dot" /><span className="dot" /></div>
               </div>
             )}
@@ -319,7 +319,8 @@ function CompanionView() {
           {/* Guided experiences available when nothing is waiting */}
           {!awaiting && guided && flowsAvailable.length > 0 && (
             <div className="quick-replies guided-offer" id="guidedOffer">
-              <span className="qr-label">{guided.first_arrival_offer ? "New here?" : "Guided experiences:"}</span>
+              {/* The approved label in both states (build/dashboard.html #guidedOffer). */}
+              <span className="qr-label">Sprout can guide you:</span>
               {guided.first_arrival_offer ? (
                 <>
                   <button className="qr-btn qr-btn--guided" type="button" disabled={flowBusy} onClick={() => void openFlow(FIRST_TIME_FLOW, "start")}>Guide me</button>
@@ -424,7 +425,7 @@ function BotRow({ row, content, typed, onTypingChange, onRate, onCopy }: {
 
   return (
     <div className="msg-row bot">
-      <div className="msg-avatar">🌱</div>
+      <div className="msg-avatar">🌿</div>
       <div className="msg-content">
         <div className="msg-bubble"><span className="msg-typewriter">{shown}</span></div>
         {note && <p className="msg-note">{note}</p>}

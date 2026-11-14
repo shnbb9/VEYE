@@ -8,7 +8,7 @@ import {
   type BloodMarkersHistory, type BodyCompositionHistory, type HealthAssessmentHistory, type HealthNumberHistoryItem, type SimpleQuizHistory,
 } from "@/lib/api";
 import { FIRST_TIME_FLOW, PROGRESS_GUIDE_FLOW, getGuidedOverview, skipFlow, type GuidedOverview } from "@/lib/guided-flows-api";
-import { getMood, getPersonalTip, getPublishedContent, getSupportDetails, myRequests, sendMemberRequest, type MemberRequest, type MoodOverview, type PersonalTip, type SupportDetails } from "@/lib/member-api";
+import { getMood, getPersonalTip, getPublishedContent, getSupportDetails, myRequests, type MemberRequest, type MoodOverview, type PersonalTip, type SupportDetails } from "@/lib/member-api";
 import { displayHealthNumber, prefersReducedMotion } from "@/lib/member-format";
 import { useToast } from "@/components/member/member-chrome";
 import { ContactUsDialog } from "@/components/member/contact-us-dialog";
@@ -45,7 +45,6 @@ export default function MemberDashboard() {
   const [support, setSupport] = useState<SupportDetails | null>(null);
   const [requests, setRequests] = useState<MemberRequest[] | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
-  const [betaBusy, setBetaBusy] = useState(false);
   const toast = useToast();
   const firstName = useSession().member?.first_name ?? "";
 
@@ -80,20 +79,9 @@ export default function MemberDashboard() {
     return () => { cancelled = true; };
   }, []);
 
-  const betaRequest = requests?.find((r) => r.kind === "join_beta") ?? null;
   // Veye's answers arrive by email; the card says one is waiting so the member
   // does not have to open the dialog to find out.
   const replyCount = (requests ?? []).reduce((total, request) => total + request.replies.length, 0);
-  async function joinBeta() {
-    setBetaBusy(true);
-    try {
-      const sent = await sendMemberRequest({ kind: "join_beta", page: "/app" });
-      setRequests(await myRequests());
-      toast.flash(sent.already_open ? "Your Beta request is already with us" : "Thank you — your Beta request has been sent");
-    } catch (reason) {
-      toast.flash(reason instanceof Error ? reason.message : "The request could not be sent");
-    } finally { setBetaBusy(false); }
-  }
 
   // Cara: a new member is offered the guide once ("Guide me" / "Explore on my own");
   // either answer settles it and Sprout stays available for both guided flows later.
@@ -155,17 +143,9 @@ export default function MemberDashboard() {
             <h2 className="beta-card__title"><img className="beta-card__icon" src="/assets/web/img/ic-beta.svg" alt="" />Join the Beta Test</h2>
             <img className="beta-card__art" src="/assets/web/img/dash-rocket.png" alt="People launching the Veye beta" />
             <p>When you Join the Veye Beta Test, you can experience our innovative platform, and take proactive measures in managing your health through a tailored nutrition program that goes beyond mere weight loss.</p>
-            <div className="beta-card__actions">
-              {betaRequest ? (
-                <p className="beta-card__status" data-testid="beta-status">
-                  {betaRequest.status === "resolved" ? "Your Beta request has been handled." : `Beta request sent ${new Date(betaRequest.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })} · ${betaRequest.status_label}`}
-                </p>
-              ) : (
-                <button className="beta-card__btn" type="button" disabled={betaBusy} onClick={() => void joinBeta()} data-testid="beta-join">
-                  {betaBusy ? "Sending…" : "Join the Beta Test"}
-                </button>
-              )}
-            </div>
+            {/* No button: exactly the approved card (owner decision, 14 Nov 2026).
+                Members no longer send Join Beta requests from here; the console
+                keeps any it already holds. */}
           </article>
 
           <article className="card dash-companion-card fade-in d3">
@@ -273,10 +253,12 @@ export default function MemberDashboard() {
 
       {/* Progress Trackers line graph (Cara, Progress Trackers Decision Tree): real
           dated results per tracker; unused or unconnected trackers stay at rest. */}
-      <section className="card tracker-card fade-in" aria-labelledby="trackerGraphTitle">
-        <div className="tracker-card__head">
-          <h2 id="trackerGraphTitle" className="activity-title tracker-card__title">Progress Trackers</h2>
-          <Link className="tracker-card__link" href={`/app/companion?flow=${PROGRESS_GUIDE_FLOW}`}>Let Sprout guide you</Link>
+      {/* Sits on the page like the Activity Tracker row above it — no white
+          card (owner, 14 Nov 2026). */}
+      <section className="tracker-section fade-in" aria-labelledby="trackerGraphTitle">
+        <div className="tracker-section__head">
+          <h2 id="trackerGraphTitle" className="activity-title tracker-section__title">Progress Trackers</h2>
+          <Link className="tracker-section__link" href={`/app/companion?flow=${PROGRESS_GUIDE_FLOW}`}>Let Sprout guide you</Link>
         </div>
         <TrackerGraph blood={blood} body={body} assessment={assessment} quiz={quiz} />
       </section>

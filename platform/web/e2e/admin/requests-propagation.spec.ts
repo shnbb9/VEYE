@@ -34,14 +34,13 @@ test.describe.serial("Requests & Inbox and content propagation", () => {
     await maya.locator("#contactMessage").fill("Is my first Health Number kept when I retake the assessment?");
     await maya.getByTestId("contact-send").click();
     await expect(maya.getByTestId("contact-dialog")).toHaveCount(0);
-    // Join Beta (Maya has no seeded request) → the card turns into a status line.
-    await maya.getByTestId("beta-join").click();
-    await expect(maya.getByTestId("beta-status")).toContainText(/Beta request sent .* New/);
+    // (The dashboard's Join Beta button was removed for prototype parity,
+    // 14 Nov 2026; Contact Us is the member's request here.)
 
     await adminSignIn(page, ADMIN.email, ADMIN.password);
     await expectAdminHome(page);
     await expect(page.getByTestId("home-requests-open")).toHaveText(/^\d+$/);
-    expect(Number(await page.getByTestId("home-requests-open").textContent())).toBeGreaterThanOrEqual(2);
+    expect(Number(await page.getByTestId("home-requests-open").textContent())).toBeGreaterThanOrEqual(1);
 
     await page.getByRole("link", { name: "Requests & Inbox" }).first().click();
     await expect(page).toHaveURL(/\/admin\/requests/);
@@ -97,10 +96,6 @@ test.describe.serial("Requests & Inbox and content propagation", () => {
     expect((thread.replies as { body: string }[])[0].body).toBe(answer);
     // The console's own record is not on the member's wire at all.
     for (const internal of ["resolution_note", "handled_by", "handled_at"]) expect(thread).not.toHaveProperty(internal);
-    // the Join Beta request is still open
-    await page.getByRole("link", { name: "Open Requests & Inbox" }).click();
-    await page.getByLabel("Kind").selectOption("join_beta");
-    await expect(page.getByTestId("requests-list")).toContainText(`${member.firstName} ${member.lastName}`);
     await mayaContext.close();
   });
 
@@ -117,10 +112,15 @@ test.describe.serial("Requests & Inbox and content propagation", () => {
     await page.getByTestId("support-save").click();
     await expect(page.getByTestId("support-saved")).toBeVisible();
 
-    // Daily tip: publish the seeded draft with our own text.
+    // Daily tip: publish the seeded draft with our own text. The original text
+    // and status are put back at the end: this database is also the owner's
+    // live demo, and a published "E2E daily tip" once stayed on every member
+    // dashboard after this test.
     await open(page, "/admin/content?group=member_copy");
     const tipRow = page.getByTestId("content-table").locator("tr", { hasText: "daily_health_tip" });
+    const originalTipStatus = ((await tipRow.locator(".chip").textContent()) ?? "").trim();
     await tipRow.getByRole("button", { name: "Edit" }).click();
+    const originalTip = await page.locator("#ce-body").inputValue();
     await page.locator("#ce-body").fill(`E2E daily tip ${stamp}: drink a glass of water before each meal.`);
     await page.getByTestId("content-save").click();
     await expect(page.getByTestId("content-table").locator("tr", { hasText: "daily_health_tip" })).toContainText(`E2E daily tip ${stamp}`);
@@ -173,6 +173,17 @@ test.describe.serial("Requests & Inbox and content propagation", () => {
     await expect(page.getByTestId("content-save")).toHaveCount(0);
     await open(page, "/help");
     await expect(page.locator('.faq__item[data-key="what_is_metabolism"]')).not.toContainText("(E2E");
+
+    // ...and the daily tip: its own words, and unpublished again if it was a draft.
+    await open(page, "/admin/content?group=member_copy");
+    const tipAgain = () => page.getByTestId("content-table").locator("tr", { hasText: "daily_health_tip" });
+    await tipAgain().getByRole("button", { name: "Edit" }).click();
+    await page.locator("#ce-body").fill(originalTip);
+    await page.getByTestId("content-save").click();
+    await expect(page.getByTestId("content-save")).toHaveCount(0);
+    if (originalTipStatus !== "Published") await tipAgain().getByRole("button", { name: "Unpublish" }).click();
+    await expect(tipAgain().locator(".chip")).toHaveText(originalTipStatus);
+    await expect(tipAgain()).not.toContainText(`E2E daily tip ${stamp}`);
   });
 
   test("a second administrator has the same plain capability; the console never grants member access", async ({ page }) => {

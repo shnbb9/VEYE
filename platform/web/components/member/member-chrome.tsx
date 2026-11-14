@@ -143,7 +143,11 @@ function MemberFrame({ children }: { children: ReactNode }) {
           </header>
 
           <section className="content">
-            <div className="view active">{children}</div>
+            {/* The prototype's one view-specific compound rule is
+                `.view.view-bot.active` (the Companion fills the content area so
+                the chat fits without page scroll); the wrapper carries
+                view-bot there so that rule applies. */}
+            <div className={`view active${pathname?.startsWith("/app/companion") ? " view-bot" : ""}`}>{children}</div>
           </section>
         </main>
       </div>

@@ -31,13 +31,6 @@ a.module-cta--ghost { color: #446514; }
   .fade-in { opacity: 1; transform: none; }
 }
 
-/* ---- Modules without a production vertical slice yet -------------------- */
-/* Same card language as the prototype's development sections (.mind-card,
-   .dev-note, .dev-more), so a not-yet-connected screen reads as part of the
-   product rather than a generic placeholder. */
-.hold-card { max-width: 620px; }
-.hold-card .dev-note { margin: 18px 0 0; text-align: left; }
-.hold-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 22px; }
 
 /* Health Number history screen: the prototype renders it inside the retake
    result card; here it is its own route, so the card needs its own top margin. */
@@ -81,12 +74,6 @@ a.settings-outline { text-decoration:none; box-sizing:border-box; }
 .settings-save:disabled, .settings-outline:disabled { opacity:.6; cursor:progress; }
 
 /* ---- Dashboard: real member state on the approved cards ---------------------- */
-.beta-card__actions { margin-top: 12px; }
-.beta-card__btn { border: 0; border-radius: 999px; min-height: 40px; padding: 8px 18px; background: #446514; color: #fff;
-  font: 600 14px 'Teachers', sans-serif; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; }
-.beta-card__btn:hover { transform: translateY(-1px); box-shadow: 0 7px 16px rgba(56,76,12,.16); }
-.beta-card__btn:disabled { opacity: .6; cursor: progress; }
-.beta-card__status { margin: 0; font: 600 13.5px 'Teachers', sans-serif; color: #446514; }
 .tip-muted { color: var(--body-text-light); }
 button.mini-card { border: 0; font: inherit; text-align: center; cursor: pointer; color: inherit; }
 button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
@@ -153,24 +140,38 @@ button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
 .qr-btn--guided:hover { background: #384C0C; }
 .qr-btn:disabled { opacity: .6; cursor: progress; }
 
-/* ---- Progress Trackers line graph (dashboard) ------------------------------ */
-.tracker-card { margin-top: 26px; padding: 22px 26px 20px; }
-.tracker-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-.tracker-card__title { margin: 0; }
-.tracker-card__link { font-family: 'Teachers', sans-serif; font-size: 12.5px; letter-spacing: .6px; text-transform: uppercase; color: #446514;
+/* ---- Progress Trackers line graph (dashboard) ------------------------------
+   On the page itself, like the Activity Tracker row above — no white card
+   (owner, 14 Nov 2026): a heading row, a quiet plot, and the four trackers as
+   tinted pills in Cara's colours. */
+.tracker-section { margin-top: 34px; }
+.tracker-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.tracker-section__title { margin: 0; }
+.tracker-section__link { font-family: 'Teachers', sans-serif; font-size: 12.5px; letter-spacing: .6px; text-transform: uppercase; color: #446514;
   text-decoration: none; border-bottom: 1px solid rgba(68,101,20,.35); }
-.tracker-card__link:hover { color: #384C0C; border-bottom-color: currentColor; }
-.tracker-graph__svg { width: 100%; height: auto; display: block; }
-.tracker-graph__axis { stroke: #DDE5D1; stroke-width: 1; }
-.tracker-graph__tick, .tracker-graph__empty { font-family: 'Nunito Sans', sans-serif; font-size: 11px; fill: var(--body-text-light); }
-.tracker-graph__empty { font-size: 13px; }
-.tracker-graph__legend { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 18px; }
-.tracker-graph__legend li { display: flex; align-items: center; gap: 8px; font-family: 'Nunito Sans', sans-serif; font-size: 12.5px; color: var(--body-text); min-width: 0; }
-.tracker-graph__swatch { width: 14px; height: 4px; border-radius: 2px; flex: none; }
-.tracker-graph__name { font-weight: 700; color: var(--olive-heading); flex: none; }
-.tracker-graph__value { color: var(--body-text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tracker-section__link:hover { color: #384C0C; border-bottom-color: currentColor; }
+.tracker-graph__plot { position: relative; }
+.tracker-graph__svg { width: 100%; height: auto; display: block; overflow: visible; }
+.tracker-graph__grid { stroke: rgba(105,124,61,.13); stroke-width: 1; stroke-dasharray: 2 7; stroke-linecap: round; }
+.tracker-graph__base { stroke: rgba(105,124,61,.24); stroke-width: 1.2; stroke-linecap: round; }
+.tracker-graph__tick { font-family: 'Nunito Sans', sans-serif; font-size: 11px; fill: var(--body-text-light); }
+.tracker-graph__empty { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 14px;
+  border-radius: 999px; background: rgba(141,196,18,.12); color: #446514; white-space: nowrap;
+  font-family: 'Teachers', sans-serif; font-size: 13px; letter-spacing: .2px; }
+.tracker-graph__legend { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tracker-graph__legend li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid transparent; border-radius: 14px;
+  font-family: 'Nunito Sans', sans-serif; font-size: 12.5px; color: var(--body-text); min-width: 0; }
+.tracker-graph__text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.tracker-graph__swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.tracker-graph__name { font-weight: 700; color: var(--olive-heading); }
+.tracker-graph__value { color: var(--body-text-light); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tracker-graph--compact .tracker-graph__legend { grid-template-columns: 1fr 1fr; }
-@media (max-width: 600px) { .tracker-card { padding: 18px 16px 16px; } .tracker-graph__legend { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .tracker-graph__legend { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) {
+  .tracker-graph__empty { white-space: normal; text-align: center; width: max-content; max-width: 92%; }
+  .tracker-graph__legend { grid-template-columns: 1fr; gap: 8px; }
+  .tracker-graph__value { white-space: normal; }
+}
 
 /* Security card: the member's own sessions and the inline password / email
    forms. Same ink, spacing and rhythm as the approved Settings cards. */
@@ -220,3 +221,130 @@ button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
 .delete-card__input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #DDE6C8; border-radius: 10px; font: inherit; }
 .delete-card__input:focus { outline: 2px solid #446514; outline-offset: 1px; }
 .delete-card__submit { background: #9C3A24 !important; }
+
+/* ---- Moved from dashboard.css (14 Nov 2026) -------------------------------
+   dashboard.css is now the prototype's stylesheet verbatim. These rules
+   style application screens the prototype draws differently or not at
+   all: Food Choices (Cara's 18 Sep decision trees, newer than the
+   prototype's view), the mood/contact note fields, the Resources card
+   heading level, and Meal Planning's hidden guard. */
+.note-input-wrap textarea {
+    width: 100%;
+    border: 1.5px solid var(--border-soft);
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 14px;
+    color: var(--body-text);
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 90px;
+    background: var(--cream-soft);
+    transition: border-color 0.25s ease, background 0.25s ease;
+  }
+.note-input-wrap textarea:focus {
+    outline: none;
+    border-color: var(--olive-medium);
+    background: white;
+    box-shadow: 0 0 0 4px rgba(77,122,46,0.12);
+  }
+.days-continue-wrap[hidden] { display: none; }
+.res-card h2 { font-family:'Teachers',sans-serif; font-weight:500; font-size:27px;
+    line-height:1.15; letter-spacing:.2px; color:#384C0C; margin:0 0 16px; }
+.fcx-blurb { margin:0 0 18px; max-width:62ch; color:var(--muted,#6f7d5c); font-size:15px; line-height:1.55; }
+.fcx-tabs { display:flex; gap:8px; margin:0 0 18px; flex-wrap:wrap; }
+.fcx-tab {
+  appearance:none; border:1px solid var(--line,#dfe8cd); background:var(--paper,#fff);
+  color:var(--deep,#38670b); border-radius:999px; padding:9px 18px; font:inherit; font-weight:600;
+  font-size:14px; cursor:pointer;
+}
+.fcx-tab.is-on { background:var(--deep,#38670b); border-color:var(--deep,#38670b); color:#fff; }
+.fcx-grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:20px; align-items:start; }
+.fcx-panel {
+  background:var(--paper,#fff); border:1px solid var(--line,#dfe8cd); border-radius:18px;
+  padding:24px; box-shadow:var(--shadow,0 18px 45px rgba(49,77,14,.1));
+}
+.fcx-panel__title { margin:0 0 12px; font-size:19px; color:var(--ink,#294407); }
+.fcx-note { margin:0 0 10px; color:var(--muted,#6f7d5c); font-size:14px; line-height:1.5; }
+.fcx-hint { margin:0 0 10px; font-size:13px; color:var(--muted,#6f7d5c); }
+.fcx-prompt-note {
+  margin:0 0 10px; padding:10px 14px; border-left:3px solid var(--leaf,#80c800);
+  background:var(--cream,#fff8ea); border-radius:0 10px 10px 0; font-size:14px; line-height:1.5;
+}
+.fcx-ask { margin:16px 0 12px; font-size:17px; font-weight:600; color:var(--ink,#294407); }
+.fcx-recap { margin:0 0 12px; padding-left:20px; font-size:14px; line-height:1.7; }
+.fcx-answer { display:flex; flex-direction:column; gap:10px; align-items:flex-start; }
+.fcx-label { font-size:13px; font-weight:600; color:var(--muted,#6f7d5c); }
+.fcx-input, .fcx-select {
+  font:inherit; padding:10px 12px; border:1px solid var(--line,#dfe8cd); border-radius:10px;
+  background:var(--paper,#fff); color:var(--ink,#294407); min-width:220px; max-width:100%;
+}
+.fcx-input--inline { min-width:180px; }
+.fcx-check { display:flex; gap:8px; align-items:center; font-size:14px; }
+.fcx-choices { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 14px; }
+.fcx-choice {
+  appearance:none; border:1px solid var(--line,#dfe8cd); background:var(--cream,#fff8ea);
+  color:var(--deep,#38670b); border-radius:12px; padding:12px 18px; font:inherit; font-weight:600;
+  cursor:pointer;
+}
+.fcx-choice:hover:not(:disabled) { border-color:var(--leaf,#80c800); }
+.fcx-choice.is-on { background:var(--deep,#38670b); border-color:var(--deep,#38670b); color:#fff; }
+.fcx-candidates, .fcx-foods { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px; }
+.fcx-food {
+  appearance:none; display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+  border:1px solid var(--line,#dfe8cd); background:var(--paper,#fff); color:var(--ink,#294407);
+  border-radius:10px; padding:8px 12px; font:inherit; font-size:13px; cursor:pointer; text-align:left;
+}
+.fcx-food:hover { border-color:var(--leaf,#80c800); }
+.fcx-food.is-on { background:var(--leaf-soft,#b6e85b); border-color:var(--deep,#38670b); }
+.fcx-portion { font-size:11px; color:var(--muted,#6f7d5c); }
+.fcx-food.is-on .fcx-portion { color:var(--deep,#38670b); }
+.fcx-action { margin-top:6px; }
+.fcx-err { margin:0 0 14px; padding:10px 14px; border-radius:10px; background:#fdeeee; color:#8c2f2f; font-size:14px; }
+.fcx-empty { margin:0; color:var(--muted,#6f7d5c); font-size:14px; }
+.fcx-panel--day .fcx-day { list-style:none; margin:0 0 14px; padding:0; display:flex; flex-direction:column; gap:8px; }
+.fcx-day-row {
+  display:grid; grid-template-columns:78px 60px minmax(0,1fr); gap:8px; align-items:baseline;
+  padding:9px 12px; border:1px solid var(--line,#dfe8cd); border-radius:10px; font-size:13px;
+}
+.fcx-day-row.is-done { background:var(--cream,#fff8ea); }
+.fcx-day-time { font-weight:700; color:var(--deep,#38670b); }
+.fcx-day-kind { color:var(--muted,#6f7d5c); }
+.fcx-day-foods { color:var(--ink,#294407); }
+.fcx-lists-head { display:flex; gap:16px; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; }
+.fcx-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.fcx-filters .fcx-select { min-width:140px; }
+.fcx-group { margin-top:22px; }
+.fcx-group__title { margin:0 0 10px; font-size:16px; color:var(--deep,#38670b); }
+.fcx-tier { margin:0 0 16px; }
+.fcx-tier__label {
+  margin:0 0 8px; font-size:13px; font-weight:700; color:var(--ink,#294407);
+  display:flex; gap:8px; align-items:baseline; flex-wrap:wrap;
+}
+.fcx-allowance { font-weight:500; font-size:12px; color:var(--muted,#6f7d5c); }
+.fcx-writeins { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.fcx-writein {
+  display:inline-flex; gap:6px; align-items:center; padding:5px 10px; border-radius:999px;
+  background:var(--cream,#fff8ea); border:1px dashed var(--line,#dfe8cd); font-size:12px;
+}
+.fcx-writein button { appearance:none; border:0; background:none; cursor:pointer; font-size:14px; line-height:1; color:var(--muted,#6f7d5c); }
+.fcx-lists-actions { display:flex; gap:14px; align-items:center; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+.fcx-count { font-size:13px; color:var(--muted,#6f7d5c); }
+@media (max-width: 900px) {
+  .fcx-grid { grid-template-columns:1fr; }
+}
+@media (max-width: 560px) {
+  .fcx-panel { padding:18px; }
+  .fcx-input, .fcx-select, .fcx-filters .fcx-select { min-width:0; width:100%; }
+  .fcx-answer { align-items:stretch; }
+  .fcx-answer .fcx-action { width:100%; }
+  .fcx-day-row { grid-template-columns:68px 1fr; }
+  .fcx-day-kind { grid-column:2; }
+  .fcx-day-foods { grid-column:1 / -1; }
+  .fcx-lists-head, .fcx-lists-actions { justify-content:flex-start; }
+}
+
+/* My Progress: the prototype's guide control is a <button>; here it is a link
+   to the guided flow. A button does not inherit line-height, so the link takes
+   the button's to keep the hero's geometry identical. */
+a.progress-hero__guide { line-height: normal; }
