@@ -109,7 +109,8 @@ async function resolve() {
 function navigate(path, { replace = false } = {}) {
   const h = '#' + (path.startsWith('/') ? path : '/' + path);
   if (location.hash === h) { resolve(); return; }
-  if (replace) history.replaceState(null, '', h);
+  // replaceState fires no hashchange, so a replacing navigation resolves itself.
+  if (replace) { history.replaceState(null, '', h); resolve(); }
   else location.hash = h;
 }
 

@@ -125,7 +125,11 @@
      Help stays visible — WCAG 2.2 asks for help to be reachable the same way on
      every screen — but it drops to its icon and keeps its accessible name. */
   .topbar { gap: 4px; padding-inline: var(--s-3); }
-  .search { flex: 1 1 0; min-width: 0; max-width: none; }
+  /* `.topbar .search`, not a bare `.search`: the console's top bar has no
+     search field at all, and the only elements carrying this class are the
+     find bars on Members, Requests, Content, Conversations and the
+     assessment attempts list. An unscoped rule here reached all five. */
+  .topbar .search { flex: 1 1 0; min-width: 0; max-width: none; }
   .topbar__tools { min-width: 0; gap: 2px; }
   .icon-btn { width: 36px; height: 36px; }
   #helpBtn { padding: 0 8px; }
@@ -133,9 +137,13 @@
   #profileBtn { padding: 2px 4px 2px 2px !important; }
   .who__name { display: none; }
 
-  /* A 120px-wide search field communicates nothing. On a phone the field is
-     replaced by one clear icon that opens a full-width search sheet. */
-  .search { display: none; }
+  /* A 120px-wide search field communicates nothing. On a phone the top bar's
+     field is replaced by one clear icon that opens a full-width search sheet.
+     Scoped to `.topbar`: unscoped, this hid the find-bar search on Members,
+     Requests, Content, Conversations and the assessment attempts list — five
+     screens left with no way to search at all, because `.topbar__searchbtn`,
+     the replacement this rule hands off to, is rendered nowhere. */
+  .topbar .search { display: none; }
   .topbar__searchbtn { display: inline-flex; }
   .topbar__spacer { flex: 1 1 auto; }
 

@@ -739,15 +739,22 @@ group('J · Correction pass — consumer', () => {
 });
 
 /* ======================================================================== K
-   CORRECTION PASS (21 Aug 2026) — ADMIN RUNTIME
-   Static assertions over admin-panel/prototype-client: no user-facing
-   "Health Status Report", no stale Coming-Soon claims for the four live
-   sections, the Meal Planning rename, the accurate Food Diary description,
-   and the honest prototype-to-production mapping wording.
+   ADMIN PROTOTYPE — THE CONSOLE, 1:1 (rewritten 15 Nov 2026)
+   On 14 Nov 2026 the owner asked for admin-panel/prototype-client to show
+   Cara the console as it now is. It was rebuilt screen by screen from
+   platform/web/app/admin/**, so the August correction-pass checks that pinned
+   prototype-only structures (the feature table, the v2 storage migrations,
+   the Where-does-this-appear drawer) went with those structures. What still
+   holds is pinned here: the console's own stylesheets, synthetic people,
+   the sharing rule, the guided flows the platform runs, and the old honesty
+   rules (no Health Status Report, no Coming-Soon or Phase-2 claims for live
+   sections, no Your Days, no invented Mindfulness scope, no unsupported
+   supplement guidance).
    ========================================================================= */
 
-group('K · Correction pass — admin', () => {
+group('K · Admin prototype — the console, 1:1', () => {
   const ADMIN = path.join(ROOT, 'admin-panel', 'prototype-client');
+  const CONSOLE_CSS = path.join(ROOT, 'platform', 'web', 'public', 'admin-css');
   const readA = rel => fs.readFileSync(path.join(ADMIN, rel), 'utf8');
   const stripComments = t => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
   const SCREENS = fs.readdirSync(path.join(ADMIN, 'js', 'screens')).filter(f => f.endsWith('.js'));
@@ -755,13 +762,24 @@ group('K · Correction pass — admin', () => {
   SCREENS.forEach(f => { screenSrc[f] = readA(path.join('js', 'screens', f)); });
   const MOCK = readA(path.join('js', 'mock-data.js'));
   const STATE = readA(path.join('js', 'state.js'));
+  const APP = readA(path.join('js', 'app.js'));
+  const INDEX = readA('index.html');
 
+  check("the prototype draws with the console's own stylesheets", () => {
+    if (!fs.existsSync(CONSOLE_CSS)) return; // a checkout without the platform
+    fs.readdirSync(CONSOLE_CSS).filter(f => f.endsWith('.css')).forEach(f => {
+      const mine = path.join(ADMIN, 'css', f);
+      assert.ok(fs.existsSync(mine), `css/${f} is missing from the prototype`);
+      assert.ok(fs.readFileSync(mine).equals(fs.readFileSync(path.join(CONSOLE_CSS, f))),
+        `css/${f} has drifted from platform/web/public/admin-css/${f}`);
+      assert.ok(new RegExp(`href="css/${f.replace('.', '\\.')}\\?v=\\d+"`).test(INDEX), `index.html does not load css/${f}`);
+    });
+  });
   check('no user-facing admin string says Health Status Report', () => {
     SCREENS.forEach(f => {
       assert.ok(!stripComments(screenSrc[f]).includes('Health Status Report'),
         `${f} still shows "Health Status Report"`);
     });
-    // mock-data may keep the historical source FILENAME only
     stripComments(MOCK).split('\n').forEach((line, i) => {
       if (line.includes('Health Status Report')) {
         assert.ok(line.includes('Health Status Report.docx'),
@@ -769,81 +787,58 @@ group('K · Correction pass — admin', () => {
       }
     });
   });
-  check('member-360 renders the Health Assessment card', () => {
-    assert.ok(/<h2 class="card__title">Health Assessment<\/h2>/.test(screenSrc['member-360.js']),
-      'the member-360 card heading was not renamed');
-    assert.ok(/Health Assessment results/.test(screenSrc['member-360.js']),
-      'the screen-reader caption was not renamed');
-  });
-  check('no active screen claims the four live sections are Coming Soon', () => {
+  check('no active screen claims a live section is Coming Soon or held for Phase 2', () => {
     SCREENS.forEach(f => {
       const src = stripComments(screenSrc[f]);
       assert.ok(!/Coming Soon to members/.test(src), `${f} still says Coming Soon to members`);
       assert.ok(!/held for Phase 2|locked for Phase 2/.test(src), `${f} still claims a Phase 2 hold`);
     });
-    assert.ok(/live development sections\. Historical usage is not shown until sufficient activity exists\./.test(screenSrc['insights.js']),
-      'Insights Engagement lost the honest live-sections wording');
   });
-  check('the Meal Planning rename reached the admin runtime', () => {
-    assert.ok(/name: 'Meal Planning'/.test(MOCK), 'FT-04 is not named Meal Planning');
-    assert.ok(/'Meal Planning template: Balanced Start'/.test(MOCK), 'program steps still say Your Days');
-    assert.ok(/label: 'Meal Planning', n: 1890/.test(MOCK), 'the engagement label still says Your Days');
-    assert.ok(/Feed Meal Planning\./.test(MOCK), 'the whereShown row still says Your Days');
-    assert.ok(/Templates feed <b>Meal Planning<\/b>/.test(screenSrc['care-studio.js']),
-      'the Care Studio template explanation still says Your Days');
-    [MOCK].concat(SCREENS.map(f => screenSrc[f])).forEach(src => {
-      assert.ok(!/Your Days/.test(stripComments(src).replace(/your-days/g, '')),
+  check('Meal Planning is the name; Your Days appears only in the client’s verbatim FAQ answer', () => {
+    // Cara's approved Help answer "How do I set up my meals?" still says "go to
+    // Your Days" (build/help.html, platform seed content_data.py). That is her
+    // words, editable in Content, and reported to the owner as a conflict with
+    // her 20 Aug rename rather than changed here.
+    const VERBATIM_FAQ = /go to Your Days and the Veye Companion will help you create meals/g;
+    [MOCK, APP].concat(SCREENS.map(f => screenSrc[f])).forEach(src => {
+      assert.ok(!/Your Days/.test(stripComments(src).replace(/your-days/g, '').replace(VERBATIM_FAQ, '')),
         'an active admin string still says Your Days');
     });
   });
-  check('the Food Diary feature description is accurate', () => {
-    assert.ok(MOCK.includes("desc: 'Daily meal entries, time eaten, pre-meal feelings, notes, prototype macro estimates, daily summary and history.'"),
-      'FT-05 does not describe the daily-entry diary');
-    assert.ok(!/editable diary table and its export/.test(MOCK), 'the old table description is back');
-  });
-  check('member-effect claims use production wording', () => {
-    SCREENS.forEach(f => {
-      const src = stripComments(screenSrc[f]);
-      assert.ok(!/Members see /.test(src.replace(/Members see nothing/g, '')),
-        `${f} still claims a present-tense member effect`);
-      assert.ok(!/straight away/.test(src), `${f} still says straight away`);
-    });
-    assert.ok(/Prototype mapping — the member app is not/.test(readA(path.join('js', 'app.js'))),
-      'the Where-does-this-appear drawer lost its prototype-mapping note');
-    const allScreens = SCREENS.map(f => screenSrc[f]).join('\n');
-    assert.ok(!/Nothing left this prototype/.test(allScreens), 'the leaves/left wording regression is present');
-    assert.ok((allScreens.match(/Nothing leaves this prototype/g) || []).length >= 3,
-      'the three prototype-boundary confirmations are not present');
-  });
-  check('the mindfulness seed carries only the client-supplied status', () => {
+  check('no invented Mindfulness scope and no unsupported supplement guidance', () => {
     assert.ok(!/Guided practices, breathing sessions/.test(stripComments(MOCK)),
       'the invented Mindfulness scope copy is back in the seed');
-  });
-  check('MIG-8 migrates stored states to the corrected wording', () => {
-    assert.ok(/MIG-8/.test(STATE), 'MIG-8 is missing');
-    assert.ok(/'Your Days template:', 'Meal Planning template:'/.test(STATE),
-      'stored program steps are not migrated');
-    assert.ok(/Daily meal entries, time eaten, pre-meal feelings/.test(STATE),
-      'stored FT-05 descriptions are not migrated');
-    assert.ok(/mindfulness\.body = 'Under development — more coming\.'/.test(STATE),
-      'stored mindfulness copy is not migrated');
-  });
-  check('admin assessment and care data match the current client sources', () => {
-    assert.ok(/scale: 'Total of 11 to 33\. Lower is better/.test(MOCK),
-      'admin Health Assessment still uses the old direction');
-    assert.ok(/source: 'Health Assessment\.docx'/.test(MOCK),
-      'admin Health Assessment source was not updated');
-    assert.ok(/first scores 1, the second 2, and the third 3/.test(MOCK),
-      'admin Health Assessment scoring is stale');
-    assert.ok(/from: 11, to: 11[\s\S]*from: 33, to: 33/.test(MOCK),
-      'admin Health Assessment bands are not in the current order');
-    assert.ok(/Are you sleepy after meals\?/.test(MOCK) && /Do you suffer from painful arthritis\?/.test(MOCK),
-      'admin Simple Quiz questions are stale');
-    assert.ok(/Work day with morning exercise/.test(MOCK) && /Weekend day with morning exercise — Option 2/.test(MOCK),
-      'admin Meal Planning templates do not match the supplied day documents');
     assert.ok(!/Magnesium glycinate|Seasonal vitamin D/.test(MOCK),
       'unsupported supplement guidance was reintroduced');
-    assert.ok(/MIG-9/.test(STATE), 'the stale admin source migration is missing');
+  });
+  check("a member's Health Number shows only while they share their health records", () => {
+    assert.ok(/!S\.shares\(m\) \? 'Not shared'/.test(screenSrc['companion.js']),
+      "Sprout's conversation card must say Not shared unless the member shares (as the console does since 15 Nov 2026)");
+    assert.ok(/\$\{shares \?[^}]*: 'Not shared'\}/.test(screenSrc['member-360.js']),
+      'Member 360 must withhold the Health Number unless the member shares');
+  });
+  check('the sample people are invented; only the client’s published support addresses are real', () => {
+    const allowed = /@(demo\.veye\.test|bounces\.demo\.veye\.test|veye\.example)$/;
+    const published = new Set(['help@veye.co', 'contact@veye.co']);
+    const found = MOCK.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
+    assert.ok(found.length > 10, 'the sample data lost its people');
+    found.forEach(address => assert.ok(allowed.test(address) || published.has(address),
+      `mock-data.js carries a real-looking address: ${address}`));
+  });
+  check("Sprout's guided flows are the ones the platform and the consumer prototype run", () => {
+    const load = file => {
+      const sandbox = {};
+      new Function('window', fs.readFileSync(file, 'utf8'))(sandbox);
+      return JSON.stringify(sandbox.VeyeGuidedFlowData);
+    };
+    assert.strictEqual(load(path.join(ADMIN, 'js', 'veye-guided-flows-data.js')),
+      load(path.join(BUILD, 'js', 'veye-guided-flows-data.js')),
+      'the admin prototype and the consumer prototype carry different guided flows');
+  });
+  check('it says it is a prototype, and starts clean without touching the old store', () => {
+    assert.ok(/Prototype · synthetic data/.test(APP), 'the prototype chip is missing');
+    assert.ok(/const KEY = 'veye_admin_client_v3'/.test(STATE), 'the storage key is not the v3 one');
+    assert.ok(!/removeItem\(['"]veye_admin_client_v2['"]\)/.test(STATE), 'the old store must be left alone');
   });
 });
 

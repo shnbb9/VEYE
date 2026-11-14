@@ -1,11 +1,15 @@
 /* ============================================================================
    Members — the directory
    ----------------------------------------------------------------------------
-   Deliberately still a table. A directory is the one place in this console where
-   density is the point, so v2 refines it rather than turning it into cards:
-   a sticky header, a real focus and hover treatment on rows, an active-filter
-   count with one-click clear, a filter drawer instead of a crowded control row
-   on a phone, and Last active sorted by actual date.
+   The console's directory (platform/web app/admin/members/page.tsx): a table,
+   because density is the point. Search across name, email and member id;
+   three filters; sortable columns; Open → Member 360. Members · Prospects ·
+   Deletions are the three views of the Members area.
+
+   The Health Number column is the record only when the member shares their
+   health records with the Veye team. The API withholds it otherwise — before
+   filtering and sorting, so neither can be used to infer it — and the console
+   then shows "Not completed", exactly as here.
    ============================================================================ */
 
 (function () {
@@ -13,262 +17,187 @@
 const { icon } = window.Veye;
 const R = window.Veye.R;
 const S = window.Veye.S;
-const UI = window.Veye.UI;
 const H = window.Veye.H;
-const esc = UI.esc;
+const esc = window.Veye.UI.esc;
 
-const DEFAULTS = { status: 'Any status', onboarding: 'Any onboarding', active: 'Any time' };
-const view = { q: '', ...DEFAULTS, sort: 'name', dir: 1 };
+const MEMBER_VIEWS = [
+  { key: 'members', label: 'Members', route: '/members' },
+  { key: 'prospects', label: 'Prospects', route: '/members/prospects' },
+  { key: 'deletions', label: 'Deletions', route: '/members/deletions' },
+];
+const STATUS = [['any', 'Any status'], ['active', 'Active'], ['inactive', 'Inactive'], ['unverified', 'Email unverified']];
+const ONBOARDING = [['any', 'Any onboarding'], ['complete', 'Complete'], ['not_started', 'Not started']];
+const ACTIVE = [['any', 'Any time'], ['week', 'This week'], ['month', 'This month'], ['longer', 'Longer ago'], ['never', 'Never']];
+const DEFAULT = { q: '', status: 'any', onboarding: 'any', active: 'any', sort: 'name', direction: 'asc', page: 1 };
+const PAGE_SIZE = 25;
+let query = { ...DEFAULT };
 
-const OPTIONS = {
-  status: ['Any status', 'Active', 'Paused'],
-  onboarding: ['Any onboarding', 'Complete', 'In progress', 'Not started'],
-  active: ['Any time', 'Today', 'This week', 'Longer ago', 'Never'],
-};
-
-function onboardingBucket(m) {
-  if (m.onboarding === 'Complete') return 'Complete';
-  if (m.onboarding === 'Not started') return 'Not started';
-  return 'In progress';
+/** A directory row as the API's MemberRow carries it, sharing applied. */
+function row(m) {
+  const shares = S.shares(m);
+  const latest = m.records.health_number[0] || null;
+  return {
+    member_id: m.id, name: m.name, email: m.email, initials: m.initials, photo: m.photo, admin_access: m.adminAccess,
+    joined_at: m.joinedAt, email_verified: m.emailVerified, is_active: m.isActive, last_active_at: m.lastActiveAt,
+    onboarding: m.onboarding,
+    trackers_completed: ['health_number', 'body_composition', 'blood_markers', 'health_assessment', 'simple_quiz'].filter((k) => m.records[k].length).length,
+    health_number: shares && latest ? Number(latest.displayed_score) : null,
+    health_number_status: shares && latest ? latest.status : null,
+  };
 }
 
-/* Buckets from the real timestamp, not from the text of the date. */
-function activeBucket(m) {
-  const t = H.parseWhen(m.lastActive);
-  if (!t) return 'Never';
-  const days = (H.parseWhen('14 Aug 2026') - t) / 86400000;
-  if (days < 1) return 'Today';
-  if (days < 7) return 'This week';
-  return 'Longer ago';
-}
-
-function activeFilterCount() {
-  return ['status', 'onboarding', 'active'].filter((k) => view[k] !== DEFAULTS[k]).length
-    + (view.q.trim() ? 1 : 0);
-}
-
-function filtered() {
-  const st = S.get();
-  const q = view.q.trim().toLowerCase();
-  const rows = st.members.filter((m) => {
-    if (q && !(m.name + ' ' + m.email + ' ' + m.id + ' ' + (m.program || '')).toLowerCase().includes(q)) return false;
-    if (view.status !== DEFAULTS.status && m.status !== view.status) return false;
-    if (view.onboarding !== DEFAULTS.onboarding && onboardingBucket(m) !== view.onboarding) return false;
-    if (view.active !== DEFAULTS.active && activeBucket(m) !== view.active) return false;
-    return true;
+function rows() {
+  const now = Date.now();
+  let out = S.get().members.map(row);
+  const needle = query.q.trim().toLowerCase();
+  if (needle) out = out.filter((r) => r.name.toLowerCase().includes(needle) || r.email.toLowerCase().includes(needle) || r.member_id.includes(needle));
+  if (query.status === 'active') out = out.filter((r) => r.is_active);
+  else if (query.status === 'inactive') out = out.filter((r) => !r.is_active);
+  else if (query.status === 'unverified') out = out.filter((r) => !r.email_verified);
+  if (query.onboarding === 'complete') out = out.filter((r) => r.onboarding === 'Complete');
+  else if (query.onboarding === 'not_started') out = out.filter((r) => r.onboarding !== 'Complete');
+  const age = (r) => (r.last_active_at ? now - Date.parse(r.last_active_at) : null);
+  if (query.active === 'week') out = out.filter((r) => age(r) !== null && age(r) <= 7 * 864e5);
+  else if (query.active === 'month') out = out.filter((r) => age(r) !== null && age(r) <= 30 * 864e5);
+  else if (query.active === 'longer') out = out.filter((r) => age(r) !== null && age(r) > 30 * 864e5);
+  else if (query.active === 'never') out = out.filter((r) => r.last_active_at === null);
+  const key = {
+    name: (r) => r.name.toLowerCase(),
+    joined: (r) => r.joined_at,
+    health_number: (r) => (r.health_number === null ? [1, 0] : [0, r.health_number]),
+    last_active: (r) => r.last_active_at || '1970-01-01T00:00:00.000Z',
+  }[query.sort];
+  out.sort((a, b) => {
+    const x = key(a), y = key(b);
+    const c = Array.isArray(x) ? (x[0] - y[0]) || (x[1] - y[1]) : (x < y ? -1 : x > y ? 1 : 0);
+    return query.direction === 'asc' ? c : -c;
   });
-  const key = view.sort;
-  rows.sort((a, b) => {
-    let x, y;
-    if (key === 'hn') { x = a.hn == null ? 99 : a.hn; y = b.hn == null ? 99 : b.hn; }
-    else if (key === 'active') { x = H.parseWhen(a.lastActive); y = H.parseWhen(b.lastActive); }
-    else { x = String(a[key] || '').toLowerCase(); y = String(b[key] || '').toLowerCase(); }
-    return x < y ? -view.dir : x > y ? view.dir : 0;
-  });
-  return rows;
+  return out;
 }
-
-function reset() { view.q = ''; Object.assign(view, DEFAULTS); }
 
 function render(outlet) {
-  const st = S.get();
-
+  const total = S.get().members.length;
   outlet.innerHTML = `
   <div class="page">
-    ${H.pageHead({
-      title: 'Members',
-      desc: `Everyone using Veye. ${H.n(st.members.length)} in this prototype; the live product holds ${H.n(window.Veye.SEED.insights.members.total)}.`,
-      crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members' }],
-      where: 'members',
-      actions: `<button class="btn btn--secondary" id="exportBtn">${icon('download', { size: 18 })} Export</button>
-                <button class="btn btn--primary" id="addBtn">${icon('user-plus', { size: 18 })} Add member</button>`,
-    })}
-
+    ${H.pageHead({ title: 'Members', desc: `Everyone using Veye on this local stack — ${total} member${total === 1 ? '' : 's'}.`,
+      crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members' }] })}
+    ${H.subnav(MEMBER_VIEWS, 'members')}
     <div class="card">
       <div class="findbar">
         <div class="search" style="flex:1 1 260px;max-width:360px;position:relative">
           <span class="search__icon">${icon('search', { size: 18 })}</span>
           <label class="sr-only" for="mSearch">Search members</label>
-          <input class="search__input" id="mSearch" type="search" placeholder="Search by name, email or member id" value="${esc(view.q)}">
+          <input class="search__input" id="mSearch" type="search" placeholder="Search by name, email or member id" value="${esc(query.q)}">
         </div>
-
-        <!-- Desktop keeps the three selects inline. -->
         <div class="findbar__filters">
-          ${select('fStatus', 'Member status', 'status')}
-          ${select('fOnboarding', 'Onboarding status', 'onboarding')}
-          ${select('fActive', 'Last activity', 'active')}
+          ${select('fStatus', 'Member status', STATUS, query.status)}
+          ${select('fOnboarding', 'Onboarding status', ONBOARDING, query.onboarding)}
+          ${select('fActive', 'Last activity', ACTIVE, query.active)}
         </div>
-
-        <!-- A phone gets one button into a drawer instead of a crowded row. -->
-        <button class="btn btn--secondary btn--sm findbar__drawerbtn" id="filterDrawerBtn">
-          ${icon('filter', { size: 16 })} Filters<span id="fCountSm"></span>
-        </button>
-
         <span class="findbar__spacer"></span>
         <span class="filtercount" id="fCount" hidden></span>
-        <button class="btn btn--ghost btn--sm" id="clearBtn" hidden>Clear</button>
+        <button class="btn btn--ghost btn--sm" type="button" id="clearBtn" hidden>Clear</button>
       </div>
       <div id="mResults"></div>
     </div>
   </div>`;
 
-  outlet.querySelector('#addBtn').addEventListener('click', window.Veye.addMember);
-  outlet.querySelector('#exportBtn').addEventListener('click', () => {
-    const rows = filtered();
-    UI.confirm({
-      title: 'Export this list?',
-      message: `${rows.length} member${rows.length === 1 ? '' : 's'} would be written to a spreadsheet: name, member id, email, Health Number, program, last activity and status.`,
-      reversible: 'In this prototype nothing leaves the browser.',
-      confirmLabel: 'Export ' + rows.length + ' members',
-    }).then((r) => {
-      if (r.ok) UI.toast({ title: 'Export prepared', message: rows.length + ' members. In the real console the file downloads here.' });
-    });
-  });
-
-  const q = outlet.querySelector('#mSearch');
-  q.addEventListener('input', () => { view.q = q.value; paint(outlet); });
-  ['fStatus:status', 'fOnboarding:onboarding', 'fActive:active'].forEach((pair) => {
-    const [id, key] = pair.split(':');
-    outlet.querySelector('#' + id).addEventListener('change', (e) => { view[key] = e.target.value; paint(outlet); });
-  });
-  outlet.querySelector('#clearBtn').addEventListener('click', () => {
-    reset();
-    render(outlet);
-    outlet.querySelector('#mSearch').focus();
-    UI.toast({ title: 'Filters cleared', kind: 'info', timeout: 2400 });
-  });
-  outlet.querySelector('#filterDrawerBtn').addEventListener('click', () => openFilterDrawer(outlet));
-
+  const set = (patch) => { query = { ...query, ...patch, page: 1 }; paint(outlet); };
+  outlet.querySelector('#mSearch').addEventListener('input', (e) => set({ q: e.target.value }));
+  outlet.querySelector('#fStatus').addEventListener('change', (e) => set({ status: e.target.value }));
+  outlet.querySelector('#fOnboarding').addEventListener('change', (e) => set({ onboarding: e.target.value }));
+  outlet.querySelector('#fActive').addEventListener('change', (e) => set({ active: e.target.value }));
+  outlet.querySelector('#clearBtn').addEventListener('click', () => { query = { ...DEFAULT }; render(outlet); });
   paint(outlet);
 }
 
-function select(id, label, key) {
+function select(id, label, options, value) {
   return `<div class="field" style="margin:0">
     <label class="sr-only" for="${id}">${label}</label>
-    <select class="select input--sm" id="${id}">
-      ${OPTIONS[key].map((o) => `<option ${o === view[key] ? 'selected' : ''}>${o}</option>`).join('')}
-    </select>
+    <select class="select input--sm" id="${id}">${options.map(([v, l]) => `<option value="${v}" ${v === value ? 'selected' : ''}>${l}</option>`).join('')}</select>
   </div>`;
 }
 
-/* The phone filter drawer. Same three filters, room to read them. */
-function openFilterDrawer(outlet) {
-  UI.drawer({
-    eyebrow: 'Members',
-    title: 'Filters',
-    desc: 'Narrow the directory. The list updates as you choose.',
-    body: `<div class="stack gap-5">
-      ${H.field({ id: 'dStatus', label: 'Member status', type: 'select', options: OPTIONS.status, value: view.status })}
-      ${H.field({ id: 'dOnboarding', label: 'Onboarding status', type: 'select', options: OPTIONS.onboarding, value: view.onboarding })}
-      ${H.field({ id: 'dActive', label: 'Last activity', type: 'select', options: OPTIONS.active, value: view.active })}
-      <p class="t-support" id="dCount"></p>
-    </div>`,
-    foot: `<button class="btn btn--secondary" id="dClear">Clear all</button>
-           <button class="btn btn--primary" id="dDone">Show results</button>`,
-    onMount: (ref) => {
-      const count = ref.el.querySelector('#dCount');
-      const refresh = () => { count.textContent = filtered().length + ' of ' + S.get().members.length + ' members match.'; };
-      [['dStatus', 'status'], ['dOnboarding', 'onboarding'], ['dActive', 'active']].forEach(([id, key]) => {
-        ref.el.querySelector('#' + id).addEventListener('change', (e) => {
-          view[key] = e.target.value; refresh(); paint(outlet);
-        });
-      });
-      refresh();
-      ref.el.querySelector('#dClear').addEventListener('click', () => {
-        reset(); ref.close(); render(outlet);
-        UI.toast({ title: 'Filters cleared', kind: 'info', timeout: 2400 });
-      });
-      ref.el.querySelector('#dDone').addEventListener('click', () => { ref.close(); render(outlet); });
-    },
-  });
-}
-
 function paint(outlet) {
-  const rows = filtered();
+  const all = rows();
   const host = outlet.querySelector('#mResults');
-  const total = S.get().members.length;
-  const n = activeFilterCount();
+  const filters = (query.status !== 'any' ? 1 : 0) + (query.onboarding !== 'any' ? 1 : 0) + (query.active !== 'any' ? 1 : 0) + (query.q.trim() ? 1 : 0);
+  const count = outlet.querySelector('#fCount');
+  count.hidden = outlet.querySelector('#clearBtn').hidden = filters === 0;
+  count.textContent = `${filters} filter${filters === 1 ? '' : 's'} active`;
 
-  // filter count + clear
-  const countEl = outlet.querySelector('#fCount');
-  const clearEl = outlet.querySelector('#clearBtn');
-  const smEl = outlet.querySelector('#fCountSm');
-  countEl.hidden = clearEl.hidden = n === 0;
-  countEl.textContent = n + (n === 1 ? ' filter' : ' filters') + ' active';
-  smEl.textContent = n ? ' (' + n + ')' : '';
-
-  if (!rows.length) {
-    host.innerHTML = `<div class="card__body">${H.emptyState({
-      icon: 'search',
-      title: 'No members match those filters',
+  if (!all.length) {
+    host.innerHTML = `<div class="card__body">${H.emptyState({ icon: 'search', title: 'No members match those filters',
       msg: 'Try a shorter search, or clear one of the three filters above.',
-      action: `<button class="btn btn--secondary" id="emptyClear">Clear all filters</button>`,
-    })}</div>`;
-    host.querySelector('#emptyClear').addEventListener('click', () => {
-      reset(); render(outlet); UI.toast({ title: 'Filters cleared', kind: 'info', timeout: 2400 });
-    });
+      action: '<button class="btn btn--secondary" type="button" id="emptyClear">Clear all filters</button>' })}</div>`;
+    host.querySelector('#emptyClear').addEventListener('click', () => { query = { ...DEFAULT }; render(outlet); });
     return;
   }
 
+  const pageRows = all.slice((query.page - 1) * PAGE_SIZE, query.page * PAGE_SIZE);
   const th = (key, label, priority) => `
-    <th scope="col" ${priority ? `data-col-priority="${priority}"` : ''}
-        ${view.sort === key ? `aria-sort="${view.dir === 1 ? 'ascending' : 'descending'}"` : ''}>
-      <button class="th-sort" data-sort="${key}" aria-label="Sort by ${esc(label)}">
-        ${esc(label)} ${view.sort === key ? icon(view.dir === 1 ? 'chevron-up' : 'chevron-down', { size: 14 }) : ''}
-      </button></th>`;
+    <th scope="col" ${priority ? `data-col-priority="${priority}"` : ''} ${query.sort === key ? `aria-sort="${query.direction === 'asc' ? 'ascending' : 'descending'}"` : ''}>
+      <button class="th-sort" type="button" data-sort="${key}" aria-label="Sort by ${label}">${label} ${query.sort === key ? icon(query.direction === 'asc' ? 'chevron-right' : 'chevron-left', { size: 14 }) : ''}</button>
+    </th>`;
 
   host.innerHTML = `
     <div class="table-wrap table-wrap--sticky">
-      <table class="table table--rows">
-        <caption class="sr-only">Members, ${rows.length} of ${total} shown</caption>
+      <table class="table table--rows" data-testid="members-table">
+        <caption class="sr-only">Members, ${pageRows.length} of ${all.length} shown</caption>
         <thead><tr>
           ${th('name', 'Member')}
-          ${th('hn', 'Health Number')}
-          ${th('program', 'Program', 'medium')}
-          ${th('onboarding', 'Onboarding', 'low')}
-          ${th('active', 'Last active', 'medium')}
-          ${th('status', 'Status')}
+          ${th('health_number', 'Health Number')}
+          <th scope="col" data-col-priority="medium">Trackers</th>
+          <th scope="col" data-col-priority="low">Onboarding</th>
+          ${th('last_active', 'Last active', 'medium')}
+          ${th('joined', 'Joined', 'low')}
+          <th scope="col">Status</th>
           <th scope="col"><span class="sr-only">Open</span></th>
         </tr></thead>
         <tbody>
-          ${rows.map((m) => `<tr>
+          ${pageRows.map((m) => `<tr>
             <td>
               <div class="person">
-                <span class="avatar avatar--sm">${esc(m.initials)}</span>
+                ${H.avatar(m, 'sm')}
                 <div style="min-width:0">
-                  <div class="cell-primary">${esc(m.name)}</div>
-                  <div class="cell-sub">${esc(m.id)} · ${esc(m.email)}</div>
+                  <div class="cell-primary">${esc(m.name)}${m.admin_access ? '<span class="tag" style="margin-left:8px">admin access</span>' : ''}</div>
+                  <div class="cell-sub">${esc(m.email)}</div>
                 </div>
               </div>
             </td>
-            <td>${m.hn == null
-                  ? '<span class="t-muted">Not completed</span>'
-                  : `<span class="t-num">${m.hn.toFixed(1)}</span> <span class="cell-sub">${esc(m.hnBand)}</span>`}</td>
-            <td data-col-priority="medium">${m.program ? esc(m.program) : '<span class="t-muted">None</span>'}</td>
+            <td>${m.health_number === null ? '<span class="t-muted">Not completed</span>'
+              : `<span class="t-num">${m.health_number.toFixed(1)}</span> <span class="cell-sub">${esc(m.health_number_status)}</span>`}</td>
+            <td data-col-priority="medium">${m.trackers_completed} of 5</td>
             <td data-col-priority="low">${esc(m.onboarding)}</td>
-            <td data-col-priority="medium">${esc(m.lastActive)}</td>
-            <td>${H.chip(m.status)}</td>
-            <td style="text-align:right">
-              <a class="btn btn--secondary btn--sm" href="${R.href('/members/' + m.id + '/overview')}">Open<span class="sr-only"> ${esc(m.name)}</span></a>
-            </td>
+            <td data-col-priority="medium">${m.last_active_at ? esc(H.fmtDate(m.last_active_at)) : '<span class="t-muted">Never</span>'}</td>
+            <td data-col-priority="low">${esc(H.fmtDate(m.joined_at))}</td>
+            <td>${H.chip(m.is_active ? (m.email_verified ? 'Active' : 'Unverified') : 'Inactive', m.is_active ? (m.email_verified ? 'live' : 'draft') : 'archived')}</td>
+            <td style="text-align:right"><a class="btn btn--secondary btn--sm" href="${R.href('/members/' + m.member_id)}">Open<span class="sr-only"> ${esc(m.name)}</span></a></td>
           </tr>`).join('')}
         </tbody>
       </table>
     </div>
     <div class="pager">
-      <span class="pager__info">Showing ${rows.length} of ${total} members</span>
+      <span class="pager__info">Showing ${pageRows.length} of ${all.length} members</span>
       <span class="t-support">A lower Health Number is better.</span>
+      ${all.length > PAGE_SIZE ? `<span class="row gap-2">
+        <button class="btn btn--ghost btn--sm" type="button" id="prevPage" ${query.page <= 1 ? 'disabled' : ''}>Previous</button>
+        <button class="btn btn--ghost btn--sm" type="button" id="nextPage" ${query.page * PAGE_SIZE >= all.length ? 'disabled' : ''}>Next</button>
+      </span>` : ''}
     </div>`;
 
-  host.querySelectorAll('[data-sort]').forEach((b) => {
-    b.addEventListener('click', () => {
-      const k = b.dataset.sort;
-      if (view.sort === k) view.dir = -view.dir; else { view.sort = k; view.dir = 1; }
-      paint(outlet);
-    });
-  });
+  host.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => {
+    const sort = b.dataset.sort;
+    query = { ...query, sort, direction: query.sort === sort && query.direction === 'asc' ? 'desc' : 'asc', page: 1 };
+    paint(outlet);
+  }));
+  const prev = host.querySelector('#prevPage');
+  if (prev) prev.addEventListener('click', () => { query.page -= 1; paint(outlet); });
+  const next = host.querySelector('#nextPage');
+  if (next) next.addEventListener('click', () => { query.page += 1; paint(outlet); });
 }
 
+window.Veye.MEMBER_VIEWS = MEMBER_VIEWS;
 window.Veye.screens = window.Veye.screens || {};
 window.Veye.screens.members = { render };
 

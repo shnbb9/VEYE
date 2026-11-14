@@ -1,11 +1,20 @@
 /* ============================================================================
-   Companion
+   Companion — Conversations · Knowledge Sources · Feedback · Settings
    ----------------------------------------------------------------------------
-   Two areas: what Companion is allowed to say, and what it has been saying.
+   The console's Companion area (platform/web app/admin/companion/**). Sprout
+   is the companion members talk to inside Veye; it answers from approved Veye
+   knowledge and short summaries of the member's own results.
 
-   No model version, no policy version, no review targets and no incident
-   register. Veye Companion does not diagnose, treat or prevent anything, and
-   nothing on this screen suggests otherwise.
+   Reading a conversation changes nothing; marking it reviewed is recorded in
+   the audit log. Knowledge sources are approved one at a time, and only an
+   Active source with an ingested document is ever retrievable. Settings are
+   the wording, quick prompts and topic rules Sprout's policy gate reads on
+   every message.
+
+   One deliberate difference from the console: the member panel beside a
+   transcript shows the Health Number only when the member shares their
+   health records (see the gap matrix — the console's endpoint does not apply
+   the sharing rule there).
    ============================================================================ */
 
 (function () {
@@ -17,604 +26,560 @@ const UI = window.Veye.UI;
 const H = window.Veye.H;
 const esc = UI.esc;
 
-const MODES = [
+const COMPANION_NAV = [
   { key: 'conversations', label: 'Conversations', route: '/companion/conversations' },
-  { key: 'settings',      label: 'Companion settings', route: '/companion/settings' },
-  { key: 'guided',        label: 'Guided Experiences', route: '/companion/guided' },
+  { key: 'knowledge', label: 'Knowledge Sources', route: '/companion/knowledge-sources' },
+  { key: 'feedback', label: 'Feedback', route: '/companion/feedback' },
+  { key: 'settings', label: 'Settings', route: '/companion/settings' },
+];
+const MODES = { conversations: 'conversations', 'knowledge-sources': 'knowledge', feedback: 'feedback', settings: 'settings' };
+const DEFAULT_DESC = "Sprout is the companion members talk to inside Veye. It answers from approved Veye knowledge and short summaries of the member's own results.";
+const ADVANCED_NAV = [
+  { key: 'ai-monitoring', label: 'AI Monitoring' }, { key: 'retrieval-diagnostics', label: 'Retrieval Diagnostics' },
+  { key: 'safety-analytics', label: 'Safety Analytics' }, { key: 'provider-status', label: 'Provider Status' }, { key: 'audit', label: 'Audit' },
 ];
 
-let selected = null;
-const convView = { q: '', filter: 'Needs review' };
-
-function render(outlet, route) {
-  const mode = route.params.mode || 'conversations';
-  const st = S.get();
-
-  if (!MODES.some((m) => m.key === mode)) {
-    outlet.innerHTML = `<div class="page">
-      ${H.pageHead({ title: 'Companion',
-        crumbs: [{ label: 'Home', route: '/home' }, { label: 'Companion' }],
-        desc: `Companion has no section called <code>${esc(mode)}</code>.` })}
-      ${H.subnav(MODES, null)}
-      <div class="card"><div class="card__body">${H.emptyState({
-        icon: 'sprout', title: 'Three sections are available',
-        msg: 'Conversations, Companion settings, and Guided Experiences.',
-        action: `<a class="btn btn--primary" href="${R.href('/companion/conversations')}">Open Conversations</a>`,
-      })}</div></div></div>`;
-    return;
-  }
-
-  const flagged = st.conversations.filter((c) => c.flagged && !c.reviewed).length;
-
+function frame(outlet, active, { desc, actions, count } = {}) {
   outlet.innerHTML = `
   <div class="page">
-    ${H.pageHead({
-      title: 'Companion',
-      desc: `${esc(st.companion.name)} is the companion members talk to inside Veye. It answers from their own plan, diary and assessments.`,
-      crumbs: [{ label: 'Home', route: '/home' }, { label: 'Companion' }],
-      where: 'companion',
-      actions: mode === 'settings'
-        ? `<button class="btn btn--secondary" id="previewBtn">${icon('eye', { size: 18 })} Preview</button>
-           <button class="btn btn--primary" id="saveBtn">${icon('save', { size: 18 })} Save changes</button>`
-        : '',
-    })}
-    ${H.subnav(MODES.map((m) => m.key === 'conversations' ? { ...m, count: flagged || undefined } : m), mode)}
+    ${H.pageHead({ title: 'Companion', desc: esc(desc || DEFAULT_DESC), crumbs: [{ label: 'Home', route: '/home' }, { label: 'Companion' }], actions })}
+    ${H.subnav(COMPANION_NAV.map((n) => (n.key === 'conversations' ? { ...n, count } : n)), active)}
     <div id="cBody"></div>
   </div>`;
-
-  const body = outlet.querySelector('#cBody');
-  if (mode === 'settings') { settings(body, outlet); }
-  else if (mode === 'guided') { window.Veye.screens.companionGuided.render(body); }
-  else { conversations(body); }
+  return outlet.querySelector('#cBody');
 }
 
-/* ----------------------------------------------------------------- settings -- */
-function settings(host, outlet) {
+function render(outlet, route) {
+  const mode = MODES[route.params.mode || 'conversations'];
+  if (!mode) {
+    const body = frame(outlet, null);
+    body.innerHTML = `<div class="card"><div class="card__body">${H.emptyState({ icon: 'sprout', title: 'Companion has no section by that name',
+      msg: 'Conversations, Knowledge Sources, Feedback and Settings are the four.',
+      action: `<a class="btn btn--primary" href="${R.href('/companion/conversations')}">Open Conversations</a>` })}</div></div>`;
+    return;
+  }
+  ({ conversations, knowledge, feedback, settings })[mode](outlet, route);
+}
+
+/* ========================================================= CONVERSATIONS == */
+const FILTERS = [['needs_review', 'Needs review'], ['reviewed', 'Reviewed'], ['all', 'All']];
+let conv = { filter: 'needs_review', q: '', selected: null };
+
+function conversationRows() {
   const st = S.get();
-  const c = st.companion;
-
-  host.innerHTML = `
-    <div class="hgrid" data-reveal>
-      <div class="stack gap-5">
-        <div class="card">
-          <div class="card__head">
-            <div><h2 class="card__title">Is Companion on?</h2>
-              <p class="t-support">When it is off, members see the rest of their dashboard as normal and Companion is simply absent.</p></div>
-            <label class="switch">
-              <input type="checkbox" id="cEnabled" ${c.enabled ? 'checked' : ''}>
-              <span class="switch__track"></span>
-              <span class="check__text">${c.enabled ? 'On for everyone' : 'Off'}</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card__head"><div><h2 class="card__title">What Companion says</h2></div></div>
-          <div class="card__body stack gap-5">
-            ${H.field({ id: 'cWelcome', label: 'Opening message', type: 'textarea', rows: 3, value: c.welcome,
-              hint: 'The first thing a member reads when they open Companion.' })}
-            ${H.field({ id: 'cSafe', label: 'When a question needs a person', type: 'textarea', rows: 3, value: c.safeResponse,
-              hint: 'Used for anything about an amount, a symptom or a medicine.' })}
-            ${H.field({ id: 'cFallback', label: 'When the question is off-topic', type: 'textarea', rows: 3, value: c.fallback,
-              hint: 'Used when the question has nothing to do with Veye.' })}
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card__head">
-            <div><h2 class="card__title">Quick prompts</h2>
-              <p class="t-support">The suggestions a member can tap instead of typing.</p></div>
-            <button class="btn btn--secondary btn--sm" id="addPrompt">${icon('plus', { size: 16 })} Add a prompt</button>
-          </div>
-          <div class="card__body card__body--flush">
-            <div class="rows">${c.prompts.map((p) => `
-              <div class="rowitem">
-                <span class="rowitem__icon${p.active ? '' : ' rowitem__icon--off'}">${icon('messages', { size: 18 })}</span>
-                <div><div class="rowitem__title">${esc(p.label)}</div>
-                  <div class="rowitem__meta">Asks: ${esc(p.prompt)}</div></div>
-                <div class="rowitem__side">
-                  <label class="switch">
-                    <input type="checkbox" data-prompt="${p.id}" ${p.active ? 'checked' : ''}>
-                    <span class="switch__track"></span>
-                    <span class="sr-only">Show “${esc(p.label)}” to members</span>
-                  </label>
-                  <button class="btn btn--ghost btn--sm" data-editp="${p.id}">Edit<span class="sr-only"> ${esc(p.label)}</span></button>
-                </div>
-              </div>`).join('')}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card__head"><div><h2 class="card__title">What Companion may talk about</h2>
-          <p class="t-support">Anything outside this list gets the off-topic wording, or is handed to a person.</p></div></div>
-        <div class="card__body card__body--flush">
-          <div class="rows">${c.topics.map((t) => `
-            <div class="rowitem" style="grid-template-columns:44px minmax(0,1fr) auto">
-              <span class="rowitem__icon${t.allowed ? '' : ' rowitem__icon--warn'}">
-                ${icon(t.allowed ? 'check-circle' : 'lock', { size: 18 })}</span>
-              <div><div class="rowitem__title">${esc(t.label)}</div>
-                ${t.why ? `<div class="rowitem__meta">${esc(t.why)}</div>` : ''}</div>
-              <div class="rowitem__side">
-                <label class="switch">
-                  <input type="checkbox" data-topic="${t.id}" ${t.allowed ? 'checked' : ''}>
-                  <span class="switch__track"></span>
-                  <span class="sr-only">Allow “${esc(t.label)}”</span>
-                </label>
-              </div>
-            </div>`).join('')}</div>
-        </div>
-        <div class="card__foot" style="display:block">
-          <div class="notice notice--quiet">${icon('info', { size: 18 })}
-            <div>Companion does not diagnose, treat or prevent any condition. Questions about symptoms,
-            medicines or amounts are always handed to a person.</div></div>
-          <div class="notice notice--quiet" style="margin-top:12px">${icon('file-text', { size: 18 })}
-            <div><b>Approved sources only.</b> Companion may use the member's plan, diary and assessment history plus client-approved VEYE educational content. API keys, model secrets and prompt engineering are not managed here.</div></div>
-        </div>
-      </div>
-    </div>
-
-    <section class="card" id="guidedExperiencesCard" style="margin-top:var(--s-5)" data-reveal>
-      <div class="card__head">
-        <div><h2 class="card__title">${icon('sprout', { size: 20 })} Guided Experiences</h2>
-          <p class="t-support">Cara’s decision trees run by Sprout — First-Time User and the Progress Tracker Guide — with versions, a readable preview and an on/off switch per guide.</p></div>
-        <a class="btn btn--primary btn--sm" href="${R.href('/companion/guided')}">Open Guided Experiences</a>
-      </div>
-    </section>
-
-    <section class="card" id="knowledgeSources" style="margin-top:var(--s-5)" data-reveal>
-      <div class="card__head">
-        <div><h2 class="card__title">Knowledge Sources</h2>
-          <p class="t-support">Approved sources Companion may draw on. These are product records only — no files, indexing, credentials or model settings are managed here.</p></div>
-        <button class="btn btn--primary btn--sm" id="addSource">${icon('plus', { size: 16 })} Add source</button>
-      </div>
-      <div class="card__body card__body--flush">
-        <div class="rows">${(c.knowledgeSources || []).map((source) => `
-          <div class="rowitem" style="grid-template-columns:44px minmax(0,1fr) auto">
-            <span class="rowitem__icon${source.status === 'Active' ? '' : ' rowitem__icon--off'}">${icon('file-text', { size: 18 })}</span>
-            <div><div class="rowitem__title">${esc(source.title)}</div>
-              <div class="rowitem__meta">${esc(source.type)} · ${esc(source.scope)}</div>
-              <div class="rowitem__meta">${source.reference ? esc(source.reference) + ' · ' : ''}Updated ${esc(source.updated)}</div></div>
-            <div class="rowitem__side row gap-2 wrap">
-              ${H.chip(source.status)}
-              <button class="btn btn--ghost btn--sm" data-edit-source="${source.id}">View / edit</button>
-              ${source.status === 'Archived'
-                ? `<button class="btn btn--ghost btn--sm" data-source-restore="${source.id}">Restore</button>`
-                : `<button class="btn btn--ghost btn--sm" data-source-toggle="${source.id}">${source.status === 'Active' ? 'Deactivate' : 'Activate'}</button>
-                  <button class="btn btn--ghost btn--sm" data-source-archive="${source.id}">Archive</button>`}
-            </div>
-          </div>`).join('')}</div>
-      </div>
-      <div class="card__foot"><span class="t-support">Archiving keeps the source record and its history. It does not permanently delete it.</span></div>
-    </section>`;
-
-  const dirty = () => S.markDirty('companion', 'Companion settings');
-
-  host.querySelector('#cEnabled').addEventListener('change', (e) => {
-    S.set({ companion: { ...S.get().companion, enabled: e.target.checked } });
-    settings(host, outlet);
-    UI.toast({ title: e.target.checked ? 'Companion is on' : 'Companion is off',
-      message: (e.target.checked ? 'In production, members could open it from their dashboard.' : 'In production, members would no longer see Companion.') + ' Prototype: saved in this browser only.', kind: 'info' });
-  });
-
-  ['cWelcome', 'cSafe', 'cFallback'].forEach((id) => {
-    host.querySelector('#' + id).addEventListener('input', dirty);
-  });
-
-  host.querySelectorAll('[data-prompt]').forEach((b) => b.addEventListener('change', () => {
-    const stx = S.get();
-    S.set({ companion: { ...stx.companion, prompts: stx.companion.prompts.map((p) =>
-      p.id === b.dataset.prompt ? { ...p, active: b.checked } : p) } });
-    settings(host, outlet);
-    UI.toast({ title: b.checked ? 'Prompt shown' : 'Prompt hidden', kind: 'info', timeout: 2600 });
-  }));
-
-  host.querySelectorAll('[data-topic]').forEach((b) => b.addEventListener('change', () => {
-    const stx = S.get();
-    S.set({ companion: { ...stx.companion, topics: stx.companion.topics.map((t) =>
-      t.id === b.dataset.topic ? { ...t, allowed: b.checked } : t) } });
-    settings(host, outlet);
-    UI.toast({ title: b.checked ? 'Topic allowed' : 'Topic blocked', kind: 'info', timeout: 2600 });
-  }));
-
-  host.querySelectorAll('[data-editp]').forEach((b) => b.addEventListener('click', () => {
-    const p = S.get().companion.prompts.find((x) => x.id === b.dataset.editp);
-    editPrompt(p, host, outlet);
-  }));
-
-  host.querySelector('#addPrompt').addEventListener('click', () => editPrompt(null, host, outlet));
-
-  host.querySelector('#addSource').addEventListener('click', () => editSource(null, host, outlet));
-  host.querySelectorAll('[data-edit-source]').forEach((b) => b.addEventListener('click', () => {
-    const source = S.get().companion.knowledgeSources.find((x) => x.id === b.dataset.editSource);
-    editSource(source, host, outlet);
-  }));
-  host.querySelectorAll('[data-source-toggle]').forEach((b) => b.addEventListener('click', () => {
-    const stx = S.get();
-    const sources = stx.companion.knowledgeSources.map((source) => source.id === b.dataset.sourceToggle
-      ? { ...source, status: source.status === 'Active' ? 'Inactive' : 'Active', updated: 'Just now' } : source);
-    S.set({ companion: { ...stx.companion, knowledgeSources: sources } });
-    S.note((b.textContent.trim() === 'Activate' ? 'Activated' : 'Deactivated') + ' a Companion knowledge source');
-    settings(host, outlet);
-    UI.toast({ title: b.textContent.trim() === 'Activate' ? 'Source activated' : 'Source deactivated', message: 'The source status was saved in this browser.' });
-  }));
-  host.querySelectorAll('[data-source-archive]').forEach((b) => b.addEventListener('click', async () => {
-    const source = S.get().companion.knowledgeSources.find((x) => x.id === b.dataset.sourceArchive);
-    const answer = await UI.confirm({ title: 'Archive this source?', message: '“' + source.title + '” will be retained as an archived record and will not be permanently deleted.', confirmLabel: 'Archive source' });
-    if (!answer.ok) return;
-    const stx = S.get();
-    S.set({ companion: { ...stx.companion, knowledgeSources: stx.companion.knowledgeSources.map((item) => item.id === source.id ? { ...item, status: 'Archived', updated: 'Just now' } : item) } });
-    S.note('Archived Companion knowledge source “' + source.title + '”');
-    settings(host, outlet);
-    UI.toast({ title: 'Source archived', message: 'The archived record remains available for review.' });
-  }));
-  host.querySelectorAll('[data-source-restore]').forEach((b) => b.addEventListener('click', () => {
-    const source = S.get().companion.knowledgeSources.find((x) => x.id === b.dataset.sourceRestore);
-    const stx = S.get();
-    S.set({ companion: { ...stx.companion, knowledgeSources: stx.companion.knowledgeSources.map((item) => item.id === source.id ? { ...item, status: 'Inactive', updated: 'Just now' } : item) } });
-    S.note('Restored Companion knowledge source “' + source.title + '” as inactive');
-    settings(host, outlet);
-    UI.toast({ title: 'Source restored as inactive', message: 'Review it, then activate it when it is ready. The archived history remains in this browser.' });
-  }));
-
-  const prev = outlet.querySelector('#previewBtn');
-  if (prev) prev.addEventListener('click', () => previewCompanion(host));
-
-  const save = outlet.querySelector('#saveBtn');
-  if (save) save.addEventListener('click', (e) => {
-    H.withSaving(e.currentTarget, () => {
-      const stx = S.get();
-      S.set({ companion: { ...stx.companion,
-        welcome: host.querySelector('#cWelcome').value.trim(),
-        safeResponse: host.querySelector('#cSafe').value.trim(),
-        fallback: host.querySelector('#cFallback').value.trim() } });
-      S.clearDirty();
-      S.note('Saved Companion settings');
-      UI.toast({ title: 'Companion settings saved', message: 'In production, members would see the new wording. Prototype: saved in this browser only.' });
-    });
-  });
+  const q = conv.q.trim().toLowerCase();
+  return st.conversations
+    .filter((c) => conv.filter === 'all' || (conv.filter === 'reviewed' ? !!c.reviewed_at : c.flagged && !c.reviewed_at))
+    .filter((c) => {
+      if (!q) return true;
+      const m = S.member(c.member_id);
+      return (m && (m.name + ' ' + m.email).toLowerCase().includes(q)) || c.messages.some((x) => x.content.toLowerCase().includes(q));
+    })
+    .sort((a, b) => (a.last_message_at < b.last_message_at ? 1 : -1));
 }
 
-function editSource(existing, host, outlet) {
-  const types = ['VEYE educational document', 'FAQ / Help', 'Nutrition reference', 'Food Choices reference', 'Companion guidance'];
-  const statuses = existing && existing.status === 'Archived' ? ['Archived'] : ['Draft', 'Inactive', 'Active'];
-  UI.modal({
-    title: existing ? 'View / edit source' : 'Add source',
-    desc: 'Record simple product metadata. Adding a source does not upload a file or connect it to an AI system.',
-    body: `${H.field({ id: 'ks-title', label: 'Source title', required: true, value: existing ? existing.title : '' })}
-      ${H.field({ id: 'ks-type', label: 'Source type', type: 'select', value: existing ? existing.type : types[0], options: types })}
-      ${H.field({ id: 'ks-reference', label: 'Filename or URL label (optional)', value: existing ? existing.reference : '', hint: 'A label only — no file or URL is uploaded or fetched.' })}
-      ${H.field({ id: 'ks-scope', label: 'Scope', required: true, value: existing ? existing.scope : '', hint: 'What member questions this source supports.' })}
-      ${H.field({ id: 'ks-description', label: 'Short description', type: 'textarea', rows: 3, value: existing ? existing.description : '' })}
-      ${H.field({ id: 'ks-status', label: 'Initial status', type: 'select', value: existing ? existing.status : 'Draft', options: statuses })}`,
-    actions: [
-      { label: 'Cancel', variant: 'secondary', value: false },
-      { label: existing ? 'Save source' : 'Add source', variant: 'primary', value: true, autofocus: true, onClick: (ref) => {
-        const title = ref.el.querySelector('#ks-title').value.trim();
-        const scope = ref.el.querySelector('#ks-scope').value.trim();
-        if (!title) { H.fieldError(ref.el, 'ks-title', 'Give this source a clear title.'); return false; }
-        if (!scope) { H.fieldError(ref.el, 'ks-scope', 'Describe what this source covers.'); return false; }
-        const st = S.get();
-        const source = {
-          id: existing ? existing.id : 'KS-' + (st.companion.knowledgeSources.length + 1),
-          title, type: ref.el.querySelector('#ks-type').value,
-          reference: ref.el.querySelector('#ks-reference').value.trim(), scope,
-          description: ref.el.querySelector('#ks-description').value.trim(),
-          status: ref.el.querySelector('#ks-status').value, updated: 'Just now',
-        };
-        const knowledgeSources = existing
-          ? st.companion.knowledgeSources.map((item) => item.id === existing.id ? source : item)
-          : st.companion.knowledgeSources.concat([source]);
-        S.set({ companion: { ...st.companion, knowledgeSources } });
-        S.note((existing ? 'Updated' : 'Added') + ' Companion knowledge source “' + title + '”');
-        settings(host, outlet);
-        UI.toast({ title: existing ? 'Source saved' : 'Source added', message: 'The metadata was saved in this browser.' });
-      } },
-    ],
-  });
-}
+function conversations(outlet, route) {
+  const rows = conversationRows();
+  if (!conv.selected || !rows.some((r) => r.id === conv.selected)) conv.selected = rows[0] ? rows[0].id : null;
+  const needsReview = rows.filter((r) => r.flagged && !r.reviewed_at).length;
+  const body = frame(outlet, 'conversations', { count: needsReview });
+  const memberOf = (c) => S.member(c.member_id) || { name: 'Member', email: '' };
 
-function editPrompt(existing, host, outlet) {
-  UI.modal({
-    title: existing ? 'Edit “' + existing.label + '”' : 'Add a quick prompt',
-    body: `${H.field({ id: 'qp-label', label: 'What the member taps', required: true, value: existing ? existing.label : '' })}
-      ${H.field({ id: 'qp-prompt', label: 'What it asks Companion', type: 'textarea', rows: 2,
-        value: existing ? existing.prompt : '', hint: 'Members never see this wording.' })}`,
-    actions: [
-      { label: 'Cancel', variant: 'secondary', value: false },
-      { label: existing ? 'Save the prompt' : 'Add the prompt', variant: 'primary', value: true, autofocus: true, onClick: (ref) => {
-        const label = ref.el.querySelector('#qp-label').value.trim();
-        if (!label) { H.fieldError(ref.el, 'qp-label', 'Give the prompt a label members will read.'); return false; }
-        const prompt = ref.el.querySelector('#qp-prompt').value.trim() || label;
-        const st = S.get();
-        const prompts = existing
-          ? st.companion.prompts.map((p) => p.id === existing.id ? { ...p, label, prompt } : p)
-          : st.companion.prompts.concat([{ id: 'QP-' + (st.companion.prompts.length + 1), label, prompt, active: true }]);
-        S.set({ companion: { ...st.companion, prompts } });
-        S.note((existing ? 'Edited' : 'Added') + ' Companion prompt “' + label + '”');
-        settings(host, outlet);
-        UI.toast({ title: existing ? 'Prompt saved' : 'Prompt added' });
-      } },
-    ],
-  });
-}
-
-function previewCompanion(host) {
-  const c = S.get().companion;
-  const welcome = host.querySelector('#cWelcome') ? host.querySelector('#cWelcome').value : c.welcome;
-  const safe = host.querySelector('#cSafe') ? host.querySelector('#cSafe').value : c.safeResponse;
-  UI.drawer({
-    eyebrow: 'Preview',
-    title: 'What a member sees',
-    desc: 'Companion as it opens on the member dashboard.',
-    body: `<div class="convo" style="padding:0">
-        <div class="msg msg--companion">
-          <div class="msg__meta"><span class="sprout" style="display:inline-grid;vertical-align:middle">${icon('sprout', { size: 16 })}</span> ${esc(c.name)}</div>
-          <div class="msg__bubble">${esc(welcome)}</div>
-        </div>
-      </div>
-      <div class="row gap-2 wrap" style="margin-top:16px">
-        ${c.prompts.filter((p) => p.active).map((p) => `<span class="tag">${esc(p.label)}</span>`).join('')}
-      </div>
-      <div class="sec" style="margin:28px 0 12px"><h2 style="font-size:var(--fs-card-title)">If they ask about an amount</h2><span class="sec__rule"></span></div>
-      <div class="convo" style="padding:0">
-        <div class="msg msg--member"><div class="msg__meta">Member</div>
-          <div class="msg__bubble">How much omega-3 should I take?</div></div>
-        <div class="msg msg--companion"><div class="msg__meta">${esc(c.name)}</div>
-          <div class="msg__bubble">${esc(safe)}</div></div>
-      </div>`,
-  });
-}
-
-/* ------------------------------------------------------------ conversations -- */
-function conversations(host) {
-  const st = S.get();
-
-  /* v2 is two panes, not three. The right column in v1 repeated "why this was
-     held" — wording that already sits inside the held-response panel — and stole
-     width from the conversation itself. Member context is now a drawer opened
-     from the conversation header. */
-  host.innerHTML = `
+  body.innerHTML = `
     <div class="review2">
       <div class="card">
         <div class="findbar" style="padding:var(--s-4)">
           <div class="search" style="flex:1 1 100%;position:relative">
             <span class="search__icon">${icon('search', { size: 18 })}</span>
             <label class="sr-only" for="cvSearch">Search conversations</label>
-            <input class="search__input" id="cvSearch" type="search" placeholder="Search members and messages" value="${esc(convView.q)}">
+            <input class="search__input" id="cvSearch" type="search" placeholder="Search members and messages" value="${esc(conv.q)}">
           </div>
-          <div class="modeswitch" style="width:100%;justify-content:space-between">
-            ${['Needs review', 'Reviewed', 'All'].map((f) => `<button class="modeswitch__btn" data-f="${f}"
-              aria-selected="${convView.filter === f}">${f}</button>`).join('')}
+          <div class="modeswitch" role="tablist" aria-label="Which conversations" style="width:100%;justify-content:space-between">
+            ${FILTERS.map(([k, l]) => `<button class="modeswitch__btn" type="button" role="tab" aria-selected="${conv.filter === k}" data-filter="${k}">${l}</button>`).join('')}
           </div>
         </div>
-        <div class="flaglist" id="cvList"></div>
-        <div class="card__foot">
-          <span class="t-support">Use J and K, or the arrow keys, to move between conversations.</span>
+        <div class="flaglist">
+          ${rows.length === 0 ? `<div style="padding:var(--s-6)">${H.emptyState({
+            icon: conv.filter === 'needs_review' ? 'check-circle' : 'search',
+            title: conv.filter === 'needs_review' ? 'Nothing waiting for review' : 'No conversations match',
+            msg: conv.filter === 'needs_review' ? 'Every conversation handed to a person has been read.' : 'Try a shorter search, or switch the filter to All.' })}</div>` : ''}
+          ${rows.map((c) => {
+            const first = (c.messages.find((x) => x.role === 'member') || {}).content || '';
+            return `<button class="flag${c.id === conv.selected ? ' is-active' : ''}" type="button" data-conv="${c.id}">
+              <span class="flag__top">
+                <span class="flag__who">${esc(memberOf(c).name)}</span>
+                ${c.flagged && !c.reviewed_at ? '<span class="chip chip--attention chip--sm">Needs review</span>'
+                  : c.reviewed_at ? '<span class="chip chip--live chip--sm">Reviewed</span>' : '<span class="chip chip--sm">Normal</span>'}
+              </span>
+              <span class="flag__why">${esc(first.slice(0, 160) || '(no member message)')}</span>
+              <span class="t-support" style="display:block;margin-top:4px">${esc(H.fmtDate(c.last_message_at))} · ${c.message_count} messages</span>
+            </button>`;
+          }).join('')}
         </div>
+        <div class="card__foot"><span class="t-support">Reading a conversation changes nothing. Marking it reviewed is recorded in the audit log.</span></div>
       </div>
       <div class="card" id="cvDetail"></div>
     </div>`;
 
-  const q = host.querySelector('#cvSearch');
-  q.addEventListener('input', () => { convView.q = q.value; paintList(host); });
-  host.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => {
-    convView.filter = b.dataset.f;
-    host.querySelectorAll('[data-f]').forEach((x) => x.setAttribute('aria-selected', String(x.dataset.f === convView.filter)));
-    paintList(host);
-  }));
-
-  paintList(host);
+  body.querySelector('#cvSearch').addEventListener('input', (e) => { conv.q = e.target.value; conversations(outlet, route); focusEnd(outlet, '#cvSearch'); });
+  body.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => { conv.filter = b.dataset.filter; conversations(outlet, route); }));
+  body.querySelectorAll('[data-conv]').forEach((b) => b.addEventListener('click', () => { conv.selected = b.dataset.conv; conversations(outlet, route); }));
+  detail(body.querySelector('#cvDetail'), outlet, route);
 }
 
-function listed() {
-  const st = S.get();
-  const q = convView.q.trim().toLowerCase();
-  return st.conversations.filter((c) => {
-    if (convView.filter === 'Needs review' && !(c.flagged && !c.reviewed)) return false;
-    if (convView.filter === 'Reviewed' && !c.reviewed) return false;
-    if (q && !(c.member + ' ' + c.messages.map((m) => m.text).join(' ')).toLowerCase().includes(q)) return false;
-    return true;
-  });
+function focusEnd(outlet, sel) {
+  const el = outlet.querySelector(sel);
+  if (el) { el.focus(); const v = el.value; el.value = ''; el.value = v; }
 }
 
-function paintList(host) {
-  const rows = listed();
-  const list = host.querySelector('#cvList');
+function detail(host, outlet, route) {
+  const c = S.get().conversations.find((x) => x.id === conv.selected);
+  if (!c) { host.innerHTML = `<div class="card__body">${H.emptyState({ icon: 'messages', title: 'Nothing selected', msg: 'Pick a conversation on the left.' })}</div>`; return; }
+  const m = S.member(c.member_id);
+  const name = m ? m.name : 'Member';
+  const latest = m && m.records.health_number[0];
+  const hnText = !m ? 'Not completed' : !S.shares(m) ? 'Not shared' : latest ? `${Number(latest.displayed_score).toFixed(1)} — ${latest.status}` : 'Not completed';
 
-  if (!rows.length) {
-    list.innerHTML = `<div style="padding:var(--s-6)">${H.emptyState({
-      icon: convView.filter === 'Needs review' ? 'check-circle' : 'search',
-      title: convView.filter === 'Needs review' ? 'Nothing waiting for review' : 'No conversations match',
-      msg: convView.filter === 'Needs review'
-        ? 'Every held reply has been read by a person.'
-        : 'Try a shorter search, or switch the filter to All.',
-    })}</div>`;
-    paintDetail(host, null);
-    return;
-  }
-
-  if (!selected || !rows.some((r) => r.id === selected)) selected = rows[0].id;
-
-  list.innerHTML = rows.map((c) => `
-    <button class="flag${c.id === selected ? ' is-active' : ''}" data-c="${c.id}">
-      <span class="flag__top">
-        <span class="flag__who">${esc(c.member)}</span>
-        ${c.flagged && !c.reviewed ? '<span class="chip chip--attention chip--sm">Needs review</span>'
-          : c.reviewed ? '<span class="chip chip--live chip--sm">Reviewed</span>' : '<span class="chip chip--sm">Normal</span>'}
-      </span>
-      <span class="flag__why">${esc(c.messages[0].text)}</span>
-      <span class="t-support" style="display:block;margin-top:4px">${esc(c.at)}</span>
-    </button>`).join('');
-
-  list.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => {
-    selected = b.dataset.c;
-    paintList(host);
-  }));
-
-  /* Keyboard movement through the queue. J/K and the arrow keys both work, and
-     the newly selected conversation takes focus so a keyboard reviewer never
-     loses their place. */
-  const step = (delta) => {
-    const idx = rows.findIndex((r) => r.id === selected);
-    const next = rows[Math.max(0, Math.min(rows.length - 1, idx + delta))];
-    if (!next || next.id === selected) return;
-    selected = next.id;
-    paintList(host);
-    const btn = host.querySelector(`[data-c="${selected}"]`);
-    if (btn) { btn.focus(); btn.scrollIntoView({ block: 'nearest' }); }
-  };
-  list.addEventListener('keydown', (e) => {
-    if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); step(1); }
-    if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); step(-1); }
-  });
-  host.__cvStep = step;
-
-  paintDetail(host, S.get().conversations.find((c) => c.id === selected));
-}
-
-function paintDetail(host, c) {
-  const detail = host.querySelector('#cvDetail');
-
-  if (!c) {
-    detail.innerHTML = `<div class="card__body">${H.emptyState({
-      icon: 'messages', title: 'Nothing selected', msg: 'Pick a conversation on the left.' })}</div>`;
-    return;
-  }
-
-  const held = c.messages.find((m) => m.held);
-  const member = S.member(c.memberId);
-  const feedback = c.feedback || { rating: null, comment: null, submittedAt: null, reviewed: false };
-  const feedbackLabel = feedback.rating === 'helpful' ? 'Helpful' : feedback.rating === 'not-helpful' ? 'Not helpful' : 'No member feedback';
-
-  detail.innerHTML = `
+  host.innerHTML = `
     <div class="card__head">
-      <div><h2 class="card__title">${esc(c.member)}</h2><p class="t-support">${esc(c.at)}</p></div>
+      <div><h2 class="card__title">${esc(name)}</h2><p class="t-support">${esc(m ? m.email : '')} · started ${esc(H.fmtDate(c.started_at))}</p></div>
       <div class="row gap-2">
-        ${c.reviewed ? '<span class="chip chip--live">Reviewed</span>' : ''}
-        ${member ? `<button class="btn btn--ghost btn--sm" id="cvCtx">${icon('users', { size: 16 })} Member context</button>` : ''}
-        <button class="icon-btn btn--sm" id="cvPrev" aria-label="Previous conversation" style="width:32px;height:32px">${icon('chevron-up', { size: 16 })}</button>
-        <button class="icon-btn btn--sm" id="cvNext" aria-label="Next conversation" style="width:32px;height:32px">${icon('chevron-down', { size: 16 })}</button>
+        ${c.reviewed_at ? '<span class="chip chip--live">Reviewed</span>' : ''}
+        ${m && m.isSynthetic ? '<span class="chip chip--lime">Synthetic</span>' : ''}
       </div>
+    </div>
+    <div class="panel" style="margin:var(--s-4) var(--s-5) 0">
+      <dl class="kv">
+        <dt>Health Number</dt><dd>${esc(hnText)}</dd>
+        <dt>Member since</dt><dd>${esc(H.fmtDate(m ? m.joinedAt : c.started_at))}</dd>
+        <dt>Email</dt><dd>${m && m.emailVerified ? 'Verified' : 'Not verified'}</dd>
+      </dl>
     </div>
     <div class="convo convo--wide">
-      ${c.messages.map((m, i) => {
-        /* A reply that is still held never entered the conversation, so the
-           transcript marks its position rather than printing it. The one
-           readable copy lives in the decision panel below, with the reason and
-           the actions beside it. Once a decision has been taken the reply is
-           part of the conversation and is shown in full, here and only here. */
-        if (m.held && !c.reviewed) return `
-        <div class="msg msg--companion msg--heldmark msg--reveal" style="--d:${i * 70}ms">
-          <div class="msg__meta">Sprout</div>
-          <p class="msg__marker">${icon('lock', { size: 13 })} A reply was drafted here and held. It is below, with the decision.</p>
-        </div>`;
-        return `
-        <div class="msg msg--${m.who === 'member' ? 'member' : 'companion'} msg--reveal" style="--d:${i * 70}ms">
-          <div class="msg__meta">${m.who === 'member' ? esc(c.member) : 'Sprout'}${m.held ? ' · released after review' : ''}</div>
-          <div class="msg__bubble">${esc(m.text)}</div>
-        </div>`;
-      }).join('')}
+      ${c.messages.map((x) => `<div class="msg msg--${x.role === 'member' ? 'member' : 'companion'}">
+        <div class="msg__meta">${x.role === 'member' ? esc(name) : 'Sprout'}${x.outcome && x.outcome !== 'answered' ? ' · ' + H.chip(x.outcome) : ''}${x.policy_decision && x.role === 'member' ? ` · policy: ${esc(x.policy_decision.outcome)}${x.policy_decision.category ? ` (${esc(x.policy_decision.category)})` : ''}` : ''}</div>
+        <div class="msg__bubble">${esc(x.content)}</div>
+        ${x.role === 'sprout' ? `<div class="msg__sources">${x.sources.length ? `Sources · ${x.sources.length}: ${x.sources.map((s) => esc(s.title) + ' v' + s.source_version).join(', ')} · ` : ''}${x.provider ? `${esc(x.provider)}${x.model ? ' · ' + esc(x.model) : ''} · ${x.latency_ms || 0} ms · safety ${esc(x.safety_result || '—')}` : 'no model call'}${x.feedback ? ` · feedback: ${esc(x.feedback.rating.replace('_', ' '))}${x.feedback.reason ? ` (${esc(x.feedback.reason)})` : ''}` : ''}</div>` : ''}
+      </div>`).join('')}
     </div>
-    <div class="panel" style="margin:0 var(--s-5) var(--s-4)">
-      <div class="row gap-3 wrap" style="align-items:center;justify-content:space-between">
-        <div><div class="t-eyebrow">Member feedback</div><p class="t-support">${feedbackLabel}${feedback.submittedAt ? ' · submitted ' + esc(feedback.submittedAt) : ''}${feedback.reviewed ? ' · reviewed by Cara' : ''}</p>
-          ${feedback.comment ? `<p class="t-support" style="margin-top:8px">“${esc(feedback.comment)}”</p>` : ''}</div>
-        ${feedback.rating && !feedback.reviewed ? '<button class="btn btn--secondary btn--sm" id="markFeedbackReviewed">Mark feedback reviewed</button>' : ''}
-      </div>
-    </div>
-    <!-- Response decisions are pinned to the workspace so they do not scroll
-         away behind a long conversation. -->
-    ${held && !c.reviewed ? `<div class="held held--pinned">
-      <span class="held__label">${icon('lock', { size: 14 })} Held — the member has not seen this</span>
-      <div class="held__text">${esc(held.text)}</div>
-      <p class="t-support" style="margin-top:12px">${esc(c.why)}</p>
-      <div class="row gap-3 wrap" style="margin-top:16px">
-        <button class="btn btn--primary btn--sm" id="cvSend">Send it as written</button>
-        <button class="btn btn--secondary btn--sm" id="cvEdit">Edit and send</button>
-        <button class="btn btn--danger-quiet btn--sm" id="cvHand">Hand to a person instead</button>
-      </div>
+    ${c.flagged && !c.reviewed_at ? `<div class="held held--pinned">
+      <span class="held__label">${icon('lock', { size: 14 })} Handed to a person</span>
+      <div class="held__text">${esc(c.flag_reason || '')}</div>
+      <p class="t-support" style="margin-top:12px">Sprout sent the member its escalation wording and did not generate an answer. The Veye team follows up outside the Companion.</p>
+      <div class="row gap-3 wrap" style="margin-top:16px"><button class="btn btn--primary btn--sm" type="button" id="markReviewed">Mark reviewed</button></div>
     </div>` : `<div class="card__foot">
-      ${c.reviewed ? `<span class="t-support">${c.why ? esc(c.why) : 'Nothing was held in this conversation.'}</span>`
-        : `<span class="t-support">Nothing was held here. This is an ordinary conversation.</span>`}
-      ${!c.reviewed && c.flagged ? `<button class="btn btn--secondary btn--sm" id="cvDone">Mark reviewed</button>` : ''}
+      <span class="t-support">${c.reviewed_at ? `Reviewed by ${esc(c.reviewed_by)} on ${esc(H.fmtDate(c.reviewed_at))}.` : 'Nothing was handed to a person here. This is an ordinary conversation.'}</span>
+      ${!c.reviewed_at ? '<button class="btn btn--secondary btn--sm" type="button" id="markReviewed">Mark reviewed</button>' : ''}
     </div>`}`;
 
-  /* Member context, on demand, from the conversation header. */
-  const ctxBtn = detail.querySelector('#cvCtx');
-  const feedbackReviewed = detail.querySelector('#markFeedbackReviewed');
-  if (feedbackReviewed) feedbackReviewed.addEventListener('click', () => {
-    S.set({ conversations: S.get().conversations.map((item) => item.id === c.id
-      ? { ...item, feedback: { ...item.feedback, reviewed: true } } : item) });
-    S.note('Marked member feedback reviewed for ' + c.member);
-    paintList(host);
-    UI.toast({ title: 'Feedback marked reviewed', message: 'The existing member feedback is now marked reviewed in this browser.' });
-  });
-  if (ctxBtn) ctxBtn.addEventListener('click', () => {
-    UI.drawer({
-      eyebrow: 'Member context',
-      title: member.name,
-      desc: member.id,
-      body: `<div class="row gap-3" style="align-items:center">
-          <span class="avatar avatar--lg">${esc(member.initials)}</span>
-          <div style="min-width:0"><div class="t-strong">${esc(member.name)}</div>
-            <div class="t-support">${esc(member.email)}</div></div>
-        </div>
-        <dl class="facts" style="margin-top:var(--s-6)">
-          <div class="fact"><dt>Health Number</dt><dd>${member.hn == null ? 'Not completed' : member.hn.toFixed(1) + ' — ' + esc(member.hnBand)}</dd></div>
-          <div class="fact"><dt>Program</dt><dd>${member.program ? esc(member.program) : 'None'}</dd></div>
-          <div class="fact"><dt>Plan</dt><dd>${esc(member.subscription)}</dd></div>
-          <div class="fact"><dt>Last active</dt><dd>${esc(member.lastActive)}</dd></div>
-        </dl>`,
-      foot: `<a class="btn btn--primary" href="${R.href('/members/' + member.id + '/overview')}">Open the member record</a>`,
-    });
-  });
-
-  detail.querySelector('#cvPrev').addEventListener('click', () => host.__cvStep && host.__cvStep(-1));
-  detail.querySelector('#cvNext').addEventListener('click', () => host.__cvStep && host.__cvStep(1));
-
-  const markReviewed = (msg) => {
-    S.set({ conversations: S.get().conversations.map((x) => x.id === c.id ? { ...x, reviewed: true } : x) });
-    S.note('Reviewed a Companion conversation with ' + c.member);
-    paintList(host);
-    UI.toast({ title: 'Marked reviewed', message: msg });
-  };
-
-  const b1 = detail.querySelector('#cvSend');
-  if (b1) b1.addEventListener('click', () => markReviewed('In production, the reply would be delivered to ' + c.member + '. Nothing leaves this prototype.'));
-
-  const b2 = detail.querySelector('#cvEdit');
-  if (b2) b2.addEventListener('click', () => {
-    UI.modal({
-      title: 'Edit before sending',
-      desc: 'In production, the member would see exactly what you send.',
-      body: H.field({ id: 'ed-text', label: 'Reply', type: 'textarea', rows: 5, value: held.text }),
-      actions: [
-        { label: 'Cancel', variant: 'secondary', value: false },
-        { label: 'Send the edited reply', variant: 'primary', value: true, autofocus: true, onClick: (ref) => {
-          const v = ref.el.querySelector('#ed-text').value.trim();
-          if (!v) { H.fieldError(ref.el, 'ed-text', 'A reply cannot be empty.'); return false; }
-          markReviewed('In production, your edited reply would go to ' + c.member + '. Nothing leaves this prototype.');
-        } },
-      ],
-    });
-  });
-
-  const b3 = detail.querySelector('#cvHand');
-  if (b3) b3.addEventListener('click', async () => {
-    const r = await UI.confirm({
-      title: 'Hand this to a person?',
-      message: 'The held reply is discarded and ' + c.member + ' is told someone from the team will pick it up.',
-      confirmLabel: 'Hand it over',
-    });
-    if (r.ok) markReviewed(c.member + ' has been told a person will reply.');
-  });
-
-  const b4 = detail.querySelector('#cvDone');
-  if (b4) b4.addEventListener('click', () => markReviewed('Nothing needed changing.'));
+  const btn = host.querySelector('#markReviewed');
+  if (btn) btn.addEventListener('click', () => H.busy(btn, 'Mark reviewed', () => {
+    S.set({ conversations: S.get().conversations.map((x) => (x.id === c.id ? { ...x, reviewed_at: S.now(), reviewed_by: S.me().name } : x)) });
+    S.audit('conversation.reviewed', 'companion_conversation', c.id, { note: null });
+    conversations(outlet, route);
+  }, 300));
 }
 
+/* ============================================================ KNOWLEDGE == */
+const SCOPES = () => S.get().companion.retrieval_scope_options;
+let kn = { editing: null, notice: '', error: '' };
+
+function knowledge(outlet, route) {
+  const body = frame(outlet, 'knowledge', { actions: `<button class="btn btn--primary" type="button" id="addSource">${icon('plus', { size: 18 })} Add source</button>` });
+  const sources = S.get().knowledgeSources;
+  const storage = sources[0] ? sources[0].storage : 'local-file';
+  const e = kn.editing;
+
+  body.innerHTML = `
+    ${H.errorbar(kn.error)}
+    ${kn.notice ? `<div class="notice notice--quiet" style="margin-bottom:var(--s-4)">${icon('info', { size: 18 })}<div>${esc(kn.notice)}</div></div>` : ''}
+    ${e ? `<form class="card" style="margin-bottom:var(--s-5)" method="post" id="ksForm">
+      <div class="card__head"><div><h2 class="card__title">${e.id ? 'View / edit source' : 'Add source'}</h2>
+        <p class="t-support">Metadata is saved to PostgreSQL. Attaching a document stores the file in the ${esc(storage)} object store and ingests it for retrieval.</p></div></div>
+      <div class="card__body inline-form">
+        <div class="field"><label for="ks-title">Source title</label><input class="input" id="ks-title" required value="${esc(e.input.title)}"></div>
+        <div class="field"><label for="ks-type">Source type</label>
+          <select class="select" id="ks-type">${window.Veye.SEED_CONTENT.KNOWLEDGE_TYPES.map((t) => `<option ${t === e.input.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+        <div class="field"><label for="ks-scope">Scope</label>
+          <select class="select" id="ks-scope">${Object.entries(SCOPES()).map(([k, l]) => `<option value="${k}" ${k === e.input.scope_key ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+        <div class="field"><label for="ks-ref">Filename or URL label (optional)</label><input class="input" id="ks-ref" value="${esc(e.input.reference_label || '')}"></div>
+        <div class="field"><label for="ks-date">Effective date (optional)</label><input class="input" id="ks-date" type="date" value="${esc(e.input.effective_date || '')}"></div>
+        <div class="field field--wide"><label for="ks-desc">Short description</label><textarea class="textarea" id="ks-desc" rows="3">${esc(e.input.description)}</textarea></div>
+      </div>
+      <div class="card__foot">
+        <button class="btn btn--secondary" type="button" id="ksCancel">Cancel</button>
+        <button class="btn btn--primary" type="submit" id="ksSave">${e.id ? 'Save source' : 'Add source'}</button>
+      </div>
+    </form>` : ''}
+    <section class="card">
+      <div class="card__head"><div><h2 class="card__title">Knowledge Sources</h2>
+        <p class="t-support">Approved sources Sprout may draw on. Only an Active source with an ingested document is retrievable; Inactive and Archived sources never are.</p></div></div>
+      <div class="card__body card__body--flush">
+        <div class="rows">
+          ${sources.map((s) => {
+            const doc = s.current_document;
+            const canActivate = s.status === 'Active' || (doc && doc.ingestion_status === 'ingested');
+            return `<div class="rowitem" style="grid-template-columns:44px minmax(0,1fr) auto">
+              <span class="rowitem__icon${s.status === 'Active' ? '' : ' rowitem__icon--off'}">${icon('file-text', { size: 18 })}</span>
+              <div>
+                <div class="rowitem__title">${esc(s.title)} <span class="t-support">v${s.version}</span></div>
+                <div class="rowitem__meta">${esc(s.type)} · ${esc(SCOPES()[s.scope_key] || s.scope_key)}${s.reference_label ? ' · ' + esc(s.reference_label) : ''}</div>
+                <div class="rowitem__meta">
+                  ${doc ? `Document: ${esc(doc.filename)} · ${H.chip(doc.ingestion_status)}${doc.ingestion_status === 'ingested' ? ` · ${doc.chunk_count} passages` : doc.ingestion_error ? ' · ' + esc(doc.ingestion_error) : ''}${doc.ingestion_status === 'ingested' && doc.extraction_note ? ' · ' + esc(doc.extraction_note) : ''}` : 'No document attached'}
+                  · Updated ${esc(H.fmtDate(s.updated_at))}${s.approved_at ? ` · Approved by ${esc(s.approved_by)} on ${esc(H.fmtDate(s.approved_at))}` : ''}
+                </div>
+                ${s.status !== 'Archived' ? `<label class="filelabel t-support" style="margin-top:6px">
+                  Attach document (.docx, .pdf, .md or .txt)
+                  <input type="file" data-attach="${s.id}" accept=".docx,.pdf,.md,.markdown,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/markdown,text/plain">
+                </label>` : ''}
+              </div>
+              <div class="rowitem__side row gap-2 wrap">
+                ${H.chip(s.status)}
+                ${s.status !== 'Archived' ? `<button class="btn btn--secondary btn--sm" type="button" data-edit="${s.id}">View / edit</button>` : ''}
+                ${s.status === 'Archived'
+                  ? `<button class="btn btn--ghost btn--sm" type="button" data-act="restore" data-id="${s.id}">Restore</button>`
+                  : `<button class="btn btn--ghost btn--sm" type="button" data-act="${s.status === 'Active' ? 'deactivate' : 'activate'}" data-id="${s.id}" ${canActivate ? '' : 'disabled title="Attach an ingested document first"'}>${s.status === 'Active' ? 'Deactivate' : 'Activate'}</button>
+                     <button class="btn btn--ghost btn--sm" type="button" data-act="archive" data-id="${s.id}">Archive</button>`}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="card__foot"><span class="t-support">Archiving keeps the source record, its documents and its history. Nothing is permanently deleted from this screen. Storage: ${esc(storage)} (production target Google Cloud Storage, not connected).</span></div>
+    </section>`;
+
+  const again = () => knowledge(outlet, route);
+  outlet.querySelector('#addSource').addEventListener('click', () => {
+    kn.editing = { id: null, input: { title: '', type: 'VEYE educational document', scope_key: 'help', description: '', reference_label: '', effective_date: null } };
+    again();
+  });
+  body.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => {
+    const s = sources.find((x) => x.id === b.dataset.edit);
+    kn.editing = { id: s.id, input: { title: s.title, type: s.type, scope_key: s.scope_key, description: s.description, reference_label: s.reference_label || '', effective_date: s.effective_date } };
+    again();
+  }));
+  const form = body.querySelector('#ksForm');
+  if (form) {
+    body.querySelector('#ksCancel').addEventListener('click', () => { kn.editing = null; again(); });
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const input = {
+        title: body.querySelector('#ks-title').value.trim(), type: body.querySelector('#ks-type').value, scope_key: body.querySelector('#ks-scope').value,
+        description: body.querySelector('#ks-desc').value, reference_label: body.querySelector('#ks-ref').value.trim() || null,
+        effective_date: body.querySelector('#ks-date').value || null,
+      };
+      if (!input.title) { kn.error = 'Give the source a title.'; again(); return; }
+      H.busy(body.querySelector('#ksSave'), 'Saving…', () => {
+        const at = S.now();
+        if (e.id) {
+          S.set({ knowledgeSources: S.get().knowledgeSources.map((s) => (s.id === e.id ? { ...s, ...input, updated_at: at } : s)) });
+          S.audit('knowledge_source.updated', 'knowledge_source', e.id, { title: input.title });
+          kn.notice = 'Source saved.';
+        } else {
+          const id = S.newId();
+          S.set({ knowledgeSources: [...S.get().knowledgeSources, { id, ...input, status: 'Draft', version: 1, approved_by: null, approved_at: null,
+            is_synthetic: true, created_at: at, updated_at: at, archived_at: null, current_document: null, documents: [], storage, passages: [] }] });
+          S.audit('knowledge_source.created', 'knowledge_source', id, { title: input.title });
+          kn.notice = 'Source added as Draft. Attach a document, then activate it.';
+        }
+        kn.editing = null; kn.error = '';
+        again();
+      });
+    });
+  }
+
+  body.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', async () => {
+    const s = S.get().knowledgeSources.find((x) => x.id === b.dataset.id);
+    const action = b.dataset.act;
+    if (action === 'archive') {
+      const r = await UI.confirm({ title: 'Archive this source?', message: `Archive "${esc(s.title)}"? It is retained as an archived record and is never permanently deleted.`, confirmLabel: 'Archive' });
+      if (!r.ok) return;
+    }
+    const status = { activate: 'Active', deactivate: 'Inactive', archive: 'Archived', restore: 'Inactive' }[action];
+    const at = S.now();
+    const me = S.me().name;
+    let saved;
+    S.set({ knowledgeSources: S.get().knowledgeSources.map((x) => (x.id === s.id ? (saved = { ...x, status, updated_at: at,
+      approved_by: action === 'activate' ? me : x.approved_by, approved_at: action === 'activate' ? at : x.approved_at,
+      archived_at: action === 'archive' ? at : action === 'restore' ? null : x.archived_at }) : x)) });
+    S.audit(`knowledge_source.${action}d`, 'knowledge_source', s.id, { title: s.title });
+    kn.notice = `${saved.title}: ${saved.status}${action === 'activate' ? ` — approved by ${saved.approved_by}` : ''}.`;
+    kn.error = '';
+    again();
+  }));
+
+  body.querySelectorAll('[data-attach]').forEach((input) => input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    attach(input.dataset.attach, file, again);
+  }));
+}
+
+/** Ingest a chosen document in the browser: .md and .txt are read and split
+ *  into passages the diagnostic search can find; .docx and .pdf are accepted
+ *  but their text is not read here. Nothing is uploaded anywhere. */
+function attach(id, file, again) {
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const fail = (text) => { kn.error = text; kn.notice = ''; again(); };
+  if (!['docx', 'pdf', 'md', 'markdown', 'txt'].includes(ext)) return fail('Only .docx, .pdf, .md and .txt documents can be attached.');
+  if (file.size === 0) return fail('The uploaded file is empty.');
+  if (file.size > 5 * 1024 * 1024) return fail('Documents larger than 5 MB are not accepted in the local environment.');
+  const finish = (passages, note) => {
+    const at = S.now();
+    let saved;
+    S.set({ knowledgeSources: S.get().knowledgeSources.map((s) => {
+      if (s.id !== id) return s;
+      const version = s.current_document ? s.version + 1 : s.version;
+      const doc = { id: S.newId(), source_version: version, filename: file.name, content_type: file.type || 'text/plain', byte_size: file.size,
+        sha256: '', is_current: true, ingestion_status: 'ingested', ingestion_error: null, extraction_note: note,
+        chunk_count: passages.length || Math.max(1, Math.ceil(file.size / 1400)), ingested_at: at, created_at: at };
+      saved = { ...s, version, current_document: doc, documents: [...s.documents.map((d) => ({ ...d, is_current: false })), doc],
+        status: s.status === 'Active' ? 'Inactive' : s.status, updated_at: at,
+        passages: passages.map(([heading, text], i) => ({ chunk_id: S.newId(), document_id: doc.id, heading, text, i })) };
+      return saved;
+    }) });
+    S.audit('knowledge_document.attached', 'knowledge_source', id, { filename: file.name, version: saved.version, chunks: saved.current_document.chunk_count });
+    kn.notice = `${file.name}: ingested into ${saved.current_document.chunk_count} passages (version ${saved.version}). Activate the source to make it retrievable.`;
+    kn.error = '';
+    again();
+  };
+  if (ext === 'md' || ext === 'markdown' || ext === 'txt') {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      let heading = null;
+      const passages = [];
+      text.split(/\n\s*\n/).forEach((block) => {
+        const b = block.trim();
+        if (!b) return;
+        const h = b.match(/^#{1,6}\s+(.*)$/);
+        if (h && !b.includes('\n')) { heading = h[1].trim(); return; }
+        passages.push([heading, b.replace(/^#{1,6}\s+/gm, '').slice(0, 900)]);
+      });
+      if (!passages.length) return fail('The document contains no readable text.');
+      finish(passages, null);
+    };
+    reader.readAsText(file);
+  } else {
+    finish([], 'This prototype reads .md and .txt files only; this file’s passages are not searchable here.');
+  }
+}
+
+/* ============================================================= FEEDBACK == */
+let fbFilter = 'unreviewed';
+
+function feedback(outlet, route) {
+  const body = frame(outlet, 'feedback', { desc: 'Helpful / not helpful responses members leave on Sprout replies. Reading changes nothing; marking reviewed is recorded in the audit log.' });
+  const rows = S.get().feedback
+    .filter((f) => fbFilter === 'all' || (fbFilter === 'reviewed' ? !!f.reviewed_at : !f.reviewed_at))
+    .sort((a, b) => (a.submitted_at < b.submitted_at ? 1 : -1));
+  body.innerHTML = `
+    <div class="card">
+      <div class="card__head">
+        <div><h2 class="card__title">Member feedback</h2></div>
+        <div class="modeswitch" role="tablist" aria-label="Which feedback">
+          ${['unreviewed', 'reviewed', 'all'].map((k) => `<button class="modeswitch__btn" type="button" role="tab" aria-selected="${fbFilter === k}" data-filter="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="card__body card__body--flush">
+        ${rows.length === 0 ? `<div style="padding:var(--s-6)">${H.emptyState({ icon: 'thumbs', title: 'No feedback here',
+          msg: fbFilter === 'unreviewed' ? 'Every response has been read.' : 'Members have not left feedback yet.' })}</div>` : `
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>Member</th><th>Rating</th><th>Reason</th><th>Sprout said</th><th>Submitted</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            ${rows.map((f) => `<tr>
+              <td>${esc(S.memberName(f.member_id))}</td>
+              <td>${H.chip(f.rating)}</td>
+              <td>${esc(f.reason || '—')}${f.comment ? `<div class="t-support">“${esc(f.comment)}”</div>` : ''}</td>
+              <td class="t-support">${esc(f.reply_excerpt)}</td>
+              <td class="t-nowrap">${esc(H.fmtDate(f.submitted_at))}</td>
+              <td>${f.reviewed_at ? `<span class="t-support">Reviewed by ${esc(f.reviewed_by)}</span>` : H.chip('Unreviewed', 'attention')}</td>
+              <td class="t-nowrap">
+                <a class="btn btn--secondary btn--sm" href="${R.href('/companion/conversations?conversation=' + f.conversation_id)}">Open</a>
+                ${!f.reviewed_at ? `<button class="btn btn--secondary btn--sm" type="button" data-review="${f.id}">Mark reviewed</button>` : ''}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`}
+      </div>
+    </div>`;
+  body.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => { fbFilter = b.dataset.filter; feedback(outlet, route); }));
+  body.querySelectorAll('[data-review]').forEach((b) => b.addEventListener('click', () => {
+    b.disabled = true;
+    S.set({ feedback: S.get().feedback.map((f) => (f.id === b.dataset.review ? { ...f, reviewed_at: S.now(), reviewed_by: S.me().name } : f)) });
+    S.audit('feedback.reviewed', 'companion_feedback', b.dataset.review, {});
+    feedback(outlet, route);
+  }));
+}
+
+/* ============================================================= SETTINGS == */
+let draft = null;
+let setNotice = '';
+
+function settings(outlet, route) {
+  if (!draft) draft = JSON.parse(JSON.stringify(S.get().companion));
+  const saved = S.get().companion;
+  const body = frame(outlet, 'settings', { actions: '<button class="btn btn--primary" type="button" id="saveSettings">Save changes</button>' });
+  const text = (key, label, hint, rows = 3) => `<div class="field">
+      <label for="c-${key}">${esc(label)}</label>
+      ${rows === 1 ? `<input class="input" id="c-${key}" data-text="${key}" value="${esc(draft[key])}">`
+        : `<textarea class="textarea" id="c-${key}" rows="${rows}" data-text="${key}">${esc(draft[key])}</textarea>`}
+      <span class="t-support">${esc(hint)}</span>
+    </div>`;
+
+  body.innerHTML = `
+    ${setNotice ? `<div class="notice notice--quiet" style="margin-bottom:var(--s-4)">${icon('info', { size: 18 })}<div>${esc(setNotice)}</div></div>` : ''}
+    <div class="hgrid">
+      <div class="stack gap-5">
+        <div class="card">
+          <div class="card__head">
+            <div><h2 class="card__title">Is Companion on?</h2><p class="t-support">When it is off, members see the rest of their dashboard as normal and Sprout declines to answer.</p></div>
+            <label class="switch"><input type="checkbox" id="cEnabled" ${draft.enabled ? 'checked' : ''}><span class="switch__track"></span><span class="check__text" id="cEnabledText">${draft.enabled ? 'On for everyone' : 'Off'}</span></label>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card__head"><div><h2 class="card__title">What Companion says</h2></div></div>
+          <div class="card__body stack gap-5">
+            ${text('name', 'Companion name', 'Shown in the member chat header.', 1)}
+            ${text('welcome', 'Opening message (first visit)', 'The first thing a member reads when they open Companion.')}
+            ${text('returning_welcome', 'Opening message (returning)', 'Shown when the member has talked to Sprout before.')}
+            ${text('safe_response', 'When a question needs a person', 'Used for anything about an amount, a symptom or a medicine.')}
+            ${text('fallback', 'When the question is off-topic', 'Used when the question has nothing to do with Veye.')}
+            ${text('escalation_response', 'When the conversation is handed to a person', 'Sent instead of an answer; the conversation is flagged for review and the team is notified.')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card__head">
+            <div><h2 class="card__title">Quick prompts</h2><p class="t-support">The suggestions a member can tap instead of typing.</p></div>
+            <button class="btn btn--secondary btn--sm" type="button" id="addPrompt">${icon('plus', { size: 16 })} Add a prompt</button>
+          </div>
+          <div class="card__body card__body--flush">
+            <div class="rows">
+              ${draft.quick_prompts.map((p, i) => `<div class="rowitem" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto">
+                <input class="input input--sm" aria-label="What the member taps" data-prompt-label="${i}" value="${esc(p.label)}">
+                <input class="input input--sm" aria-label="What it asks Companion" placeholder="What it asks Companion" data-prompt-text="${i}" value="${esc(p.prompt)}">
+                <div class="rowitem__side row gap-2">
+                  <label class="switch"><input type="checkbox" data-prompt-active="${i}" ${p.active ? 'checked' : ''}><span class="switch__track"></span><span class="sr-only">Show to members</span></label>
+                  <button class="btn btn--ghost btn--sm" type="button" data-prompt-remove="${i}">Remove</button>
+                </div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack gap-5">
+        <div class="card">
+          <div class="card__head"><div><h2 class="card__title">What Companion may talk about</h2>
+            <p class="t-support">Anything outside this list gets the off-topic wording. Keywords decide the topic; edit them as comma-separated words or phrases.</p></div></div>
+          <div class="card__body card__body--flush">
+            <div class="rows">
+              ${draft.policy.topics.map((t, i) => `<div class="rowitem" style="grid-template-columns:44px minmax(0,1fr) auto">
+                <span class="rowitem__icon${t.allowed ? '' : ' rowitem__icon--warn'}">${icon(t.allowed ? 'check-circle' : 'lock', { size: 18 })}</span>
+                <div>
+                  <div class="rowitem__title">${esc(t.label)}</div>
+                  <textarea class="textarea textarea--rows" rows="4" aria-label="Keywords for ${esc(t.label)}" data-topic-keywords="${i}">${esc(t.keywords.join(', '))}</textarea>
+                  <div class="rowitem__meta">Retrieval: ${esc(t.retrieval_scopes.map((s) => draft.retrieval_scope_options[s] || s).join(', ') || 'none')} · Member data: ${esc(t.member_data_scopes.join(', ') || 'none')}</div>
+                </div>
+                <div class="rowitem__side"><label class="switch"><input type="checkbox" data-topic-allowed="${i}" ${t.allowed ? 'checked' : ''}><span class="switch__track"></span><span class="sr-only">Allow ${esc(t.label)}</span></label></div>
+              </div>`).join('')}
+              ${draft.policy.prohibited.map((r, i) => `<div class="rowitem" style="grid-template-columns:44px minmax(0,1fr) auto">
+                <span class="rowitem__icon rowitem__icon--warn">${icon('lock', { size: 18 })}</span>
+                <div>
+                  <div class="rowitem__title">${esc(r.label)}</div>
+                  <textarea class="textarea textarea--rows" rows="4" aria-label="Keywords for ${esc(r.label)}" data-rule-keywords="${i}">${esc(r.keywords.join(', '))}</textarea>
+                  ${r.why ? `<div class="rowitem__meta">${esc(r.why)}</div>` : ''}
+                </div>
+                <div class="rowitem__side"><span class="chip ${r.action === 'escalate' ? 'chip--error' : 'chip--attention'}">${r.action === 'escalate' ? 'Handed to a person' : 'Safe response'}</span></div>
+              </div>`).join('')}
+            </div>
+          </div>
+          <div class="card__foot" style="display:block">
+            <div class="notice notice--quiet">${icon('info', { size: 18 })}<div>Companion does not diagnose, treat or prevent any condition. Questions about symptoms, medicines or amounts are always handed to a person or answered with the safe response.</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__head"><div><h2 class="card__title">Member data Sprout may use</h2><p class="t-support">Short structured summaries only — never the raw record, never contact details.</p></div></div>
+          <div class="card__body stack gap-3">
+            ${draft.member_data_scope_options.map((scope) => `<label class="switch">
+              <input type="checkbox" data-scope="${scope}" ${draft.policy.member_data_scopes_enabled.includes(scope) ? 'checked' : ''}>
+              <span class="switch__track"></span><span class="check__text">${esc(scope.replace(/_/g, ' '))}</span>
+            </label>`).join('')}
+            <p class="t-support">Mood and food-pattern summaries are built from the member’s own entries as counts and trends — never a note or a meal description. A member who has not shared their health records gets a Sprout that answers without them.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__head"><div><h2 class="card__title">Guided Experiences</h2><p class="t-support">The step-by-step guides Sprout walks members through — Cara’s First-Time User and Progress Tracker decision trees, published as numbered versions.</p></div></div>
+          <div class="card__body card__body--flush">
+            <div class="rows">
+              <a class="rowitem" href="${R.href('/companion/settings/guided-experiences')}" style="grid-template-columns:minmax(0,1fr) auto;text-decoration:none">
+                <div><div class="rowitem__title">First-Time User · Progress Tracker Guide</div><div class="rowitem__meta">Status, active version, member sessions, read-only preview, activate / deactivate.</div></div>
+                <span class="rowitem__side">${icon('chevron-right', { size: 18 })}</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__head"><div><h2 class="card__title">Advanced</h2><p class="t-support">Operational monitoring for the development environment.</p></div></div>
+          <div class="card__body card__body--flush">
+            <div class="rows">
+              ${ADVANCED_NAV.map((a) => `<a class="rowitem" href="${R.href('/companion/settings/advanced/' + a.key)}" style="grid-template-columns:minmax(0,1fr) auto;text-decoration:none">
+                <div class="rowitem__title">${esc(a.label)}</div><span class="rowitem__side">${icon('chevron-right', { size: 18 })}</span>
+              </a>`).join('')}
+            </div>
+          </div>
+          <div class="card__foot"><span class="t-support">Policy ${esc(saved.policy.version)} · last saved ${esc(H.fmtDate(S.get().companionUpdatedAt))}${S.get().companionUpdatedBy ? ' by ' + esc(S.get().companionUpdatedBy) : ''}</span></div>
+        </div>
+      </div>
+    </div>`;
+
+  const again = () => settings(outlet, route);
+  const split = (v) => v.split(',').map((x) => x.trim()).filter(Boolean);
+  body.querySelector('#cEnabled').addEventListener('change', (e) => { draft.enabled = e.target.checked; body.querySelector('#cEnabledText').textContent = draft.enabled ? 'On for everyone' : 'Off'; });
+  body.querySelectorAll('[data-text]').forEach((el) => el.addEventListener('input', () => { draft[el.dataset.text] = el.value; }));
+  body.querySelectorAll('[data-prompt-label]').forEach((el) => el.addEventListener('input', () => { draft.quick_prompts[+el.dataset.promptLabel].label = el.value; }));
+  body.querySelectorAll('[data-prompt-text]').forEach((el) => el.addEventListener('input', () => { draft.quick_prompts[+el.dataset.promptText].prompt = el.value; }));
+  body.querySelectorAll('[data-prompt-active]').forEach((el) => el.addEventListener('change', () => { draft.quick_prompts[+el.dataset.promptActive].active = el.checked; }));
+  body.querySelectorAll('[data-prompt-remove]').forEach((el) => el.addEventListener('click', () => { draft.quick_prompts.splice(+el.dataset.promptRemove, 1); again(); }));
+  body.querySelector('#addPrompt').addEventListener('click', () => {
+    draft.quick_prompts.push({ id: 'QP-' + Date.now().toString(36), label: 'New prompt', prompt: '', active: true });
+    again();
+  });
+  body.querySelectorAll('[data-topic-keywords]').forEach((el) => el.addEventListener('input', () => { draft.policy.topics[+el.dataset.topicKeywords].keywords = split(el.value); }));
+  body.querySelectorAll('[data-topic-allowed]').forEach((el) => el.addEventListener('change', () => { draft.policy.topics[+el.dataset.topicAllowed].allowed = el.checked; again(); }));
+  body.querySelectorAll('[data-rule-keywords]').forEach((el) => el.addEventListener('input', () => { draft.policy.prohibited[+el.dataset.ruleKeywords].keywords = split(el.value); }));
+  body.querySelectorAll('[data-scope]').forEach((el) => el.addEventListener('change', () => {
+    const set = new Set(draft.policy.member_data_scopes_enabled);
+    if (el.checked) set.add(el.dataset.scope); else set.delete(el.dataset.scope);
+    draft.policy.member_data_scopes_enabled = draft.member_data_scope_options.filter((s) => set.has(s));
+  }));
+  outlet.querySelector('#saveSettings').addEventListener('click', (e) => {
+    H.busy(e.currentTarget, 'Saving…', () => {
+      S.set({ companion: JSON.parse(JSON.stringify(draft)), companionUpdatedAt: S.now(), companionUpdatedBy: S.me().name });
+      S.audit('settings.updated', 'companion_settings', '1', { enabled: draft.enabled, policy_version: draft.policy.version });
+      setNotice = 'Companion settings saved. Members see the new wording and topic rules on their next message.';
+      again();
+    });
+  });
+}
+
+window.Veye.COMPANION_NAV = COMPANION_NAV;
+window.Veye.ADVANCED_NAV = ADVANCED_NAV;
 window.Veye.screens = window.Veye.screens || {};
-window.Veye.screens.companion = { render };
+/* Arriving at a Companion screen starts as the console's does: the filter and
+   notices of a previous visit are not carried over, and a ?conversation=
+   link opens that transcript under "All". */
+window.Veye.screens.companion = { render: (outlet, route) => {
+  const pre = route.query.conversation || null;
+  conv = { filter: pre ? 'all' : 'needs_review', q: '', selected: pre };
+  kn = { editing: null, notice: '', error: '' };
+  fbFilter = 'unreviewed';
+  draft = null; setNotice = '';
+  render(outlet, route);
+} };
 
 })();

@@ -693,14 +693,9 @@ body.is-auth-screen .topbar { display: none !important; }
 }
 .wherebtn svg { color: var(--green-medium); }
 
-/* ---- Companion → Guided Experiences (19 Sep 2026) ---------------------------- */
-.gx-node { padding: var(--s-3) 0; border-top: 1px solid var(--line); }
-.gx-node:first-child { border-top: 0; padding-top: 0; }
-.gx-node__head { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.gx-id { font-size: 11px; margin-left: auto; }
-.gx-text { margin-top: var(--s-2); color: var(--text-strong); font-size: var(--fs-body); line-height: var(--lh-body); }
-.gx-options { margin: var(--s-2) 0 0; padding-left: var(--s-5); font-size: var(--fs-support); color: var(--text-body); }
-.gx-options li + li { margin-top: 4px; }
-.gx-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); vertical-align: middle; margin-right: 4px; }
-.gx-dot--active { background: var(--status-positive); }
-.gx-dot--inactive { background: var(--status-attention); }
+/* A row that opens into a form (changing your own console password): same
+   grid as .rowitem, but the icon sits with the first line rather than being
+   centred against a tall body. */
+.rowitem--form { align-items: start; grid-template-columns: 44px minmax(0, 1fr); }
+.rowitem--form .field { max-width: 360px; }
+.rowitem--form .field__label { font-size: var(--fs-support); }

@@ -1,1334 +1,814 @@
 /* ============================================================================
-   Veye Admin Console — synthetic prototype data
+   Veye Admin Console — synthetic prototype data (14 Nov 2026 edition)
    ----------------------------------------------------------------------------
-   Every person, member record, message and figure below is fictional. The
-   timeline is anchored on Friday 14 August 2026 so screens agree with each
-   other.
+   Every person, account, message and figure below is invented. Addresses are
+   on demo.veye.test (members, visitors) or veye.example (the Veye team).
 
-   WHERE THE ASSESSMENT NUMBERS COME FROM
-   The scoring definitions in this file are transcribed from the CANONICAL
-   consumer engine, build/js/veye-calculations.js, which is itself sourced from
-   the client documents (HealthNumbers.xlsx, Health Number Interpretation and
-   Formula.docx, Health Assessment.docx, Simple Quiz.docx, BMI formula.docx,
-   Dated Blood Markers tracking.pdf). The admin console never re-derives a
-   weight, a band or a formula — it displays what the engine holds.
+   WHAT THIS MIRRORS
+   The real console (platform/web, app/admin/**) reads PostgreSQL. This file is
+   that database for the prototype: the same rows the console's API returns,
+   in the same shapes, so every screen can be a faithful copy of the console's
+   own screen. Product content — the Help / FAQ answers, the Care Studio items,
+   Sprout's wording and topic rules, the knowledge sources, the health-sharing
+   terms and email — is the console's own seed content, copied verbatim,
+   including the client's published support addresses (help@veye.co in the
+   Help answers, contact@veye.co as the support email — the console's own
+   defaults). Only invented people get invented addresses.
 
-   Nothing here is approved clinical output.
+   TIME
+   The console shows live dates. So does this: `buildSeed(now)` is called when
+   the sample data is created (first visit, or "Reset the sample data") and
+   every timestamp is an offset from that moment. Stored in localStorage, the
+   data then ages exactly as a real database would.
+
+   HEALTH RESULTS
+   Stored results are written out as the scoring engine stored them — score,
+   band, dose and flags as literal values, hand-checked against the canonical
+   rules (HealthNumbers.xlsx bands, Health Assessment.docx bands and EPA/DHA
+   boundaries, the Dated Blood Markers goals and Supplement Rec'd Under Blood
+   Markers tiers). Nothing here recalculates anything.
    ============================================================================ */
 
 (function () {
 
-const TODAY_LABEL = 'Friday, 14 August 2026';
-const SEED = {};
+/* ---------------------------------------------------------- deterministic ids */
+function fnv(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function hex(str, n) {
+  let out = '';
+  for (let i = 0; out.length < n; i++) out += fnv(str + '#' + i).toString(16).padStart(8, '0');
+  return out.slice(0, n);
+}
+function uuid(str) {
+  const h = hex(str, 32);
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${'89ab'[parseInt(h[16], 16) % 4]}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
 
-SEED.today = TODAY_LABEL;
+/* --------------------------------------------------------------- rich text --
+   The document tree the console's editor produces and the API validates
+   (app/policies/richtext.py). Never HTML. */
+const txt = (text, marks = []) => ({ type: 'text', text, marks });
+const paragraphs = (...lines) => ({ blocks: lines.map((line) => ({ type: 'paragraph', children: [txt(line)] })) });
 
-/* ------------------------------------------------------------ organization -- */
-SEED.org = {
-  name: 'Veye Health',
-  legalName: 'Veye Health, Inc.',
-  supportEmail: 'support@veye.example',
-  supportPhone: '+1 555 0100',
-  address: '18 Harbour Street, Suite 400, Portland, OR 97204',
-  timezone: 'America/Los_Angeles',
-  dateFormat: 'D MMM YYYY',
-  numberFormat: '1,234.5',
-  weekStart: 'Monday',
-  logo: 'assets/img/veye-logo.png',
-};
-
-/* --------------------------------------------------------------- the admins --
-   No roles, no teams, no permission columns. Every administrator listed here
-   has the same access to this console. */
-SEED.admins = [
-  { id: 'AD-01', name: 'Elena Fischer', initials: 'EF', email: 'elena.fischer@veye.example', invited: 'Accepted', invitedOn: '04 Jan 2026', lastActive: '14 Aug 2026, 07:30', status: 'Active' },
-  /* The signed-in administrator. Cara HOGUE — not Cara MORGAN, who is the sample
-     member HM-001238. Two different people who happen to share a first name, so
-     never write one where the other belongs: the surname is the whole
-     distinction and dropping it makes the demo read as if an administrator were
-     looking at their own file. */
-  { id: 'AD-02', name: 'Cara Hogue',    initials: 'CH', email: 'cara.hogue@veye.example',    invited: 'Accepted', invitedOn: '04 Jan 2026', lastActive: '14 Aug 2026, 08:12', status: 'Active' },
-  { id: 'AD-03', name: 'James Lee',     initials: 'JL', email: 'james.lee@veye.example',     invited: 'Accepted', invitedOn: '11 Feb 2026', lastActive: '14 Aug 2026, 07:55', status: 'Active' },
-  { id: 'AD-04', name: 'Priya Shah',    initials: 'PS', email: 'priya.shah@veye.example',    invited: 'Accepted', invitedOn: '11 Feb 2026', lastActive: '13 Aug 2026, 18:40', status: 'Active' },
-  { id: 'AD-05', name: 'Maya Patel',    initials: 'MP', email: 'maya.patel@veye.example',    invited: 'Accepted', invitedOn: '02 Mar 2026', lastActive: '14 Aug 2026, 08:20', status: 'Active' },
-  { id: 'AD-06', name: 'Dr Ana Ruiz',   initials: 'AR', email: 'ana.ruiz@veye.example',      invited: 'Accepted', invitedOn: '02 Mar 2026', lastActive: '13 Aug 2026, 16:05', status: 'Active' },
-  { id: 'AD-07', name: 'Nina Alvarez',  initials: 'NA', email: 'nina.alvarez@veye.example',  invited: 'Accepted', invitedOn: '19 Apr 2026', lastActive: '13 Aug 2026, 15:22', status: 'Active' },
-  { id: 'AD-08', name: 'Tom Becker',    initials: 'TB', email: 'tom.becker@veye.example',    invited: 'Accepted', invitedOn: '19 Apr 2026', lastActive: '14 Aug 2026, 08:02', status: 'Active' },
-  { id: 'AD-09', name: 'Owen Wright',   initials: 'OW', email: 'owen.wright@veye.example',   invited: 'Accepted', invitedOn: '30 May 2026', lastActive: '14 Aug 2026, 08:28', status: 'Active' },
-  { id: 'AD-10', name: 'Jonah Reid',    initials: 'JR', email: 'jonah.reid@veye.example',    invited: 'Pending',  invitedOn: '12 Aug 2026', lastActive: '—',                  status: 'Active' },
-  { id: 'AD-11', name: 'Sara Okafor',   initials: 'SO', email: 'sara.okafor@veye.example',   invited: 'Accepted', invitedOn: '14 Sep 2025', lastActive: '02 Jul 2026, 11:10', status: 'Deactivated' },
+/* ============================================================== CONTENT =====
+   Verbatim from platform/api/app/seed/content_data.py (client-approved Help
+   page copy) and care.py. */
+const HELP_FAQ = [
+  ['what_is_veye', 'About Veye', 'What is Veye?', 'Veye programs help members manage disease, lose weight and take a proactive role in their own healthcare. Veye takes a nutritional approach to family health. Whether challenged by diabetes, heart disease, osteoporosis, infertility, asthma or the simple desire to improve quality of life, Veye will be there to offer detailed nutritional planning and day-to-day support. Veye makes it possible to put medical advice into action.'],
+  ['what_subscription_am_i_on', 'Subscription and My Account', 'What subscription am I on?', 'Create an account to see the subscription options.'],
+  ['how_do_i_use_the_veye_site', 'Using the Platform', 'How do I use the Veye site?', 'The Veye site is designed to be simple and easy to use. Veye uses an internal AI assistant to guide you at your pace, concentrate on the things that work best for you, and give you personalized tips and advice. You can start with a question to the Veye Companion, randomly click on the features that interest you, or go to the left column and take the time to set up your program.'],
+  ['where_should_i_start', 'Using the Platform', 'Where should I start?', 'For best results, after you sign in Veye suggests that you start by filling in the sections on the left in order. Create a baseline assessment by filling in a Progress Tracker of your choice, or filling in more than one. Try using the Mood Tracker, eventually understanding how food affects your mood.'],
+  ['i_can_t_sign_in_to_my_account', 'Technical Issues', 'I can’t sign in to my account', 'Check that you are using the email address you signed up with, and that Caps Lock is off. If you are still unable to sign in, close the tab and open Veye again before trying once more.'],
+  ['i_forgot_my_password', 'Technical Issues', 'I forgot my password', 'Use the show/hide control in the password field to confirm what you have typed. Password resets will be available from the sign-in screen; until then, email us and we will help you back in.'],
+  ['a_page_will_not_load_or_looks_broken', 'Technical Issues', 'A page will not load or looks broken', 'Refresh the page first. If that does not help, clear your browser cache and reload. A stale cached file is the most common cause of a page rendering incorrectly.'],
+  ['what_is_metabolism', 'Diet and Nutrition Terminology', 'What is metabolism?', 'Your metabolism is how you process and convert energy, and is controlled by AMPK. Metabolism controls your weight, mental focus, physical performance, how you age, and more. By following the Veye program you can control AMPK, and therefore your metabolism.'],
+  ['is_intermittent_fasting_good_for_you', 'Diet and Nutrition Terminology', 'Is intermittent fasting good for you?', 'Although intermittent fasting has shown promise in reducing senescent, or “zombie” cells, you can achieve the same effect without starving by eating a low calorie diet with the proper ratio of macronutrients. The Veye program restricts calories without sacrifice.'],
+  ['why_do_i_need_to_eat_protein_at_every_meal', 'Diet and Nutrition Terminology', 'Why do I need to eat protein at every meal?', 'To activate glucagon and AMPK, two important components to health.'],
+  ['how_much_protein_do_i_need', 'Diet and Nutrition Terminology', 'How much protein do I need?', 'Most women need 77grams per day and men 121grams, although this varies by the individual. The Veye program can help you determine your exact protein needs.'],
+  ['how_is_veye_different_from_other_diet_programs', 'About Veye', 'How is Veye different from other diet programs?', 'Veye goes far beyond what diet sites such as WW (Weight Watchers), Noom and Jenny Craig offer, and beyond what most nutritionists offer. Veye’s proprietary systems are about more than weight loss — they are about improved health. The Veye nutritional program is based on peer reviewed and published Medical research. Veye maintains relationships with medical organizations, cutting edge thinkers, and sole practitioners.'],
+  ['what_is_in_my_account', 'Subscription and My Account', 'What is in My Account?', 'To recover your account, go to the sign in section, enter your email and reset your password.'],
+  ['how_do_i_set_up_my_meals', 'Using the Platform', 'How do I set up my meals?', 'Then make your food choices — this will help the Veye Companion customize your meals. After you have chosen the foods you like to eat, go to Your Days and the Veye Companion will help you create meals that work around your lifestyle, not the other way around. Before you start, the Veye Companion will give you the opportunity to explore the science behind our program.'],
+  ['what_should_i_do_every_day', 'Using the Platform', 'What should I do every day?', 'Finally, fill out the food diary as often as possible. The Veye Companion will assess your choices and let you know what meals are perfect for you, and what can be improved.'],
+  ['my_progress_does_not_seem_to_be_saving', 'Technical Issues', 'My progress does not seem to be saving', 'Make sure you press Save on the screen you are filling in, and that your browser is not in private/incognito mode, which discards stored progress when the window closes.'],
+  ['which_browsers_and_devices_does_veye_support', 'Technical Issues', 'Which browsers and devices does Veye support?', 'Veye works on current versions of Chrome, Edge, Firefox and Safari, on desktop, tablet and phone. If you are on an older browser, updating it usually resolves display problems.'],
+  ['my_issue_is_still_not_fixed', 'Technical Issues', 'My issue is still not fixed', 'Email help@veye.co with a short description of what happened and which page you were on, and we will take it from there.'],
+  ['what_is_the_key_to_living_longer', 'Diet and Nutrition Terminology', 'What is the key to living longer?', 'Calorie restriction is the only known way to increase longevity. The Veye program allows calorie restriction without hunger or deprivation.'],
+  ['is_a_vegan_diet_the_best_one', 'Diet and Nutrition Terminology', 'Is a vegan diet the best one?', 'The research is inconclusive, although Veye respects individuals who choose this lifestyle. It is hard to get adequate protein on a vegan diet. Veye can help you maintain a vegan diet, or make healthy choices whatever your dietary preference is.'],
+  ['can_you_eat_too_much_protein', 'Diet and Nutrition Terminology', 'Can you eat too much protein?', 'Yes, it is important to have the right protein prescription for you and your lifestyle. Veye will give you your protein requirement and help you maintain lean muscle mass.'],
+  ['is_there_protein_in_cantaloupe_broccoli', 'Diet and Nutrition Terminology', 'Is there protein in cantaloupe, broccoli?', 'Although there may be trace amounts, there is not enough to activate glucagon or AMPK, and therefore these are not good protein sources.'],
 ];
 
-/* The signed-in administrator. */
-SEED.me = {
-  id: 'AD-02',
-  name: 'Cara Hogue',
-  initials: 'CH',
-  email: 'cara.hogue@veye.example',
-  phone: '+1 555 0118',
-  timezone: 'America/Los_Angeles',
-  dateFormat: 'D MMM YYYY',
-  mfa: 'Enabled',
-  mfaMethod: 'Authenticator app',
-  /* How this administrator wants the console drawn. Their own preference, not a
-     setting that reaches any member. `motion: 'reduce'` can only add stillness —
-     there is deliberately no value that forces animation on. Navigation is not
-     here: it is `railCollapsed`, which the rail's own Collapse button already
-     writes, and two keys for one choice would drift apart. */
-  display: { density: 'comfortable', motion: 'system', data: 'visual' },
-  emailPrefs: { attention: true, weekly: true, product: false, security: true },
-  appPrefs: { attention: true, messages: true, mentions: true, contentChanges: false },
-  sessions: [
-    { id: 'SE-1', device: 'Chrome on Windows', where: 'Portland, OR', started: '14 Aug 2026, 07:58', current: true },
-    { id: 'SE-2', device: 'Safari on iPhone',  where: 'Portland, OR', started: '13 Aug 2026, 19:04', current: false },
-    { id: 'SE-3', device: 'Chrome on macOS',   where: 'Seattle, WA',  started: '09 Aug 2026, 10:41', current: false },
-  ],
-};
-
-/* ------------------------------------------------------------------ members --
-   HEALTH NUMBER DIRECTION — read before touching any `hn` value.
-   The canonical engine states plainly: "Lower is healthier (1 = great,
-   10 = poor)". Bands: <=1 Good Health, <=3.5 Relatively Good Health,
-   <=6 Moderately Good Health, >6 Insulin Resistance Risk. Every `hn` and
-   `hnBand` below follows that direction, and `hnTrend` is the change since the
-   previous assessment, so a NEGATIVE trend is an improvement. Screens must say
-   so in words rather than relying on an arrow. */
-const M = (o) => ({
-  program: null, adherence: null, attention: 0, tags: [], consent: 'Current',
-  subscription: 'DIY', onboarding: 'Complete', status: 'Active', ...o,
-});
-
-SEED.members = [
-  M({ id: 'HM-001238', name: 'Cara Morgan', initials: 'CM', email: 'cara.m@example.com', joined: '12 Feb 2026',
-      hn: 3.5, hnTrend: -0.5, hnBand: 'Relatively Good Health', hnTaken: '02 Aug 2026',
-      lastActive: '14 Aug 2026, 07:40', program: 'Stabilize Your Day', adherence: 82, attention: 1,
-      tags: ['Blood markers'], dob: '11 Mar 1984', phone: '+1 555 0142', city: 'Portland, OR' }),
-  M({ id: 'HM-001817', name: 'Lena Ortiz', initials: 'LO', email: 'lena.o@example.com', joined: '02 Mar 2026',
-      hn: 2.5, hnTrend: -0.5, hnBand: 'Relatively Good Health', hnTaken: '28 Jul 2026',
-      lastActive: '14 Aug 2026, 06:05', program: 'Steady Mornings', adherence: 74, attention: 1,
-      tags: ['Companion'], dob: '22 Jul 1991', phone: '+1 555 0188', city: 'Austin, TX' }),
-  M({ id: 'HM-002341', name: 'Maya Chen', initials: 'MC', email: 'maya.c@example.com', joined: '09 Aug 2026',
-      hn: null, hnTrend: null, hnBand: 'Not completed', hnTaken: '—',
-      lastActive: '11 Aug 2026, 21:14', onboarding: 'Stalled at step 7 of 12', attention: 1,
-      tags: ['New'], subscription: 'Trial', dob: '30 Jan 1996', phone: '+1 555 0210', city: 'Denver, CO' }),
-  M({ id: 'HM-000992', name: 'Robert Williams', initials: 'RW', email: 'robert.w@example.com', joined: '18 Nov 2025',
-      hn: 7.5, hnTrend: +0.5, hnBand: 'Insulin Resistance Risk', hnTaken: '04 Aug 2026',
-      lastActive: '13 Aug 2026, 20:02', program: 'Stabilize Your Day', adherence: 51, attention: 2,
-      tags: ['Mood', 'Priority'], subscription: 'Guided', dob: '04 Sep 1968', phone: '+1 555 0165', city: 'Chicago, IL' }),
-  M({ id: 'HM-001556', name: 'Sophie Patel', initials: 'SP', email: 'sophie.p@example.com', joined: '21 Apr 2026',
-      hn: 4.5, hnTrend: 0, hnBand: 'Moderately Good Health', hnTaken: '19 Jul 2026',
-      lastActive: '12 Aug 2026, 09:30', program: 'Nutrition Reset', adherence: 12, attention: 1,
-      tags: ['Nutrition'], dob: '15 Dec 1989', phone: '+1 555 0177', city: 'Seattle, WA' }),
-  M({ id: 'HM-002118', name: 'Daniel Kim', initials: 'DK', email: 'daniel.k@example.com', joined: '30 Jun 2026',
-      hn: 5.0, hnTrend: -1.0, hnBand: 'Moderately Good Health', hnTaken: '06 Aug 2026',
-      lastActive: '13 Aug 2026, 12:45', program: 'Nutrition Reset', adherence: 66, attention: 1,
-      tags: ['Supplements'], dob: '19 May 1993', phone: '+1 555 0199', city: 'Boston, MA' }),
-  M({ id: 'HM-002402', name: 'Aisha Bello', initials: 'AB', email: 'aisha.b@example.com', joined: '01 Jul 2026',
-      hn: 1.0, hnTrend: -0.5, hnBand: 'Good Health', hnTaken: '01 Aug 2026',
-      lastActive: '14 Aug 2026, 07:02', program: 'Steady Mornings', adherence: 91,
-      tags: ['Advocate'], subscription: 'Guided', dob: '28 Feb 1987', phone: '+1 555 0221', city: 'Miami, FL' }),
-  M({ id: 'HM-001045', name: 'Tomás Rivera', initials: 'TR', email: 'tomas.r@example.com', joined: '05 Jan 2026',
-      hn: 4.0, hnTrend: +0.5, hnBand: 'Moderately Good Health', hnTaken: '11 Jul 2026',
-      lastActive: '10 Aug 2026, 17:20', program: 'Stabilize Your Day', adherence: 58,
-      tags: [], dob: '08 Nov 1975', phone: '+1 555 0233', city: 'Phoenix, AZ' }),
-  M({ id: 'HM-002590', name: 'Grace Lin', initials: 'GL', email: 'grace.l@example.com', joined: '28 Jul 2026',
-      hn: null, hnTrend: null, hnBand: 'Not completed', hnTaken: '—',
-      lastActive: '13 Aug 2026, 08:11', onboarding: 'Step 4 of 12', subscription: 'Trial',
-      tags: ['New'], dob: '12 Jun 1998', phone: '+1 555 0244', city: 'San Diego, CA' }),
-  M({ id: 'HM-000731', name: 'Peter Novak', initials: 'PN', email: 'peter.n@example.com', joined: '14 Sep 2025',
-      hn: 3.0, hnTrend: -0.5, hnBand: 'Relatively Good Health', hnTaken: '11 Feb 2026',
-      lastActive: '09 Aug 2026, 14:00', program: 'Nutrition Reset', adherence: 70,
-      tags: ['Renewal due'], subscription: 'Guided', dob: '02 Apr 1970', phone: '+1 555 0255', city: 'Minneapolis, MN' }),
-  M({ id: 'HM-002777', name: 'Hannah Weiss', initials: 'HW', email: 'hannah.w@example.com', joined: '03 Aug 2026',
-      hn: 2.0, hnTrend: -1.0, hnBand: 'Relatively Good Health', hnTaken: '10 Aug 2026',
-      lastActive: '14 Aug 2026, 06:48', program: 'Steady Mornings', adherence: 88,
-      tags: [], dob: '25 Oct 1990', phone: '+1 555 0266', city: 'Nashville, TN' }),
-  M({ id: 'HM-000488', name: 'Sam Okonkwo', initials: 'SO', email: 'sam.o@example.com', joined: '22 Jun 2025',
-      hn: 6.5, hnTrend: +1.0, hnBand: 'Insulin Resistance Risk', hnTaken: '02 Jun 2026',
-      lastActive: '01 Aug 2026, 10:05', status: 'Paused', subscription: 'Lapsed', adherence: null,
-      tags: ['Payment failed'], consent: 'Renewal due', dob: '17 Aug 1982', phone: '+1 555 0277', city: 'Atlanta, GA' }),
+const MEMBER_COPY = [
+  { key: 'companion_first_visit_welcome', title: 'Companion — first visit welcome', order: 1, status: 'Archived',
+    body: 'Welcome to the Veye program — I look forward to working with you. How would you like to begin? I can start with the why to — the reasons behind the program and its basics — or go straight to the how to and begin meal planning.',
+    source: 'Managed in Companion → Settings (companion_settings); archived here to keep one source of truth.' },
+  { key: 'companion_returning_welcome', title: 'Companion — returning welcome', order: 2, status: 'Archived',
+    body: "Welcome back — I'm Sprout, your Veye companion. What would you like to work on today?",
+    source: 'Managed in Companion → Settings (companion_settings); archived here to keep one source of truth.' },
+  { key: 'health_assessment_parameters_note', title: 'Health Assessment — under the result', order: 3, status: 'Published',
+    body: 'These parameters reflect the overall inflammation in your organs. Your goal is to keep inflammation in control — not too much or too little. Symptoms of chronic diseases are associated with chronic high inflammation.' },
+  { key: 'simple_quiz_intro', title: 'Simple Quiz — introduction', order: 4, status: 'Published',
+    body: '8 yes/no questions to track your progress. Best health is 8 "No" answers.' },
+  { key: 'daily_health_tip', title: 'Dashboard — Daily Health tip', order: 0, status: 'Draft',
+    body: 'Write the daily tip members should see on their dashboard, then publish it. The prototype\'s sample sentence ("Although you are in moderately good health…") was placeholder copy and is not shown to members.' },
+  { key: 'development_section_note', title: 'Development sections — status line', order: 5, status: 'Published',
+    body: 'Under development — more coming.' },
 ];
 
-/* ------------------------------------------------------ needs attention -----
-   Plain-language operational items. No approvals, no governance queue. */
-SEED.attention = [
-  { id: 'AT-4821', memberId: 'HM-001238', member: 'Cara Morgan', kind: 'Blood markers', title: 'New blood results to look at',
-    detail: 'Six markers came in at 06:40 today. TG/HDL and HOMA-IR have both been calculated and nobody has opened them yet.',
-    priority: 'High', age: '2 hours ago', due: 'Today' },
-  { id: 'AT-4822', memberId: 'HM-001817', member: 'Lena Ortiz', kind: 'Companion', title: 'Companion reply held for review',
-    detail: 'Sprout paused a reply about taking magnesium alongside omega-3. The member has not seen it.',
-    priority: 'High', age: '4 hours ago', due: 'Today' },
-  { id: 'AT-4823', memberId: 'HM-002341', member: 'Maya Chen', kind: 'Onboarding', title: 'Onboarding stopped part-way',
-    detail: 'Stopped at step 7 of 12, the blood marker step, three days ago and has not come back.',
-    priority: 'Medium', age: '1 day ago', due: '15 Aug' },
-  { id: 'AT-4824', memberId: 'HM-000992', member: 'Robert Williams', kind: 'Mood', title: 'Three low mood days in a row',
-    detail: 'Three consecutive low entries, each mentioning broken sleep. Worth a human read before anything else happens.',
-    priority: 'Medium', age: '1 day ago', due: '15 Aug' },
-  { id: 'AT-4825', memberId: 'HM-001556', member: 'Sophie Patel', kind: 'Plan', title: 'Assigned plan never opened',
-    detail: 'Nutrition Reset was assigned nine days ago. No meal plan opened and no diary entries since.',
-    priority: 'Low', age: '2 days ago', due: '16 Aug' },
-  { id: 'AT-4826', memberId: 'HM-002118', member: 'Daniel Kim', kind: 'Message', title: 'Question waiting for a reply',
-    detail: 'Asked about omega-3 timing on 12 August. No reply yet.',
-    priority: 'Low', age: '2 days ago', due: '16 Aug' },
-  { id: 'AT-4827', memberId: 'HM-000488', member: 'Sam Okonkwo', kind: 'Billing', title: 'Renewal payment failed twice',
-    detail: 'Declined on 1 and 8 August. Access is paused until it is resolved.',
-    priority: 'Medium', age: '6 days ago', due: '15 Aug' },
-  { id: 'AT-4828', memberId: 'HM-000731', member: 'Peter Novak', kind: 'Assessment', title: 'Health Number retake is due',
-    detail: 'Last completed 11 February 2026. The retake reminder is six months.',
-    priority: 'Low', age: '3 days ago', due: '18 Aug' },
-  { id: 'AT-4829', memberId: 'HM-002590', member: 'Grace Lin', kind: 'Onboarding', title: 'Onboarding incomplete',
-    detail: 'Step 4 of 12 since 7 August. No reminder has been sent yet.',
-    priority: 'Low', age: '4 days ago', due: '17 Aug' },
-  { id: 'AT-4830', memberId: null, member: '—', kind: 'System', title: 'Lab import rejected two rows',
-    detail: 'Two of fourteen rows failed on 13 August because the HDL unit was not recognised.',
-    priority: 'Medium', age: '1 day ago', due: '15 Aug' },
+const CARE_SEED_BY = 'Seed (client-approved prototype content)';
+const CARE_ITEMS = [
+  { kind: 'fitness', title: 'Interested in Martial Arts and Boxing?', category: 'Martial Arts & Boxing', content_type: 'program',
+    description: 'VEYE recommends the EYR System.', external_url: 'https://withme.so/EngageYourRage', display_order: 1, status: 'Published',
+    source: 'Cara — Dashboard edits.docx (FITNESS), 17 Sep 2026' },
+  { kind: 'fitness', title: 'Here are 5 exercises to avoid', category: 'Exercise guidance', content_type: 'video', description: '',
+    youtube_url: 'https://youtu.be/XLlHJ5-vHWw', display_order: 2, status: 'Published',
+    source: 'Cara — YouTube channel video "5 Exercises to Avoid #1" (verified 17 Sep 2026)' },
+  { kind: 'fitness', title: 'Need to improve your range of motion?', category: 'Range of Motion', content_type: 'video',
+    description: 'VEYE recommends the NeoRomX System.', youtube_url: 'https://youtu.be/7YLttuiwGvw', display_order: 3, status: 'Published',
+    source: 'Cara — YouTube channel video "NeoRomX for increased range of motion" (verified 17 Sep 2026)' },
+  { kind: 'supplement', title: 'Veye supplement information', category: 'Overview', content_type: 'copy',
+    description: 'While you cannot fix a macronutrient issue with micronutrients, with an anti-inflammation diet supplements can enhance your health.',
+    body: 'It is important to remember that a balanced diet is the first step to health management. Trying to undo or reverse the effects of an unbalanced diet with supplements will not work.\n\nAlthough there are a myriad of supplements that can enhance your health, Veye recommends the two most important ones: Omega 3 fatty acids DHA/EPA, and Polyphenols.\n\nThe best source of DHA/EPA are pharmaceutical grade fish oils (not just purified or molecular distilled). For vegetarians and vegans, try an algae based DHA source. Omega 3 fatty acids reduce unresolved inflammation.\n\nPolyphenols can be from berries, cacao, or other sources. High dose polyphenols allow for increased AMPK (metabolism) activity.',
+    cautions: 'For educational purposes only. Not medical advice. Consult your healthcare provider.',
+    display_order: 1, status: 'Published', source: 'Client package 20 Aug 2026 (Supplements)' },
+  { kind: 'supplement', title: 'EPA/DHA suggested dosage', category: 'Omega 3', content_type: 'copy',
+    description: 'Dosage is chosen by condition, never inferred from a tracker.',
+    body: 'No chronic disease: 2.5g\nOverweight/obese, type II diabetes, CHD etc: 5g\nChronic pain: 7.5g\nNeurological disorders: 10g',
+    cautions: 'For educational purposes only. Not medical advice. Consult your healthcare provider.',
+    display_order: 2, status: 'Published', source: 'Client package 20 Aug 2026 (Supplements)' },
+  { kind: 'supplement', title: 'Polyphenol suggested dosage', category: 'Polyphenols', content_type: 'copy',
+    description: 'The same for every result.',
+    body: '500mg helps reduce oxidative stress\n1000mg helps reduce inflammation\n1500mg helps reduce the rate of aging and increases mitochondrial synthesis',
+    cautions: 'For educational purposes only. Not medical advice. Consult your healthcare provider.',
+    display_order: 3, status: 'Published', source: 'Client package 20 Aug 2026 (Supplements)' },
+  { kind: 'supplement', title: 'Individual vitamin pros and cons', category: 'Other supplements', content_type: 'article',
+    description: 'Provisional educational content supplied by the Veye team — pending citation and clinical review.',
+    body: 'See the approved Vitamin Overview text in the member Supplements section; it is published here as a draft until citations and clinical review are supplied.',
+    cautions: 'Pending citation and clinical review. For educational purposes only. Not medical advice.',
+    display_order: 4, status: 'Draft', source: 'Client package 20 Aug 2026 (Vitamin overview)' },
+  { kind: 'resource', title: 'Blogs', category: 'Resources', content_type: 'link',
+    description: 'Veye contributors comment on a number of factors related to wellness. Read our regularly updated articles and view the videos that interest you. Not seeing what interests you? Let us know and we will create a post with your interests in mind.',
+    display_order: 1, status: 'Draft', source: 'Approved Resources card (content to be supplied)' },
+  { kind: 'resource', title: 'Lifestyle', category: 'Resources', content_type: 'link',
+    description: 'Explore media that focuses on daily living, personal interests, and hobbies. Veye topics include fashion, food, travel, wellness, plastic surgery, and even home decor. Want recipes, cooking tips, and tips for dining out? We have that, too.',
+    display_order: 2, status: 'Draft', source: 'Approved Resources card (content to be supplied)' },
+  { kind: 'resource', title: 'Articles', category: 'Resources', content_type: 'article',
+    description: 'Research papers, excerpts, and articles giving you insight to the science behind the Veye program. Want academic or accessible, expert content or beginner guides, advanced research or quick reads? Veye has it all.',
+    display_order: 3, status: 'Draft', source: 'Approved Resources card (content to be supplied)' },
+  { kind: 'resource', title: 'Biohacks', category: 'Resources', content_type: 'article',
+    description: 'Interested in making intentional changes to your exercise routine, lifestyle, or environment to optimize your physical and mental performance? Often called "do-it-yourself biology", Biohacks use science, data, and self-experimentation to take a proactive role in health and longevity. Discover Veye offerings and recommendations.',
+    display_order: 4, status: 'Draft', source: 'Approved Resources card (content to be supplied)' },
 ];
 
-/* ------------------------------------------------------------- programs ----- */
-SEED.programs = [
-  { id: 'PR-01', name: 'Stabilize Your Day', audience: 'Members with irregular meal timing', status: 'Live', version: 'v3.1', updated: '02 Aug 2026', members: 214, completion: 68, weeks: 8 },
-  { id: 'PR-02', name: 'Steady Mornings', audience: 'New members in their first 30 days', status: 'Live', version: 'v2.4', updated: '28 Jul 2026', members: 168, completion: 74, weeks: 4 },
-  { id: 'PR-03', name: 'Nutrition Reset', audience: 'Members choosing favourable carbohydrates', status: 'Live', version: 'v1.9', updated: '19 Jul 2026', members: 96, completion: 55, weeks: 6 },
-  { id: 'PR-04', name: 'Metabolic Health Program', audience: 'Raised TG/HDL ratio', status: 'Draft', version: 'v1.0 draft', updated: '14 Aug 2026', members: 0, completion: null, weeks: 10 },
-  { id: 'PR-05', name: 'Longevity Nutrition Plan', audience: 'Guided subscribers', status: 'Draft', version: 'v0.4 draft', updated: '14 Aug 2026', members: 0, completion: null, weeks: 8 },
-  { id: 'PR-06', name: 'Movement Foundations', audience: 'Low reported activity', status: 'Paused', version: 'v1.2', updated: '11 Jun 2026', members: 41, completion: 32, weeks: 6 },
-  { id: 'PR-07', name: 'Winter Reset 2025', audience: 'Seasonal cohort', status: 'Archived', version: 'v1.0', updated: '04 Mar 2026', members: 302, completion: 81, weeks: 6 },
-];
-
-SEED.programSteps = [
-  /* PR-01 Stabilize Your Day — 8 weeks */
-  { id: 'PS-1',  programId: 'PR-01', week: 1, type: 'Assessment',    title: 'Health Number check-in',       timing: 'Day 1',  detail: 'The full 12-question assessment' },
-  { id: 'PS-2',  programId: 'PR-01', week: 1, type: 'Message',       title: 'Welcome from your coach',      timing: 'Day 1',  detail: 'Message template WEL-02' },
-  { id: 'PS-3',  programId: 'PR-01', week: 1, type: 'Food choice',   title: 'Choose your proteins',         timing: 'Day 2',  detail: 'Protein portal, five selections' },
-  { id: 'PS-4',  programId: 'PR-01', week: 2, type: 'Meal plan',     title: 'Build your first day',         timing: 'Day 8',  detail: 'Meal Planning template: Balanced Start' },
-  { id: 'PS-5',  programId: 'PR-01', week: 2, type: 'Mood check-in', title: 'Daily mood prompt',            timing: 'Daily',  detail: 'Reminder at 20:00 local time' },
-  { id: 'PS-6',  programId: 'PR-01', week: 3, type: 'Food diary',    title: 'Three-day diary',              timing: 'Day 15', detail: 'Prompt with a reminder at 21:00' },
-  { id: 'PS-7',  programId: 'PR-01', week: 4, type: 'Coach review',  title: 'Mid-point review',             timing: 'Day 22', detail: 'Coach checkpoint, 25 minutes' },
-  { id: 'PS-8',  programId: 'PR-01', week: 6, type: 'Resource',      title: 'Understanding inflammation',   timing: 'Day 36', detail: 'Resource RS-14' },
-  { id: 'PS-9',  programId: 'PR-01', week: 8, type: 'Assessment',    title: 'Closing Health Number retake', timing: 'Day 52', detail: 'Compared against day 1' },
-  /* PR-02 Steady Mornings — 4 weeks */
-  { id: 'PS-11', programId: 'PR-02', week: 1, type: 'Message',       title: 'Welcome from your coach',      timing: 'Day 1',  detail: 'Message template WEL-01' },
-  { id: 'PS-12', programId: 'PR-02', week: 1, type: 'Assessment',    title: 'Health Number check-in',       timing: 'Day 2',  detail: 'The full 12-question assessment' },
-  { id: 'PS-13', programId: 'PR-02', week: 1, type: 'Habit',         title: 'Set a consistent wake time',   timing: 'Day 3',  detail: 'Member picks a 30-minute window' },
-  { id: 'PS-14', programId: 'PR-02', week: 2, type: 'Meal plan',     title: 'Plan your first breakfast',    timing: 'Day 8',  detail: 'Meal Planning template: Balanced Start' },
-  { id: 'PS-15', programId: 'PR-02', week: 2, type: 'Mood check-in', title: 'Morning mood prompt',          timing: 'Daily',  detail: 'Reminder at 08:00 local time' },
-  { id: 'PS-16', programId: 'PR-02', week: 3, type: 'Resource',      title: 'Why mornings set the day',     timing: 'Day 15', detail: 'Resource RS-06' },
-  { id: 'PS-17', programId: 'PR-02', week: 3, type: 'Coach review',  title: 'Two-week check-in',            timing: 'Day 17', detail: 'Coach checkpoint, 20 minutes' },
-  { id: 'PS-18', programId: 'PR-02', week: 4, type: 'Food diary',    title: 'Three-day diary',              timing: 'Day 22', detail: 'Prompt with a reminder at 21:00' },
-  { id: 'PS-19', programId: 'PR-02', week: 4, type: 'Assessment',    title: 'Closing Health Number retake', timing: 'Day 26', detail: 'Compared against day 2' },
-  /* PR-03 Nutrition Reset — 6 weeks */
-  { id: 'PS-20', programId: 'PR-03', week: 1, type: 'Assessment',    title: 'Health Number check-in',       timing: 'Day 1',  detail: 'The full 12-question assessment' },
-  { id: 'PS-21', programId: 'PR-03', week: 1, type: 'Food choice',   title: 'Choose your proteins',         timing: 'Day 2',  detail: 'Protein portal, five selections' },
-  { id: 'PS-22', programId: 'PR-03', week: 1, type: 'Food choice',   title: 'Choose your favourable carbs', timing: 'Day 3',  detail: 'Favorable Carbohydrates portal, five selections' },
-  { id: 'PS-23', programId: 'PR-03', week: 2, type: 'Meal plan',     title: 'Build your first week',        timing: 'Day 8',  detail: 'Meal Planning template: Reset Week' },
-  { id: 'PS-24', programId: 'PR-03', week: 2, type: 'Food diary',    title: 'Daily diary prompt',           timing: 'Daily',  detail: 'Reminder at 21:00 local time' },
-  { id: 'PS-25', programId: 'PR-03', week: 3, type: 'Resource',      title: 'Reading a food label',         timing: 'Day 15', detail: 'Resource RS-09' },
-  { id: 'PS-26', programId: 'PR-03', week: 4, type: 'Coach review',  title: 'Mid-point review',             timing: 'Day 22', detail: 'Coach checkpoint, 25 minutes' },
-  { id: 'PS-27', programId: 'PR-03', week: 5, type: 'Meal plan',     title: 'Rebuild with what worked',     timing: 'Day 29', detail: 'Member edits their own template' },
-  { id: 'PS-28', programId: 'PR-03', week: 6, type: 'Assessment',    title: 'Closing Health Number retake', timing: 'Day 38', detail: 'Compared against day 1' },
-];
-
-/* ===========================================================================
-   ASSESSMENTS AND RULES — transcribed from build/js/veye-calculations.js
-   =========================================================================== */
-
-/* Health Number — 12 questions. Q1, Q11 and Q12 carry no points and exist for
-   personalisation. Lower is healthier. */
-SEED.healthNumber = {
-  version: 'v4.4',
-  effective: '10 Sep 2026',
-  scale: '1 to 10 published, rounded to the nearest 0.5; the raw weighted total may be lower',
-  direction: 'Lower is healthier. 1 is great, 10 is poor.',
-  membersScored: 1284,
-  source: 'HealthNumbers.xlsx, via the consumer scoring engine',
-  questions: [
-    { id: 'Q1', text: 'What are your goals?', type: 'Multiple choice', scored: false,
-      note: 'Carries no points. Used to personalise the plan.',
-      options: [
-        { label: 'Manage Current Chronic Diseases', points: 0 },
-        { label: 'Prevent Future Disease', points: 0 },
-        { label: 'Live a Healthier Lifestyle', points: 0 },
-        { label: 'Better Mental Focus', points: 0 },
-        { label: 'Lose Body Fat', points: 0 }, { label: 'Other', points: 0 },
-      ] },
-    { id: 'Q2', text: 'Have you tried other food plans?', type: 'Multiple choice', scored: true, group: 'Food',
-      note: '"No other plans" is exclusive and scores 0. A written-in plan scores as Other.',
-      options: [
-        { label: 'Weight Watchers', points: 0.5 }, { label: 'Noom', points: 0.5 },
-        { label: 'Jenny Craig', points: 0.5 }, { label: 'The Mediterranean Diet', points: 0.5 },
-        { label: 'DASH', points: 0.5 }, { label: 'ATKINS', points: 1.5 },
-        { label: 'Keto', points: 1.5 }, { label: 'Intermittent Fasting', points: 0.5 },
-        { label: 'Fasting', points: 0.5 }, { label: 'Other', points: 0.5 },
-        { label: 'No other plans', points: 0 },
-      ] },
-    { id: 'Q3', text: 'Select your activity level', type: 'Single choice', scored: true, group: 'Lifestyle',
-      options: [
-        { label: 'None', points: 1 },
-        { label: 'Light (I work, I walk some)', points: 0 },
-        { label: 'Moderate (I exercise 1-3 times a week)', points: -1 },
-        { label: 'Heavy (I exercise 3x+ times per week)', points: -1 },
-      ] },
-    { id: 'Q4', text: 'Do you meditate?', type: 'Yes / No', scored: true, group: 'Lifestyle',
-      options: [{ label: 'Yes', points: -0.5 }, { label: 'No', points: 0.5 }] },
-    { id: 'Q5', text: 'Are you tired or do you have poor mental focus during the day?', type: 'Yes / No', scored: true, group: 'Food',
-      /* Updated 20 Aug 2026 per Health Numbers Metrics Nile site.xlsx: Yes is
-         0.5 (it was 1.5 in the earlier sheet). */
-      options: [{ label: 'Yes', points: 0.5 }, { label: 'No', points: 0 }] },
-    { id: 'Q6', text: 'Do you gain weight quickly?', type: 'Yes / No', scored: true, group: 'Food',
-      options: [{ label: 'Yes', points: 1 }, { label: 'No', points: 0 }] },
-    { id: 'Q7', text: 'Is most of your excess weight (if any) around your abdomen?', type: 'Yes / No', scored: true, group: 'Food',
-      options: [{ label: 'Yes', points: 0.5 }, { label: 'No', points: 0 }] },
-    { id: 'Q8', text: 'Do you feel like you get enough sleep?', type: 'Yes / No', scored: true, group: 'Lifestyle',
-      options: [{ label: 'Yes', points: 0 }, { label: 'No', points: 1.5 }] },
-    { id: 'Q9', text: 'Do you sleep well?', type: 'Yes / No', scored: true, group: 'Lifestyle',
-      options: [{ label: 'Yes', points: 0 }, { label: 'No', points: 1.5 }] },
-    { id: 'Q10', text: 'How many hours do you sleep per night?', type: 'Number', scored: true, group: 'Lifestyle',
-      options: [
-        { label: 'Fewer than 5 hours', points: 1 },
-        { label: '5 to 9 hours', points: 0 },
-        { label: 'More than 9 hours', points: 1 },
-      ] },
-    { id: 'Q11', text: 'What is your dietary preference?', type: 'Single choice', scored: false,
-      note: 'Carries no points. Used to filter food and meal suggestions.',
-      options: [
-        { label: 'Vegetarian', points: 0 }, { label: 'Vegan', points: 0 },
-        { label: 'Raw food', points: 0 }, { label: 'Fish and no meat', points: 0 },
-        { label: 'Fish/chicken/turkey and no red meat', points: 0 },
-        { label: 'Gluten free', points: 0 }, { label: 'Dairy free', points: 0 },
-        { label: 'No preference', points: 0 }, { label: 'Other', points: 0 },
-      ] },
-    { id: 'Q12', text: 'How did you find out about Veye?', type: 'Single choice', scored: false,
-      note: 'Carries no points. ONBOARDING ONLY — the dashboard retake omits this question (client, 20 Aug 2026: "we already know how they found out about us").',
-      onboardingOnly: true,
-      options: [
-        { label: 'Instagram', points: 0 }, { label: 'Facebook', points: 0 },
-        { label: 'On-line search', points: 0 }, { label: 'Friends or Family', points: 0 },
-        { label: 'Recommended by a doctor', points: 0 }, { label: 'Other', points: 0 },
-      ] },
-  ],
-  bands: [
-    { upTo: 1,   label: 'Good Health',
-      copy: 'You are in very good health — join and learn more about optimizing your health, preventing disease, and slowing the aging process.' },
-    { upTo: 3.5, label: 'Relatively Good Health',
-      copy: 'You are in relatively good health, and some lifestyle changes and adjustments to your dietary program will help you optimize your health, prevent disease, and slow the aging process.' },
-    { upTo: 6,   label: 'Moderately Good Health',
-      copy: 'Although you are in moderately good health, incorporating better food choices and implementing some lifestyle changes will help you optimize your health, prevent disease, and slow the aging process.' },
-    { upTo: 10,  label: 'Insulin Resistance Risk',
-      copy: 'You show signs of insulin resistance, which will lead to chronic disease or a worsening of established chronic disease. Join the Program and we can help you make changes so you feel better and live longer.' },
-  ],
-  grouping: {
-    note: 'The middle two bands change their wording depending on where the points came from.',
-    lifestyle: ['Q3', 'Q4', 'Q8', 'Q9', 'Q10'],
-    food: ['Q2', 'Q5', 'Q6', 'Q7'],
-    rule: 'For scores from 1.5 to 3.5, use the mostly Lifestyle, mostly Food, or Mixed wording according to the high answers. For scores from 4 to 6, use the wording for whichever group has more high answers; use the Mixed wording for a tie. For scores from 6.5 to 10, use the Insulin Resistance Risk wording for any combination.',
-  },
-  /* RESOLVED 20 Aug 2026 (Nile Site Health Number Interpretation and
-     Formula.docx): "-1 and this defaults to 1". The published floor is 1. */
-  floor: {
-    value: 1,
-    resolved: '20 Aug 2026',
-    note: 'A member with no scoring answers and moderate or heavy exercise totals −1; the published number floors at 1. Resolved by the client on 20 Aug 2026 — the engine and both member quizzes clamp to 1.',
-  },
-  personas: [
-    { id: 'PP-1', name: 'Sedentary, high stress, broken sleep',
-      answers: { Q3: 'None', Q4: 'No', Q5: 'Yes', Q8: 'No', Q9: 'No' }, score: 5.0 },
-    { id: 'PP-2', name: 'Active, sleeps well, no other plans',
-      answers: { Q2: 'No other plans', Q3: 'Heavy (I exercise 3x+ times per week)', Q4: 'Yes', Q8: 'Yes', Q9: 'Yes' }, score: 1 },
-    { id: 'PP-3', name: 'Keto history, gains weight quickly',
-      answers: { Q2: 'Keto', Q3: 'Light (I work, I walk some)', Q4: 'No', Q6: 'Yes', Q7: 'Yes' }, score: 3.5 },
-    { id: 'PP-4', name: 'Sleeps fine, diet is the problem',
-      answers: { Q2: 'ATKINS', Q3: 'Moderate (I exercise 1-3 times a week)', Q5: 'Yes', Q6: 'Yes' }, score: 2.0 },
-  ],
-  versions: [
-    { version: 'v4.4', effective: '10 Sep 2026', note: 'Current. The Start the Process review replaces Twitter with Facebook and adds Recommended by a doctor to the onboarding-only referral question. Scoring remains unchanged.', current: true },
-    { version: 'v4.3', effective: '20 Aug 2026', note: 'Q5 (tired / poor focus) set to 0.5 for Yes per Health Numbers Metrics Nile site.xlsx; the published floor resolved to 1; the 0–1 band reads "very good health"; the referral question marked onboarding-only.' },
-    { version: 'v4.2', effective: '02 Jun 2026', note: 'Meditation set to −0.5 for Yes and +0.5 for No, matching the spreadsheet.' },
-    { version: 'v4.1', effective: '14 Feb 2026', note: 'Corrected the Heavy activity option label so it scored −1 instead of 0.' },
-    { version: 'v4.0', effective: '11 Nov 2025', note: 'Moved from 13 questions to the canonical 12.' },
-  ],
-};
-
-/* Health Assessment (source file: Health Assessment.docx) — 11 questions,
-   first choice 1, middle 2, third 3. Lower totals mean lower inflammation. */
-SEED.statusReport = {
-  version: 'v1.7',
-  effective: '28 Aug 2026',
-  membersScored: 412,
-  scale: 'Total of 11 to 33. Lower is better: 11 is low inflammation and 33 is high inflammation.',
-  source: 'Health Assessment.docx',
-  scoring: 'Each of the eleven questions offers three answers. The first scores 1, the second 2, and the third 3.',
-  bands: [
-    { from: 11, to: 11, label: 'Very Low Inflammation', copy: 'On a scale of 11 to 33, you have very low inflammation. What you are eating is working well for you and few adjustments are needed.' },
-    { from: 12, to: 16, label: 'Low Inflammation', copy: 'You have low inflammation. What you are eating is good. Making some improvements and following the Veye guidelines will decrease inflammation even more.' },
-    { from: 17, to: 22, label: 'Moderate Inflammation', copy: 'You have moderate inflammation. You can improve your health with the Veye guidelines.' },
-    { from: 23, to: 27, label: 'High Inflammation', copy: 'Your inflammation is high — you may already have a chronic disease, and if not you are at risk of developing a chronic disease. Following the Veye guidelines will significantly improve your health.' },
-    { from: 28, to: 32, label: 'Significant Inflammation', copy: 'You have significant inflammation. You may already have a chronic disease, and if not you are at risk of developing a chronic disease. The Veye guidelines can help you make the foods you already eat healthier by combining the right ratios of proteins, carbohydrates and fats.' },
-    { from: 33, to: 33, label: 'High Inflammation / Poor Health', copy: 'Your inflammation is high and your health is poor. Try incorporating the Veye program as much as possible. Start with small changes.' },
-  ],
-  /* The supplement rows use DIFFERENT boundaries from the bands above. That is
-     what the source says, so they stay two separate lookups. */
-  dosage: [
-    { from: 11, to: 17, epa: '2.5g', poly: '500mg / 1000mg / 1500mg', note: 'EPA/DHA varies by total; all three supplied polyphenol lines remain available.' },
-    { from: 18, to: 21, epa: '5g',   poly: '500mg / 1000mg / 1500mg', note: 'EPA/DHA varies by total; all three supplied polyphenol lines remain available.' },
-    { from: 22, to: 33, epa: '7.5g', poly: '500mg / 1000mg / 1500mg', note: 'EPA/DHA varies by total; all three supplied polyphenol lines remain available.' },
-  ],
-  separateRow: { condition: 'Neurological disorders', epa: '10g', poly: '500mg / 1000mg / 1500mg', note: 'Condition-based guidance; never applied from the total alone.' },
-  boundaryNote: 'The assessment bands and the supplement boundaries are separate lookups. EPA/DHA is 2.5g for totals 11–17, 5g for 18–21 and 7.5g for 22–33. The three polyphenol lines remain available at every level. Neurological guidance is condition-based and is never inferred from the total alone.',
-  versions: [
-    { version: 'v1.7', effective: '28 Aug 2026', note: 'Current. Client correction: first choice scores 1, third scores 3, and lower inflammation totals are better. Bands and EPA/DHA rows follow Health Assessment.docx.', current: true },
-    { version: 'v1.6', effective: '20 May 2026', note: 'Previous version. Used the superseded higher-is-better direction.' },
-    { version: 'v1.5', effective: '02 Feb 2026', note: 'Added the separate neurological row so it is never applied from the score alone.' },
-    { version: 'v1.4', effective: '11 Oct 2025', note: 'First release of the eleven-question form.' },
-  ],
-};
-
-/* Simple Health Quiz — a count, and nothing more. */
-SEED.simpleQuiz = {
-  version: 'v2.1',
-  effective: '27 Aug 2026',
-  membersScored: 640,
-  source: 'Simple Quiz.docx / Functional Edits (1).docx',
-  questions: 8,
-  scoring: 'Eight yes/no questions. The result is a count of Yes and No answers, stored against the date it was taken.',
-  progressNote: 'Fewer Yes answers over time indicates improvement.',
-  constraint: 'The source defines no health status tiers and no supplement amounts for this quiz, so the console shows none. It also never creates or changes a Health Number.',
-  items: [
-    'Are you sleepy after meals?',
-    'Do you need coffee during the day?',
-    'Do you crave sweets?',
-    'Are you more than 10 lbs overweight?',
-    'Do you exercise but lack good muscle tone or consistent fat loss?',
-    'Do you need to manage a chronic disease?',
-    'Do you lose focus throughout the day?',
-    'Do you suffer from painful arthritis?',
-  ],
-  versions: [
-    { version: 'v2.1', effective: '27 Aug 2026', note: 'Current. Uses the eight client-supplied yes/no questions. The quiz remains a count and never changes the Health Number.', current: true },
-    { version: 'v2.0', effective: '14 Apr 2026', note: 'Previous version. Removed the five invented status tiers and the supplement amounts. The quiz is a count.' },
-    { version: 'v1.2', effective: '19 Dec 2025', note: 'Reworded three questions after member feedback.' },
-    { version: 'v1.0', effective: '14 Sep 2025', note: 'First release.' },
-  ],
-};
-
-/* Blood markers and the three ratios. */
-SEED.markers = [
-  { id: 'BM-1', name: 'Total cholesterol', unit: 'mg/dL', aliases: 'TC, Chol', low: 100, high: 320, status: 'Live' },
-  { id: 'BM-2', name: 'HDL', unit: 'mg/dL', aliases: 'HDL-C', low: 20, high: 120, status: 'Live' },
-  { id: 'BM-3', name: 'Triglycerides', unit: 'mg/dL', aliases: 'TG, Trig', low: 30, high: 600, status: 'Live' },
-  { id: 'BM-4', name: 'Fasting glucose', unit: 'mg/dL', aliases: 'FBG', low: 50, high: 300, status: 'Live' },
-  { id: 'BM-5', name: 'Fasting insulin', unit: 'µIU/mL', aliases: 'Insulin', low: 1, high: 60, status: 'Live' },
-  { id: 'BM-6', name: 'Arachidonic acid', unit: '%', aliases: 'AA', low: 1, high: 30, status: 'Live' },
-  { id: 'BM-7', name: 'EPA', unit: '%', aliases: 'Eicosapentaenoic acid', low: 0.1, high: 15, status: 'Live' },
-  { id: 'BM-8', name: 'HbA1c', unit: '%', aliases: 'A1c', low: 3.5, high: 15, status: 'Live' },
-  { id: 'BM-9', name: 'ApoB', unit: 'mg/dL', aliases: 'Apolipoprotein B', low: 30, high: 200, status: 'Draft' },
-];
-
-SEED.ratios = [
-  { id: 'RT-1', name: 'TG / HDL ratio', formula: 'Triglycerides ÷ HDL', goal: 'Under 1', rounding: '2 decimal places' },
-  { id: 'RT-2', name: 'AA / EPA ratio', formula: 'Arachidonic acid ÷ EPA', goal: '1.5 to 3', rounding: '2 decimal places',
-    entry: 'Calculated or entered directly',
-    entryNote: 'Some laboratories report only the ratio. The member screen accepts a typed AA/EPA value when AA and EPA are not both present, labels which source produced it, and the calculated value wins when both components are entered (client, 20 Aug 2026).' },
-  { id: 'RT-3', name: 'HOMA-IR', formula: 'Fasting insulin × fasting glucose ÷ 405', goal: 'Under 1', rounding: '2 decimal places',
-    note: 'The source states insulin × glucose ÷ 22.5 with glucose in mmol/L. This product collects glucose in mg/dL, and mg/dL = mmol/L × 18.0182, so ÷405 is the exact unit equivalent. Do not change one without the other.' },
-  { id: 'RT-4', name: 'HbA1c', formula: 'Entered directly', goal: '4.9 to 5.1%', rounding: '1 decimal place' },
-];
-
-/* Supplement amounts are chosen by condition. They are never derived from how
-   many markers sit outside their range — no source defines such a rule. */
-SEED.doseByCondition = [
-  { condition: 'No chronic disease', epa: '2.5g' },
-  { condition: 'Overweight or obese, type II diabetes, coronary heart disease and similar', epa: '5g' },
-  { condition: 'Chronic pain', epa: '7.5g' },
-  { condition: 'Neurological disorders', epa: '10g' },
-];
-
-SEED.bodyComposition = {
-  version: 'v2.2',
-  effective: '03 Mar 2026',
-  membersScored: 297,
-  source: 'BMI formula.docx, Appendix B lookup tables',
-  note: 'Body fat comes from the supplied lookup tables, one per sex. Nothing is interpolated. A blank cell in the table means that combination is not supported and the result reads "not available".',
-  inputs: [
-    { sex: 'Woman', fields: 'Hips, abdomen and height, each in inches', method: 'Three table constants, A + B − C' },
-    { sex: 'Man', fields: 'Weight in pounds, waist and wrist in inches', method: 'One table cell, looked up by weight against waist minus wrist' },
-  ],
-  bmi: { formula: '703 × weight in pounds ÷ height in inches squared',
-         note: 'Standard BMI is reported separately. It is not part of the body-fat table and must never be described as coming from it.' },
-  versions: [
-    { version: 'v2.2', effective: '03 Mar 2026', note: 'Current. Half-inch rounding on the female inputs and five-pound rounding on the male weight, matching the tables.', current: true },
-    { version: 'v2.0', effective: '08 Nov 2025', note: 'Replaced an estimated formula with the supplied lookup tables.' },
-  ],
-};
-
-SEED.markersMeta = {
-  version: 'v3.4',
-  effective: '11 Jul 2026',
-  membersScored: 388,
-  source: 'Dated Blood Markers tracking.pdf',
-  versions: [
-    { version: 'v3.4', effective: '11 Jul 2026', note: 'Current. Added HbA1c with its 4.9 to 5.1% goal.', current: true },
-    { version: 'v3.3', effective: '20 Mar 2026', note: 'Stated the HOMA-IR unit conversion in the definition so ÷405 is not mistaken for a different formula.' },
-    { version: 'v3.0', effective: '14 Sep 2025', note: 'First release with the three ratios.' },
-  ],
-};
-
-/* The Assessments & Scoring index. */
-SEED.assessments = [
-  { id: 'AS-1', key: 'health-number', name: 'Health Number', icon: 'gauge',
-    desc: 'The twelve onboarding questions, their weights and the four result bands.',
-    version: 'v4.4', updated: '10 Sep 2026', members: 1284, warn: false },
-  { id: 'AS-2', key: 'simple-quiz', name: 'Simple Health Quiz', icon: 'clipboard',
-    desc: 'Eight yes/no questions counted and stored by date. No score, no tiers.',
-    version: 'v2.1', updated: '27 Aug 2026', members: 640, warn: false },
-  /* Renamed from "Health Status Report" (client, 20 Aug 2026). The stored key
-     and the source document name are unchanged. */
-  { id: 'AS-3', key: 'status-report', name: 'Health Assessment', icon: 'flask',
-    desc: 'Eleven questions totalling 11 to 33, with six inflammation bands.',
-    version: 'v1.7', updated: '28 Aug 2026', members: 412, warn: false },
-  { id: 'AS-4', key: 'markers', name: 'Blood markers and ratios', icon: 'droplet',
-    desc: 'Marker definitions, units, entry bounds and the four calculated ratios.',
-    version: 'v3.4', updated: '11 Jul 2026', members: 388, warn: false },
-  { id: 'AS-5', key: 'body-composition', name: 'BMI and body composition', icon: 'scale',
-    desc: 'The supplied body-fat lookup tables per sex, and standard BMI reported separately.',
-    version: 'v2.2', updated: '03 Mar 2026', members: 297, warn: false },
-];
-
-/* ---------------------------------------------------------------- nutrition -- */
-/* ---------------------------------------------------------- the food library --
-   THE TAXONOMY IS THE MEMBER PRODUCT'S, NOT THIS CONSOLE'S.
-
-   Every portal, group label and food name below was read out of
-   `build/dashboard.html` — the FOOD_CATEGORIES object and FC_ORDER that render
-   the member's Food Choices screen — and not retyped. Four portals in the
-   member's own order, fourteen groups with the member's own labels, 161 foods.
-
-   What that means for anyone editing this file:
-
-   - A food's classification IS its portal plus its group. There is no separate
-     favorable/unfavorable flag, because three of the four portals do not work
-     that way: Proteins and Fats run Best / Fair / Poor, and only carbohydrates
-     split favorable from unfavorable. A binary field flattened that and put
-     sweet potato among the favorable carbohydrates, where the member's own
-     screen has it under Unfavorable → Starchy Vegetables.
-   - `tier` is the source's own value and is deliberately NOT unique inside a
-     portal — all four Unfavorable groups carry `poor`. The unique key is
-     `group`, built from the portal key and the group label.
-   - `memberInfo` is the exact paragraph the member reads at the top of that
-     portal. Editing it in the console changes what they read.
-   - `origin: 'source'` means the name came from that list. `origin: 'admin'`
-     means an administrator created it, and the console labels it as such — a
-     food the member's list does not contain must never look canonical.
-   - `usage` is invented, like every figure in this prototype. It is derived
-     from the record id so it stays the same between reloads.
-   - `aliases` and `diets` are administrative, not source data. The consumer
-     list carries names only; aliases exist so the Food Diary can match what a
-     member typed, and are blank wherever nobody has entered one.
-
-   Regenerating: the values come from `build/dashboard.html`, which is read-only.
-   Read it; do not reconstruct this table from memory. */
-
-/* tierInfo is the member-facing definition of the tiers, shown behind the
-   (i) control on each portal (client info-button texts, 20 Aug 2026). */
-SEED.foodPortals = [
-  { key: 'proteins', label: 'Proteins',
-    tierInfo: 'BEST protein choices are low in fat or have healthy fats and are not processed or minimally processed. FAIR protein choices have a higher amount of saturated fat and/or are minimally processed. LIMIT protein choices have high fat and/or are ultra processed.',
-    memberInfo: 'Proteins help preserve lean mass, support satiety, and stabilize energy. Favor minimally processed protein sources and balance portions across your day.',
-    groups: [
-      { key: 'proteins:best', tier: 'best', label: 'Best' },
-      { key: 'proteins:fair', tier: 'fair', label: 'Fair' },
-      { key: 'proteins:poor', tier: 'poor', label: 'Limit' },
-    ] },
-  { key: 'fats', label: 'Fats',
-    tierInfo: 'BEST choices are Omega 9 (neutral) and mostly monounsaturated. FAIR choices are Omega 9 (neutral) and saturated. LIMIT them from your diet.',
-    memberInfo: 'Healthy fats support hormones, brain function, and long-lasting energy. Prioritize whole-food fats and avoid heavily refined industrial oils when possible.',
-    groups: [
-      { key: 'fats:best-monounsaturated-omega-9', tier: 'best', label: 'Best — Monounsaturated (Omega-9)' },
-      { key: 'fats:fair-saturated-omega-9', tier: 'fair', label: 'Fair — Saturated Omega-9' },
-      { key: 'fats:poor-pro-inflammatory-omega-6', tier: 'poor', label: 'Limit — Pro-inflammatory Omega-6' },
-      /* New tier (client, 20 Aug 2026): "For Fats there needs to be 4
-         categories: BEST, FAIR, LIMIT and AVOID." */
-      { key: 'fats:avoid', tier: 'avoid', label: 'Avoid' },
-    ] },
-  { key: 'favorable_carbs', label: 'Favorable Carbohydrates',
-    tierInfo: 'Three stars are super favorable foods and great for gut health. They can be eaten in unlimited quantities raw or cooked. Two stars are very favorable and great for gut health. You can have 3-5 cups per meal, more than most people eat at a time. BEST are great for gut health, and you can eat 1 - 1.5 cups per meal. FAIR are mostly fruits, are still good for you, and can be eaten in moderation.',
-    memberInfo: 'Favorable carbohydrates are generally fiber-rich and less disruptive to glucose control. Choose whole-food carbs with nutrients and slower digestion.',
-    groups: [
-      { key: 'favorable_carbs:super-favorable-unlimited', tier: 'super', label: 'Super Favorable (unlimited)' },
-      { key: 'favorable_carbs:very-favorable-4-6-cups-per-meal', tier: 'very', label: 'Very Favorable (4–6 cups per meal)' },
-      { key: 'favorable_carbs:favorable-legumes', tier: 'best', label: 'Favorable Legumes' },
-      { key: 'favorable_carbs:favorable-fruits-portions-per-meal', tier: 'fair', label: 'Favorable Fruits (portions per meal)' },
-    ] },
-  { key: 'unfavorable_carbs', label: 'Unfavorable Carbohydrates',
-    tierInfo: 'Unfavorable carbohydrates enter the bloodstream quickly as sugar, cause a rapid rise in insulin, and increase inflammation. Eat in moderation.',
-    memberInfo: 'Unfavorable carbohydrates are often rapidly absorbed and low in nutrient density. Keeping these occasional can help improve metabolic consistency.',
-    groups: [
-      { key: 'unfavorable_carbs:starchy-vegetables', tier: 'poor', label: 'Starchy Vegetables' },
-      { key: 'unfavorable_carbs:grains-breads-incl-whole-grain', tier: 'poor', label: 'Grains & Breads (incl. "whole grain")' },
-      { key: 'unfavorable_carbs:unfavorable-fruits-juices', tier: 'poor', label: 'Unfavorable Fruits / Juices' },
-      { key: 'unfavorable_carbs:sugars-alcohol-sweeteners', tier: 'poor', label: 'Sugars, Alcohol & Sweeteners' },
-    ] },
-];
-
-SEED.foods = [
-  { id: 'FD-001', name: 'Egg whites', portal: 'proteins', group: 'proteins:best', aliases: 'egg white, eggwhite', diets: '', status: 'Live', usage: 227, origin: 'source', note: '' },
-  { id: 'FD-002', name: 'Egg beaters', portal: 'proteins', group: 'proteins:best', aliases: '', diets: '', status: 'Live', usage: 228, origin: 'source', note: '' },
-  { id: 'FD-003', name: 'Chicken breast, skinless', portal: 'proteins', group: 'proteins:best', aliases: '', diets: '', status: 'Live', usage: 229, origin: 'source', note: '' },
-  { id: 'FD-004', name: 'Turkey breast, skinless', portal: 'proteins', group: 'proteins:best', aliases: '', diets: '', status: 'Live', usage: 230, origin: 'source', note: '' },
-  { id: 'FD-005', name: 'Ground turkey', portal: 'proteins', group: 'proteins:best', aliases: '', diets: '', status: 'Live', usage: 231, origin: 'source', note: '' },
-  { id: 'FD-006', name: 'Fish', portal: 'proteins', group: 'proteins:best', aliases: 'salmon, sockeye, cod, tuna, white fish', diets: '', status: 'Live', usage: 232, origin: 'source', note: '' },
-  { id: 'FD-007', name: 'Tofu (firm/extra firm)', portal: 'proteins', group: 'proteins:best', aliases: '', diets: '', status: 'Live', usage: 233, origin: 'source', note: '' },
-  { id: 'FD-008', name: 'Cottage cheese', portal: 'proteins', group: 'proteins:best', aliases: 'cottage', diets: '', status: 'Live', usage: 234, origin: 'source', note: '' },
-  { id: 'FD-009', name: 'Soy burgers/dogs/sausage', portal: 'proteins', group: 'proteins:best', aliases: '', diets: '', status: 'Live', usage: 235, origin: 'source', note: '' },
-  { id: 'FD-010', name: 'Protein powder', portal: 'proteins', group: 'proteins:best', aliases: 'protein shake, whey, protein smoothie', diets: '', status: 'Live', usage: 257, origin: 'source', note: '' },
-  { id: 'FD-011', name: 'Beef (free range/game)', portal: 'proteins', group: 'proteins:best', aliases: '', diets: '', status: 'Live', usage: 258, origin: 'source', note: '' },
-  { id: 'FD-012', name: 'Whole eggs', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 139, origin: 'source', note: '' },
-  { id: 'FD-013', name: 'Beef (lean cuts/ground)', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 140, origin: 'source', note: '' },
-  { id: 'FD-014', name: 'Canadian bacon (lean)', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 141, origin: 'source', note: '' },
-  { id: 'FD-015', name: 'Chicken/turkey dark meat', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 142, origin: 'source', note: '' },
-  { id: 'FD-016', name: 'Duck', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 143, origin: 'source', note: '' },
-  { id: 'FD-017', name: 'Ham (lean)', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 144, origin: 'source', note: '' },
-  { id: 'FD-018', name: 'Lamb (lean)', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 145, origin: 'source', note: '' },
-  { id: 'FD-019', name: 'Pork (lean)', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 146, origin: 'source', note: '' },
-  { id: 'FD-020', name: 'Turkey bacon', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 168, origin: 'source', note: '' },
-  { id: 'FD-021', name: 'Low-fat cheese', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 169, origin: 'source', note: '' },
-  { id: 'FD-022', name: 'Mozzarella (skim)', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 170, origin: 'source', note: '' },
-  { id: 'FD-023', name: 'Ricotta (skim)', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 171, origin: 'source', note: '' },
-  { id: 'FD-024', name: 'Hard or full-fat cheese', portal: 'proteins', group: 'proteins:fair', aliases: '', diets: '', status: 'Live', usage: 172, origin: 'source', note: '' },
-  { id: 'FD-025', name: 'Pork/beef bacon', portal: 'proteins', group: 'proteins:poor', aliases: '', diets: '', status: 'Live', usage: 53, origin: 'source', note: '' },
-  { id: 'FD-026', name: 'Fatty cuts of beef', portal: 'proteins', group: 'proteins:poor', aliases: '', diets: '', status: 'Live', usage: 54, origin: 'source', note: '' },
-  { id: 'FD-027', name: 'Hot dogs', portal: 'proteins', group: 'proteins:poor', aliases: '', diets: '', status: 'Live', usage: 55, origin: 'source', note: '' },
-  { id: 'FD-028', name: 'Kielbasa', portal: 'proteins', group: 'proteins:poor', aliases: '', diets: '', status: 'Live', usage: 56, origin: 'source', note: '' },
-  { id: 'FD-029', name: 'Liver (beef/chicken)', portal: 'proteins', group: 'proteins:poor', aliases: '', diets: '', status: 'Live', usage: 57, origin: 'source', note: '' },
-  { id: 'FD-030', name: 'Pepperoni', portal: 'proteins', group: 'proteins:poor', aliases: '', diets: '', status: 'Live', usage: 79, origin: 'source', note: '' },
-  { id: 'FD-031', name: 'Salami', portal: 'proteins', group: 'proteins:poor', aliases: '', diets: '', status: 'Live', usage: 80, origin: 'source', note: '' },
-  { id: 'FD-032', name: 'Sausage', portal: 'proteins', group: 'proteins:poor', aliases: '', diets: '', status: 'Live', usage: 81, origin: 'source', note: '' },
-  { id: 'FD-033', name: 'Extra virgin olive oil', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: 'EVOO, olive oil', diets: '', status: 'Live', usage: 322, origin: 'source', note: '' },
-  { id: 'FD-034', name: 'Olive oil (extra light, for cooking)', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 323, origin: 'source', note: '' },
-  { id: 'FD-035', name: 'Avocado', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 324, origin: 'source', note: '' },
-  { id: 'FD-036', name: 'Guacamole', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 325, origin: 'source', note: '' },
-  { id: 'FD-037', name: 'Almond butter', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 326, origin: 'source', note: '' },
-  { id: 'FD-038', name: 'Almonds (slivered/whole)', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 327, origin: 'source', note: '' },
-  { id: 'FD-039', name: 'Cashews', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 328, origin: 'source', note: '' },
-  { id: 'FD-040', name: 'Macadamia nuts', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 350, origin: 'source', note: '' },
-  { id: 'FD-041', name: 'Olives', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 351, origin: 'source', note: '' },
-  { id: 'FD-042', name: 'Pistachios', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 352, origin: 'source', note: '' },
-  { id: 'FD-043', name: 'Tahini', portal: 'fats', group: 'fats:best-monounsaturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 353, origin: 'source', note: '' },
-  { id: 'FD-044', name: 'Mayonnaise (regular/light)', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 234, origin: 'source', note: '' },
-  { id: 'FD-045', name: 'Sesame oil', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 235, origin: 'source', note: '' },
-  { id: 'FD-046', name: 'High oleic safflower oil', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 236, origin: 'source', note: '' },
-  { id: 'FD-047', name: 'Walnuts', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 237, origin: 'source', note: '' },
-  { id: 'FD-048', name: 'Bacon bits', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 238, origin: 'source', note: '' },
-  { id: 'FD-049', name: 'Butter', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 239, origin: 'source', note: '' },
-  { id: 'FD-050', name: 'Cream (half & half)', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 261, origin: 'source', note: '' },
-  { id: 'FD-051', name: 'Cream cheese', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 262, origin: 'source', note: '' },
-  { id: 'FD-052', name: 'Lard', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 263, origin: 'source', note: '' },
-  { id: 'FD-053', name: 'Sour cream', portal: 'fats', group: 'fats:fair-saturated-omega-9', aliases: '', diets: '', status: 'Live', usage: 264, origin: 'source', note: '' },
-  { id: 'FD-054', name: 'Canola oil', portal: 'fats', group: 'fats:poor-pro-inflammatory-omega-6', aliases: '', diets: '', status: 'Live', usage: 145, origin: 'source', note: '' },
-  { id: 'FD-055', name: 'Peanut oil', portal: 'fats', group: 'fats:poor-pro-inflammatory-omega-6', aliases: '', diets: '', status: 'Live', usage: 146, origin: 'source', note: '' },
-  { id: 'FD-056', name: 'Soybean oil', portal: 'fats', group: 'fats:poor-pro-inflammatory-omega-6', aliases: '', diets: '', status: 'Live', usage: 147, origin: 'source', note: '' },
-  { id: 'FD-057', name: 'Vegetable oils (corn/safflower)', portal: 'fats', group: 'fats:poor-pro-inflammatory-omega-6', aliases: '', diets: '', status: 'Live', usage: 148, origin: 'source', note: '' },
-  { id: 'FD-058', name: 'Peanuts & peanut butter', portal: 'fats', group: 'fats:poor-pro-inflammatory-omega-6', aliases: '', diets: '', status: 'Live', usage: 149, origin: 'source', note: '' },
-  { id: 'FD-059', name: 'Alfalfa sprouts', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 590, origin: 'source', note: '' },
-  { id: 'FD-060', name: 'Bean sprouts', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 612, origin: 'source', note: '' },
-  { id: 'FD-061', name: 'Bamboo shoots', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 613, origin: 'source', note: '' },
-  { id: 'FD-062', name: 'Bok choy', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 614, origin: 'source', note: '' },
-  { id: 'FD-063', name: 'Broccoli', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 615, origin: 'source', note: '' },
-  { id: 'FD-064', name: 'Cabbage', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 616, origin: 'source', note: '' },
-  { id: 'FD-065', name: 'Cauliflower', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 617, origin: 'source', note: '' },
-  { id: 'FD-066', name: 'Endive', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 618, origin: 'source', note: '' },
-  { id: 'FD-067', name: 'Escarole', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 619, origin: 'source', note: '' },
-  { id: 'FD-068', name: 'Lettuce', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 620, origin: 'source', note: '' },
-  { id: 'FD-069', name: 'Mushrooms', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 621, origin: 'source', note: '' },
-  { id: 'FD-070', name: 'Spinach', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 643, origin: 'source', note: '' },
-  { id: 'FD-071', name: 'Turnip greens', portal: 'favorable_carbs', group: 'favorable_carbs:super-favorable-unlimited', aliases: '', diets: '', status: 'Live', usage: 644, origin: 'source', note: '' },
-  { id: 'FD-072', name: 'Artichoke', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 105, origin: 'source', note: '' },
-  { id: 'FD-073', name: 'Artichoke hearts', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 106, origin: 'source', note: '' },
-  { id: 'FD-074', name: 'Asparagus', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 107, origin: 'source', note: '' },
-  { id: 'FD-075', name: 'Celery', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 108, origin: 'source', note: '' },
-  { id: 'FD-076', name: 'Cucumber', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 109, origin: 'source', note: '' },
-  { id: 'FD-077', name: 'Eggplant', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 110, origin: 'source', note: '' },
-  { id: 'FD-078', name: 'Green/wax beans', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 111, origin: 'source', note: '' },
-  { id: 'FD-079', name: 'Kale', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 112, origin: 'source', note: '' },
-  { id: 'FD-080', name: 'Onions', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 134, origin: 'source', note: '' },
-  { id: 'FD-081', name: 'Peppers', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 135, origin: 'source', note: '' },
-  { id: 'FD-082', name: 'Snow peas', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 136, origin: 'source', note: '' },
-  { id: 'FD-083', name: 'Tomatoes', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 137, origin: 'source', note: '' },
-  { id: 'FD-084', name: 'Zucchini', portal: 'favorable_carbs', group: 'favorable_carbs:very-favorable-4-6-cups-per-meal', aliases: '', diets: '', status: 'Live', usage: 138, origin: 'source', note: '' },
-  { id: 'FD-085', name: 'Hummus', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-legumes', aliases: '', diets: '', status: 'Live', usage: 479, origin: 'source', note: '' },
-  { id: 'FD-086', name: 'Black beans', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-legumes', aliases: '', diets: '', status: 'Live', usage: 480, origin: 'source', note: '' },
-  { id: 'FD-087', name: 'Chickpeas', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-legumes', aliases: 'chick peas, chick pea, garbanzo', diets: '', status: 'Live', usage: 481, origin: 'source', note: '' },
-  { id: 'FD-088', name: 'Kidney beans', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-legumes', aliases: '', diets: '', status: 'Live', usage: 482, origin: 'source', note: '' },
-  { id: 'FD-089', name: 'Lentils', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-legumes', aliases: 'dal, dhal, pulses, red lentils', diets: '', status: 'Live', usage: 483, origin: 'source', note: '' },
-  { id: 'FD-090', name: 'Salsa', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-legumes', aliases: '', diets: '', status: 'Live', usage: 505, origin: 'source', note: '' },
-  { id: 'FD-091', name: 'Apple', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 386, origin: 'source', note: '' },
-  { id: 'FD-092', name: 'Applesauce', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 387, origin: 'source', note: '' },
-  { id: 'FD-093', name: 'Apricots', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 388, origin: 'source', note: '' },
-  { id: 'FD-094', name: 'Blueberries', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 389, origin: 'source', note: '' },
-  { id: 'FD-095', name: 'Cantaloupe / Honeydew', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: 'Cantaloupe, Honeydew', diets: '', status: 'Live', usage: 390, origin: 'source', note: '' },
-  { id: 'FD-096', name: 'Cherries', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 391, origin: 'source', note: '' },
-  { id: 'FD-097', name: 'Grapes', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 12, origin: 'source', note: '' },
-  { id: 'FD-098', name: 'Grapefruit', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 13, origin: 'source', note: '' },
-  { id: 'FD-099', name: 'Kiwi', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 14, origin: 'source', note: '' },
-  { id: 'FD-100', name: 'Nectarine', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 307, origin: 'source', note: '' },
-  { id: 'FD-101', name: 'Orange', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 308, origin: 'source', note: '' },
-  { id: 'FD-102', name: 'Peach', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 309, origin: 'source', note: '' },
-  { id: 'FD-103', name: 'Pear', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 310, origin: 'source', note: '' },
-  { id: 'FD-104', name: 'Pineapple', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 311, origin: 'source', note: '' },
-  { id: 'FD-105', name: 'Plum', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 312, origin: 'source', note: '' },
-  { id: 'FD-106', name: 'Raspberries', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 313, origin: 'source', note: '' },
-  { id: 'FD-107', name: 'Strawberries', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 314, origin: 'source', note: '' },
-  { id: 'FD-108', name: 'Tangerine', portal: 'favorable_carbs', group: 'favorable_carbs:favorable-fruits-portions-per-meal', aliases: '', diets: '', status: 'Live', usage: 315, origin: 'source', note: '' },
-  { id: 'FD-109', name: 'Acorn squash', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 236, origin: 'source', note: '' },
-  { id: 'FD-110', name: 'Baked beans', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 18, origin: 'source', note: '' },
-  { id: 'FD-111', name: 'Beets', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 19, origin: 'source', note: '' },
-  { id: 'FD-112', name: 'Butternut squash', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 20, origin: 'source', note: '' },
-  { id: 'FD-113', name: 'Carrots', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 21, origin: 'source', note: '' },
-  { id: 'FD-114', name: 'Corn', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 22, origin: 'source', note: '' },
-  { id: 'FD-115', name: 'French fries', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 23, origin: 'source', note: '' },
-  { id: 'FD-116', name: 'Lima beans', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 24, origin: 'source', note: '' },
-  { id: 'FD-117', name: 'Parsnips', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 25, origin: 'source', note: '' },
-  { id: 'FD-118', name: 'Peas', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 26, origin: 'source', note: '' },
-  { id: 'FD-119', name: 'Pinto beans', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 27, origin: 'source', note: '' },
-  { id: 'FD-120', name: 'Potatoes', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 49, origin: 'source', note: '' },
-  { id: 'FD-121', name: 'Refried beans', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: '', diets: '', status: 'Live', usage: 50, origin: 'source', note: '' },
-  { id: 'FD-122', name: 'Sweet potatoes', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:starchy-vegetables', aliases: 'sweet potato, kumara, yam', diets: '', status: 'Live', usage: 51, origin: 'source', note: '' },
-  { id: 'FD-123', name: 'Bagels', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 52, origin: 'source', note: '' },
-  { id: 'FD-124', name: 'Biscuits', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 53, origin: 'source', note: '' },
-  { id: 'FD-125', name: 'Bread', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: 'white bread, toast, sourdough, wholemeal', diets: '', status: 'Live', usage: 54, origin: 'source', note: '' },
-  { id: 'FD-126', name: 'Buckwheat', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 55, origin: 'source', note: '' },
-  { id: 'FD-127', name: 'Cereal & granola', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: 'cereal, breakfast cereal, muesli', diets: '', status: 'Live', usage: 56, origin: 'source', note: '' },
-  { id: 'FD-128', name: 'Cornbread', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 57, origin: 'source', note: '' },
-  { id: 'FD-129', name: 'Couscous', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 58, origin: 'source', note: '' },
-  { id: 'FD-130', name: 'Crackers', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 80, origin: 'source', note: '' },
-  { id: 'FD-131', name: 'Croissants / Doughnuts', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: 'Croissants, Doughnuts', diets: '', status: 'Live', usage: 81, origin: 'source', note: '' },
-  { id: 'FD-132', name: 'Grits', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 82, origin: 'source', note: '' },
-  { id: 'FD-133', name: 'Muffins', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 83, origin: 'source', note: '' },
-  { id: 'FD-134', name: 'Pancakes / Waffles', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: 'Pancakes, Waffles', diets: '', status: 'Live', usage: 84, origin: 'source', note: '' },
-  { id: 'FD-135', name: 'Pasta', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 85, origin: 'source', note: '' },
-  { id: 'FD-136', name: 'Popcorn', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 86, origin: 'source', note: '' },
-  { id: 'FD-137', name: 'Pretzels', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 87, origin: 'source', note: '' },
-  { id: 'FD-138', name: 'Quinoa', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: '', diets: '', status: 'Live', usage: 88, origin: 'source', note: '' },
-  { id: 'FD-139', name: 'Rice / Rice cakes', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: 'Rice, Rice cakes', diets: '', status: 'Live', usage: 89, origin: 'source', note: '' },
-  { id: 'FD-140', name: 'Tortillas / Tortilla chips', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: 'Tortillas, Tortilla chips', diets: '', status: 'Live', usage: 111, origin: 'source', note: '' },
-  { id: 'FD-141', name: 'Bananas', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: '', diets: '', status: 'Live', usage: 112, origin: 'source', note: '' },
-  { id: 'FD-142', name: 'Cranberries', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: '', diets: '', status: 'Live', usage: 113, origin: 'source', note: '' },
-  { id: 'FD-143', name: 'Dried fruit (raisins, prunes…)', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: '', diets: '', status: 'Live', usage: 114, origin: 'source', note: '' },
-  { id: 'FD-144', name: 'Figs', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: '', diets: '', status: 'Live', usage: 115, origin: 'source', note: '' },
-  { id: 'FD-145', name: 'Guava', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: '', diets: '', status: 'Live', usage: 116, origin: 'source', note: '' },
-  { id: 'FD-146', name: 'Mango', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: '', diets: '', status: 'Live', usage: 117, origin: 'source', note: '' },
-  { id: 'FD-147', name: 'Papaya', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: '', diets: '', status: 'Live', usage: 118, origin: 'source', note: '' },
-  { id: 'FD-148', name: 'Fruit juice', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: 'orange juice, oj, apple juice', diets: '', status: 'Live', usage: 119, origin: 'source', note: '' },
-  { id: 'FD-149', name: 'Vegetable juice', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:unfavorable-fruits-juices', aliases: '', diets: '', status: 'Live', usage: 120, origin: 'source', note: '' },
-  { id: 'FD-150', name: 'Sugary drinks', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: 'soft drink, soda, pop, cola', diets: '', status: 'Live', usage: 142, origin: 'source', note: '' },
-  { id: 'FD-151', name: 'Candy', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: '', diets: '', status: 'Live', usage: 143, origin: 'source', note: '' },
-  { id: 'FD-152', name: 'Cake / Cookies / Baked goods', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: 'Cake, Cookies, Baked goods', diets: '', status: 'Live', usage: 144, origin: 'source', note: '' },
-  { id: 'FD-153', name: 'Honey', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: '', diets: '', status: 'Live', usage: 145, origin: 'source', note: '' },
-  { id: 'FD-154', name: 'Jam / Jelly', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: 'Jam, Jelly', diets: '', status: 'Live', usage: 146, origin: 'source', note: '' },
-  { id: 'FD-155', name: 'Ketchup / Cocktail sauce', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: 'Ketchup, Cocktail sauce', diets: '', status: 'Live', usage: 147, origin: 'source', note: '' },
-  { id: 'FD-156', name: 'Molasses', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: '', diets: '', status: 'Live', usage: 148, origin: 'source', note: '' },
-  { id: 'FD-157', name: 'Sugar', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: '', diets: '', status: 'Live', usage: 149, origin: 'source', note: '' },
-  { id: 'FD-158', name: 'Teriyaki sauce', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: '', diets: '', status: 'Live', usage: 150, origin: 'source', note: '' },
-  { id: 'FD-159', name: 'Wine', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: '', diets: '', status: 'Live', usage: 151, origin: 'source', note: '' },
-  { id: 'FD-160', name: 'Beer', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: '', diets: '', status: 'Live', usage: 173, origin: 'source', note: '' },
-  { id: 'FD-161', name: 'Alcohol', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:sugars-alcohol-sweeteners', aliases: '', diets: '', status: 'Live', usage: 174, origin: 'source', note: '' },
-  { id: 'FD-A01', name: 'Wild salmon', portal: 'proteins', group: 'proteins:best', aliases: 'salmon fillet, sockeye', diets: 'Pescatarian, Omnivore', status: 'Live', usage: 104, origin: 'admin', note: 'Added here to name one fish specifically. The consumer list carries the general “Fish”, in this same group.' },
-  { id: 'FD-A02', name: 'Greek yoghurt', portal: 'proteins', group: 'proteins:fair', aliases: 'greek yogurt, yoghurt', diets: 'Vegetarian', status: 'Live', usage: 105, origin: 'admin', note: 'Not on the consumer list. An administrator placed it in Fair; that placement is an administrative decision, not a source value.' },
-  { id: 'FD-A03', name: 'Oat milk', portal: 'unfavorable_carbs', group: 'unfavorable_carbs:grains-breads-incl-whole-grain', aliases: 'oatmilk, oat milk latte', diets: 'Vegan, Vegetarian', status: 'Review', usage: 106, origin: 'admin', note: 'Created from the custom-food queue and still under review. Not on the consumer list.' },
-  /* The Avoid tier foods (client, 20 Aug 2026). */
-  { id: 'FD-165', name: 'Trans fats', portal: 'fats', group: 'fats:avoid', aliases: 'trans fat', diets: '', status: 'Live', usage: 0, origin: 'source', note: '' },
-  { id: 'FD-166', name: 'Vegetable shortening', portal: 'fats', group: 'fats:avoid', aliases: 'shortening', diets: '', status: 'Live', usage: 0, origin: 'source', note: '' },
-  { id: 'FD-167', name: 'Hydrogenated oils', portal: 'fats', group: 'fats:avoid', aliases: 'hydrogenated oil', diets: '', status: 'Live', usage: 0, origin: 'source', note: '' },
-  { id: 'FD-168', name: 'Partially hydrogenated oils', portal: 'fats', group: 'fats:avoid', aliases: 'partially hydrogenated oil', diets: '', status: 'Live', usage: 0, origin: 'source', note: '' },
-];
-
-/* The reconciliation queue: what members typed into the Food Diary that no name
-   and no alias in the catalogue matched. Admin-only — nothing here is on the
-   member's Food Choices screen until somebody promotes it into the catalogue. */
-SEED.customFoods = [
-  { id: 'CF-1', entered: 'chick pea salad', count: 14, members: 9,  suggestion: 'Match to Chickpeas — Favorable Carbohydrates, Favorable Legumes' },
-  { id: 'CF-2', entered: 'quinoa bowl',     count: 22, members: 17, suggestion: 'Match to Quinoa — Unfavorable Carbohydrates, Grains & Breads' },
-  { id: 'CF-3', entered: 'salmonn',         count: 6,  members: 5,  suggestion: 'Spelling. Match to Fish — Proteins, Best' },
-  { id: 'CF-4', entered: 'kombucha',        count: 31, members: 24, suggestion: 'No match on the consumer list. Creating it makes an admin-created record' },
-  { id: 'CF-5', entered: 'asdf',            count: 2,  members: 2,  suggestion: 'Not a food. Reject' },
-];
-
-SEED.mealTemplates = [
-  { id: 'MT-1', name: 'Work day',                              slots: 'Breakfast, snack, exercise, brunch, dinner', diets: 'All', uses: 240, status: 'Live' },
-  { id: 'MT-2', name: 'Work day with morning exercise',         slots: 'Breakfast, snack, exercise, brunch, dinner', diets: 'All', uses: 118, status: 'Live' },
-  { id: 'MT-3', name: 'Work day, exercise after work',         slots: 'Breakfast, snack, brunch, exercise, dinner', diets: 'All', uses: 87,  status: 'Live' },
-  { id: 'MT-4', name: 'Weekend day',                           slots: 'Breakfast, lunch, snack, dinner',             diets: 'All', uses: 61,  status: 'Live' },
-  { id: 'MT-5', name: 'Weekend day with morning exercise — Option 1', slots: 'Breakfast, exercise, lunch, snack, dinner', diets: 'All', uses: 0, status: 'Live' },
-  { id: 'MT-6', name: 'Weekend day with morning exercise — Option 2', slots: 'Breakfast, exercise, lunch, snack, dinner', diets: 'All', uses: 0, status: 'Live' },
-];
-
-/* Supplement guidance references retained for later clinical/content work. */
-SEED.supplementGuidance = [
-  { id: 'SG-1', name: 'Health Assessment EPA/DHA bands', supplement: 'Omega-3 (EPA/DHA)', trigger: 'Health Assessment total', amount: '2.5g / 5g / 7.5g by total; 10g only for neurological disorders', status: 'Draft' },
-  { id: 'SG-2', name: 'Blood-marker EPA/DHA guidance', supplement: 'Omega-3 (EPA/DHA)', trigger: 'Condition-based blood-marker interpretation', amount: '2.5g optimal / 3.5g moderate / 5g high', status: 'Draft' },
-  { id: 'SG-3', name: 'Polyphenol guidance', supplement: 'Polyphenols', trigger: 'Health Assessment and blood-marker guidance', amount: '500mg / 1000mg / 1500mg supplied lines', status: 'Draft' },
-];
-
-/* ---------------------------------------------------------------- companion -- */
-SEED.companion = {
+/* ============================================================ COMPANION =====
+   Sprout's settings, topic rules and member-data scopes as seeded by
+   platform/api/app/companion/settings.py and policy.py. */
+const COMPANION_SETTINGS = {
   enabled: true,
   name: 'Sprout',
-  welcome: 'Hi, I’m Sprout. I can help you think through meals, your plan and how your week is going. What would you like to look at?',
+  welcome: 'Welcome to the Veye program — I look forward to working with you. How would you like to begin? I can start with the why to — the reasons behind the program and its basics — or go straight to the how to and begin meal planning.',
+  returning_welcome: "Welcome back — I'm Sprout, your Veye companion. What would you like to work on today?",
+  safe_response: 'I can share what your plan already says, but anything about an amount or a medical question needs your coach to confirm.',
   fallback: 'That is outside what I can help with, but your coach can pick it up. Would you like me to pass it on?',
-  safeResponse: 'I can share what your plan already says, but anything about an amount or a medical question needs your coach to confirm.',
-  prompts: [
-    { id: 'QP-1', label: 'Plan my next day', prompt: 'Help me build tomorrow from my food choices', active: true },
-    { id: 'QP-2', label: 'What should I eat now?', prompt: 'Suggest something from my favourable list', active: true },
-    { id: 'QP-3', label: 'How is my week going?', prompt: 'Summarise my diary and mood for the week', active: true },
-    { id: 'QP-4', label: 'Explain my Health Number', prompt: 'Explain what my Health Number means in plain language', active: true },
-    { id: 'QP-5', label: 'Help me shop', prompt: 'Turn my week into a shopping list', active: false },
+  escalation_response: 'Thank you for telling me. This is something a person from the Veye team should pick up with you, so I have handed this conversation to them and they will follow up.',
+  quick_prompts: [
+    { id: 'QP-1', label: '\u{1F37D}️ What should I eat?', prompt: 'What should I eat for lunch today?', active: true },
+    { id: 'QP-2', label: "\u{1F613} I'm feeling stressed", prompt: "I'm feeling a bit stressed today.", active: true },
+    { id: 'QP-3', label: '\u{1F4CA} My progress this month', prompt: 'How is my health progress this month?', active: true },
+    { id: 'QP-4', label: '\u{1F34E} Suggest a snack', prompt: 'Can you suggest a low-glycemic snack?', active: true },
+    { id: 'QP-5', label: "\u{1F634} I'm tired today", prompt: "I'm tired today, what should I do?", active: true },
   ],
-  topics: [
-    { id: 'TP-1', label: 'Food choices and meals', allowed: true },
-    { id: 'TP-2', label: 'The member’s own plan and diary', allowed: true },
-    { id: 'TP-3', label: 'How Veye assessments work', allowed: true },
-    { id: 'TP-4', label: 'Mood and daily check-ins', allowed: true },
-    { id: 'TP-5', label: 'Supplement amounts', allowed: false, why: 'Amounts are set by condition and confirmed by a coach.' },
-    { id: 'TP-6', label: 'Diagnosis, symptoms and medication', allowed: false, why: 'Always handed to a person.' },
+  policy: {
+    version: '1.0.0',
+    topics: [
+      { key: 'food', label: 'Food choices and meals', allowed: true,
+        keywords: ['eat', 'meal', 'food', 'snack', 'lunch', 'dinner', 'breakfast', 'recipe', 'cook', 'protein', 'carb', 'carbohydrate', 'fat', 'hungry', 'portion', 'favorable', 'unfavorable', 'vegetable', 'fruit', 'glycemic', 'salmon', 'shopping'],
+        retrieval_scopes: ['food_choices', 'help'], member_data_scopes: ['food_pattern_summary'] },
+      { key: 'plan_diary', label: "The member's own plan and diary", allowed: true,
+        keywords: ['diary', 'plan', 'log', 'week', 'my day', 'meal planning', 'entries', 'routine'],
+        retrieval_scopes: ['help'], member_data_scopes: ['food_pattern_summary', 'mood_summary'] },
+      { key: 'assessments', label: 'How Veye assessments work', allowed: true,
+        keywords: ['health number', 'assessment', 'score', 'body composition', 'body fat', 'bmi', 'blood', 'marker', 'tg/hdl', 'homa', 'hba1c', 'aa/epa', 'progress', 'result', 're-take', 'retake', 'quiz', 'lower is better'],
+        retrieval_scopes: ['health_number', 'assessments', 'help'],
+        member_data_scopes: ['health_number_summary', 'body_composition_summary', 'blood_marker_summary'] },
+      { key: 'mood', label: 'Mood and daily check-ins', allowed: true,
+        keywords: ['mood', 'stress', 'stressed', 'tired', 'energy', 'sleep', 'anxious', 'feeling', 'check-in', 'calm', 'focus'],
+        retrieval_scopes: ['help', 'companion'], member_data_scopes: ['mood_summary'] },
+      { key: 'using_veye', label: 'Using Veye', allowed: true,
+        keywords: ['veye', 'sprout', 'companion', 'dashboard', 'sign in', 'password', 'account', 'subscription', 'how do i', 'where do i', 'what can you'],
+        retrieval_scopes: ['help', 'companion'], member_data_scopes: [] },
+    ],
+    prohibited: [
+      { key: 'supplement_amounts', label: 'Supplement amounts', action: 'prohibit',
+        keywords: ['how much', 'how many', 'dose', 'dosage', 'mg', 'milligram', 'grams of', 'capsule', 'iu', 'should i take', 'magnesium at night', 'take together'],
+        why: 'Amounts are set by condition and confirmed by a coach.' },
+      { key: 'medical', label: 'Diagnosis, symptoms and medication', action: 'escalate',
+        keywords: ['diagnos', 'symptom', 'medication', 'medicine', 'prescription', 'pill', 'drug', 'chest pain', 'bleeding', 'infection', 'doctor said', 'disease', 'injection', 'metformin', 'statin', 'pregnan'],
+        why: 'Always handed to a person.' },
+      { key: 'wellbeing_concern', label: 'Sustained difficulty or distress', action: 'escalate',
+        keywords: ["can't go on", 'cant go on', 'nothing is working', 'hopeless', 'hurt myself', 'self-harm', 'suicid', 'give up', "haven't slept properly in a week", 'not slept properly in a week'],
+        why: 'Policy is to hand this to a person.' },
+    ],
+    member_data_scopes_enabled: ['health_number_summary', 'body_composition_summary', 'blood_marker_summary', 'mood_summary', 'food_pattern_summary'],
+    escalation_categories: ['medical', 'wellbeing_concern'],
+  },
+  member_data_scope_options: ['health_number_summary', 'body_composition_summary', 'blood_marker_summary', 'mood_summary', 'food_pattern_summary'],
+  retrieval_scope_options: {
+    health_number: 'Health Number explanations', assessments: 'How Veye assessments work', help: 'Member support questions',
+    food_choices: 'Food Choices guidance', companion: 'Companion guidance',
+  },
+};
+
+const KNOWLEDGE_TYPES = ['VEYE educational document', 'FAQ / Help', 'Nutrition reference', 'Food Choices reference', 'Companion guidance'];
+
+/* The approved-knowledge passages the retrieval-diagnostic search runs over —
+   headings and text from the platform's synthetic knowledge documents
+   (platform/api/app/seed/knowledge_content), written from published wording. */
+const PASSAGES = {
+  hn: [
+    ['What the Health Number is', 'Your Health Number comes from the twelve questions you answer when you start with Veye: your goals, any eating plan you follow, how active you are, whether you meditate, how tired you feel, weight and abdominal weight, and three questions about sleep. It is shown on a scale of 1 to 10, where 1 is very healthy and 10 is very unhealthy. A lower Health Number is better.'],
+    ['How the scale reads', 'A Health Number of 1 means good health: you are in very good health, and Veye helps you learn about optimizing your health, preventing disease and slowing the aging process.'],
+    ['How the scale reads', 'A Health Number above 1 and up to 3.5 means relatively good health. Some lifestyle changes, some changes to your dietary program, or a mix of both will help you optimize your health, prevent disease and slow the aging process.'],
+    ['How the scale reads', 'A Health Number above 3.5 and up to 6 means moderately good health. Incorporating better food choices and implementing some lifestyle changes will help you optimize your health, prevent disease and slow the aging process.'],
+    ['Lifestyle, food or mixed', 'Veye also looks at whether the answers that raised your number were mostly about lifestyle (activity, meditation, tiredness, sleep) or mostly about food (eating plans, weight, abdominal weight).'],
+    ['Re-taking the assessment', 'You can re-take the Health Number assessment whenever you like from My Progress. Every result is kept, so the history shows how your number has moved over time.'],
+    ['What the Health Number is not', 'The Health Number is not a diagnosis and it does not replace advice from your doctor. Body composition and blood test markers are separate trackers in My Progress; they do not change the Health Number.'],
   ],
-  knowledgeSources: [
-    { id: 'KS-1', title: 'Health Number guide', type: 'VEYE educational document', reference: 'Health Number guide', description: 'Plain-language explanation of the Health Number and what a lower result means.', scope: 'Health Number explanations', status: 'Active', updated: '10 Sep 2026' },
-    { id: 'KS-2', title: 'Help and FAQs', type: 'FAQ / Help', reference: 'Help and FAQ content', description: 'Approved answers to common member questions about using VEYE.', scope: 'Member support questions', status: 'Active', updated: '02 Sep 2026' },
-    { id: 'KS-3', title: 'Food Choices reference', type: 'Food Choices reference', reference: 'Food Choices guidance', description: 'Approved food-category wording used when members ask about their selections.', scope: 'Food Choices guidance', status: 'Inactive', updated: '28 Aug 2026' },
+  help: [
+    ['Where should I start?', 'For best results, after you sign in Veye suggests that you start by filling in the sections on the left in order. Create a baseline assessment by filling in a Progress Tracker of your choice, or filling in more than one.'],
+    ['How do I set up my meals?', 'Then make your food choices — this will help the Veye Companion customize your meals. After you have chosen the foods you like to eat, go to Your Days and the Veye Companion will help you create meals that work around your lifestyle.'],
+    ['What should I do every day?', 'Finally, fill out the food diary as often as possible. The Veye Companion will assess your choices and let you know what meals are perfect for you, and what can be improved.'],
+    ["I can't sign in to my account", 'Check that you are using the email address you signed up with, and that Caps Lock is off. If you are still unable to sign in, close the tab and open Veye again before trying once more.'],
+    ['My progress does not seem to be saving', 'Make sure you press Save on the screen you are filling in, and that your browser is not in private/incognito mode, which discards stored progress when the window closes.'],
+    ['Why do I need to eat protein at every meal?', 'To activate glucagon and AMPK, two important components to health.'],
+  ],
+  companion: [
+    ['What Sprout can do', 'Sprout can explain how the Veye assessments work, help you think through meals and food choices from the Veye food lists, look at how your week is going from your own diary and check-ins, and point you to the right part of your dashboard.'],
+    ['What Sprout will not do', 'Sprout does not diagnose, treat or prevent any condition. Questions about symptoms, medicines, or how much of a supplement to take are always handed to a person from the Veye team.'],
+    ['Your data', 'Sprout only sees short summaries of your saved Veye results, never your whole record, and it never sees your name, email address or other contact details.'],
+    ['Feedback', 'Every reply has Helpful and Feedback controls. Use them: the Veye team reads the feedback and reviews conversations that were handed to a person.'],
   ],
 };
 
-SEED.conversations = [
-  { id: 'CV-1', memberId: 'HM-001817', member: 'Lena Ortiz', at: '14 Aug 2026, 04:52', flagged: true, reviewed: false,
-    why: 'Held because the reply combined two supplements without a coach confirming it.',
-    feedback: { rating: 'not-helpful', comment: 'I needed a clearer next step instead of general information.', submittedAt: '14 Aug 2026, 05:10', reviewed: false },
-    messages: [
-      { who: 'member', text: 'I started taking magnesium at night. Is that OK with the omega-3 you suggested?' },
-      { who: 'sprout', text: 'Those are usually taken at different times of day. Magnesium in the evening and omega-3 with a meal is a common pattern.', held: true },
-    ] },
-  { id: 'CV-2', memberId: 'HM-000992', member: 'Robert Williams', at: '13 Aug 2026, 22:10', flagged: true, reviewed: false,
-    why: 'Held because the member described sustained difficulty. Policy is to hand this to a person.',
-    feedback: { rating: null, comment: null, submittedAt: null, reviewed: false },
-    messages: [
-      { who: 'member', text: 'I haven’t slept properly in a week and I feel like nothing is working.' },
-      { who: 'sprout', text: 'That sounds really hard. Would it help to look at your evening routine together?', held: true },
-    ] },
-  { id: 'CV-3', memberId: 'HM-002118', member: 'Daniel Kim', at: '13 Aug 2026, 12:40', flagged: true, reviewed: true,
-    why: 'Reviewed on 13 August. Sprout gave the safe answer and did not name an amount.',
-    feedback: { rating: 'helpful', comment: 'Thank you — that explained why I need to check with my coach.', submittedAt: '13 Aug 2026, 13:02', reviewed: true },
-    messages: [
-      { who: 'member', text: 'How much EPA should I take each day?' },
-      { who: 'sprout', text: 'I can share what your plan lists, but a specific amount needs your coach to confirm.' },
-    ] },
-  { id: 'CV-4', memberId: 'HM-002402', member: 'Aisha Bello', at: '13 Aug 2026, 08:15', flagged: false, reviewed: true,
-    why: '',
-    feedback: { rating: null, comment: null, submittedAt: null, reviewed: false },
-    messages: [
-      { who: 'member', text: 'Can you build me a day around salmon and sweet potato?' },
-      /* Sweet potato is under Unfavorable Carbohydrates → Starchy Vegetables on
-         the member's own Food Choices screen, so Sprout cannot call it
-         favourable. Two parts of the console must not disagree about the same
-         food. */
-      { who: 'sprout', text: 'Yes. Fish sits under Proteins → Best, so salmon at dinner is a good anchor. Sweet potatoes are under Unfavorable Carbohydrates → Starchy Vegetables, so I have kept them to one portion and filled the rest of the day from Super Favorable — broccoli and spinach, which are unlimited.' },
-      { who: 'member', text: 'That works, thank you.' },
-    ] },
-  { id: 'CV-5', memberId: 'HM-001238', member: 'Cara Morgan', at: '12 Aug 2026, 19:22', flagged: false, reviewed: true,
-    why: '',
-    feedback: { rating: null, comment: null, submittedAt: null, reviewed: false },
-    messages: [
-      { who: 'member', text: 'What does my Health Number actually measure?' },
-      { who: 'sprout', text: 'It comes from twelve questions about how you eat, move and sleep. A lower number is better. Yours moved from 4.0 to 3.5 at your last check-in.' },
-    ] },
-  { id: 'CV-6', memberId: 'HM-001556', member: 'Sophie Patel', at: '12 Aug 2026, 19:05', flagged: false, reviewed: true,
-    why: '',
-    feedback: { rating: null, comment: null, submittedAt: null, reviewed: false },
-    messages: [
-      { who: 'member', text: 'What do you think about the new phone that came out?' },
-      { who: 'sprout', text: 'That is outside what I can help with, but I am here for anything about your plan.' },
-    ] },
-];
+/* ======================================================== HEALTH SHARING ====
+   platform/api/app/health_permission/policy.py — the built-in defaults are
+   ENGINEERING DRAFTS pending owner and counsel approval, and the console says so. */
+const SHARING_TEMPLATE = {
+  subject: 'VEYE: Review a request to share your health information',
+  body: paragraphs(
+    'Hi {{first_name}},',
+    'The Veye team would like your permission to see the health records you keep in Veye, so they can help you with your program.',
+    'Nothing is shared unless you choose to. Open the request in the Veye app to see exactly what would be shared, with whom and why, and to say yes or no. You can change your mind at any time.',
+    'Questions? Write to {{support_email}}.',
+  ),
+};
+const SHARING_TERMS = {
+  summary: paragraphs('Sharing lets the Veye team open your saved results when they are helping you, and lets Veye Companion use them to answer you about your own progress. Until you share them, nobody at Veye can see them.'),
+  details: paragraphs(
+    'The team sees your records only inside the Veye console, only while sharing is on, and every time they open them it is recorded with who looked and when.',
+    'Veye does not sell your records and does not use them for advertising.',
+  ),
+  purpose: 'To help you with your Veye program and to answer your questions about your own progress.',
+  recipient: 'The Veye team — the people who run your Veye account',
+};
 
-/* ------------------------------------------------------------------ content -- */
-SEED.website = [
-  { id: 'WS-01', section: 'Announcement bar', where: 'Every public page', status: 'Live', updated: '13 Aug 2026',
-    fields: [{ label: 'Message', value: 'August programmes are open. Start your Health Number in under five minutes.', type: 'text' },
-             { label: 'Link label', value: 'Start now', type: 'short' },
-             { label: 'Link destination', value: 'onboarding.html', type: 'short' }] },
-  { id: 'WS-02', section: 'Home hero', where: 'Home page', status: 'Live', updated: '14 Jul 2026',
-    fields: [{ label: 'Heading', value: 'Nutrition Reimagined', type: 'short' },
-             { label: 'Supporting copy', value: 'Find your Health Number, understand what it means, and change it with food you actually like.', type: 'text' },
-             { label: 'Primary call to action', value: 'Start the process', type: 'short' }] },
-  { id: 'WS-03', section: 'How it works', where: 'Home page', status: 'Live', updated: '02 Jul 2026',
-    fields: [{ label: 'Step one', value: 'Answer twelve questions', type: 'short' },
-             { label: 'Step two', value: 'Get your Health Number', type: 'short' },
-             { label: 'Step three', value: 'Choose the foods you like', type: 'short' },
-             { label: 'Step four', value: 'Follow your days', type: 'short' }] },
-  { id: 'WS-04', section: 'Why Veye', where: 'Why Veye page', status: 'Live', updated: '14 Jul 2026',
-    fields: [{ label: 'Heading', value: 'Why Veye works', type: 'short' },
-             { label: 'Supporting copy', value: 'Veye is built on food, not restriction. The programme is designed around what you already eat.', type: 'text' }] },
-  { id: 'WS-05', section: 'Pricing copy', where: 'Pricing page', status: 'Draft', updated: '14 Aug 2026',
-    fields: [{ label: 'DIY summary', value: 'Everything you need to run the programme yourself.', type: 'text' },
-             { label: 'Guided summary', value: 'DIY, plus a coach who knows your plan.', type: 'text' }] },
-  { id: 'WS-06', section: 'Help and FAQ', where: 'Help page', status: 'Live', updated: '02 Jun 2026',
-    fields: [{ label: 'Intro', value: 'Most questions are answered here. If not, we usually reply the same day.', type: 'text' },
-             { label: 'Top question', value: 'How is my Health Number calculated?', type: 'short' }] },
-  { id: 'WS-07', section: 'Community call to action', where: 'Home page', status: 'Live', updated: '21 Jun 2026',
-    fields: [{ label: 'Heading', value: 'You are not doing this alone', type: 'short' },
-             { label: 'Button label', value: 'Join the wait list', type: 'short' }] },
-];
+/* ================================================================= SEED ===== */
+function buildSeed(NOW) {
+  const MIN = 6e4, HOUR = 36e5, DAY = 864e5;
+  const pad = (n) => String(n).padStart(2, '0');
+  /** An instant `d` days, `h` hours and `m` minutes before now. */
+  const ago = (d, h = 0, m = 0) => new Date(NOW - d * DAY - h * HOUR - m * MIN).toISOString();
+  /** A calendar day `d` days back, at a wall-clock time — never in the future. */
+  const on = (d, hh, mm) => {
+    const t = new Date(NOW - d * DAY);
+    t.setHours(hh, mm, 0, 0);
+    if (t.getTime() > NOW) t.setTime(NOW - 7 * MIN);
+    return t.toISOString();
+  };
+  const dateOnly = (d) => { const t = new Date(NOW - d * DAY); return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`; };
 
-SEED.dashboardContent = [
-  { id: 'DC-01', kind: 'Daily tip', title: 'Front-load your protein', body: 'Getting protein into the first meal of the day steadies what you reach for later.', audience: 'Everyone', status: 'Live', updated: '05 Aug 2026' },
-  { id: 'DC-02', kind: 'Daily tip', title: 'Colour before quantity', body: 'Two colours on the plate does more than a smaller portion of one.', audience: 'Everyone', status: 'Live', updated: '01 Aug 2026' },
-  { id: 'DC-03', kind: 'Personal tip', title: 'Your evening wind-down', body: 'You have answered No to sleeping well three times. A fixed wind-down half hour is the change most people start with.', audience: 'Answered No to sleeping well', status: 'Live', updated: '05 Aug 2026' },
-  { id: 'DC-04', kind: 'Personal tip', title: 'Hydration reminder', body: 'Your diary shows most days start without a drink. A glass before coffee is an easy first change.', audience: 'Diary shows no morning drink', status: 'Live', updated: '30 Jul 2026' },
-  { id: 'DC-05', kind: 'Feature card', title: 'Food Choices', body: 'Pick the proteins, vegetables, fats and carbohydrates you actually like.', audience: 'Everyone', status: 'Live', updated: '18 Jul 2026' },
-  { id: 'DC-06', kind: 'Feature card', title: 'Mood Tracker', body: 'One tap a day builds a picture of your month.', audience: 'Everyone', status: 'Live', updated: '18 Jul 2026' },
-  /* These were "Coming soon" labels while the sections were locked. The
-     sections are live now, so the label each one shows is the development
-     notice (client wording, 20 Aug 2026). */
-  { id: 'DC-07', kind: 'Section reference', title: 'Supplements', body: 'Phase 2 reference — content and clinical review remain outside this Beta.', audience: 'Everyone', status: 'Phase 2', updated: '12 Sep 2026' },
-  { id: 'DC-08', kind: 'Section reference', title: 'Resources', body: 'Phase 2 reference — publishing remains outside this Beta.', audience: 'Everyone', status: 'Phase 2', updated: '12 Sep 2026' },
-  { id: 'DC-09', kind: 'Section reference', title: 'Fitness', body: 'Phase 2 reference — final workout content and media remain deferred.', audience: 'Everyone', status: 'Phase 2', updated: '12 Sep 2026' },
-  { id: 'DC-10', kind: 'Section notice', title: 'Mindfulness', body: 'In Development.', audience: 'Everyone', status: 'Live', updated: '20 Aug 2026' },
-  { id: 'DC-11', kind: 'Help content', title: 'How your Health Number works', body: 'Twelve questions, each carrying a weight. A lower number is better. You can retake it every six months.', audience: 'Everyone', status: 'Live', updated: '02 Jun 2026' },
-];
+  /* ---- the administrators. No roles: one capability, provisioned. ---- */
+  const ME = uuid('admin:cara-hogue');
+  const admin = (key, first, last, email, o) => ({
+    userId: uuid('admin:' + key), firstName: first, lastName: last, name: first + ' ' + last, email,
+    invitation: 'accepted', invitedAt: null, invitedBy: null, acceptedAt: null, lastActiveAt: null,
+    activeSessions: 0, isActive: true, deactivatedAt: null, memberId: null, photo: null, photoVersion: null, ...o,
+  });
+  const admins = [
+    admin('cara-hogue', 'Cara', 'Hogue', 'cara.hogue@veye.example', { invitation: 'seeded', lastActiveAt: ago(0, 0, 2), activeSessions: 2 }),
+    admin('priya-shah', 'Priya', 'Shah', 'priya.shah@veye.example', { invitedAt: ago(64), invitedBy: 'Cara Hogue', acceptedAt: ago(63, 20), lastActiveAt: ago(0, 3, 12), activeSessions: 1 }),
+    /* One sign-in account with both kinds of access: the member's own account
+       was given console access by invitation, so the ids are the account's. */
+    admin('owen-wright', 'Owen', 'Wright', 'owen.wright@demo.veye.test', { userId: uuid('account:owen-wright'), invitedAt: ago(52), invitedBy: 'Cara Hogue', acceptedAt: ago(52, -2), lastActiveAt: ago(1, 4), activeSessions: 0, memberId: uuid('member:owen-wright') }),
+    admin('sara-okafor', 'Sara', 'Okafor', 'sara.okafor@veye.example', { invitedAt: ago(120), invitedBy: 'Cara Hogue', acceptedAt: ago(119), lastActiveAt: ago(47, 2), isActive: false, deactivatedAt: ago(45) }),
+    admin('james-lee', 'James', 'Lee', 'james.lee@veye.example', { invitation: 'expired', invitedAt: ago(5, 2), invitedBy: 'Cara Hogue' }),
+    admin('jonah-reid', 'Jonah', 'Reid', 'jonah.reid@veye.example', { invitation: 'pending', invitedAt: ago(1, 6), invitedBy: 'Cara Hogue' }),
+  ];
 
-/* Resource drafts, waiting for their member cards to open. */
-SEED.resources = [
-  { id: 'RS-06', title: 'Why mornings set the day', kind: 'Article', updated: '12 Jun 2026', status: 'Draft' },
-  { id: 'RS-09', title: 'Reading a food label', kind: 'Article', updated: '28 May 2026', status: 'Draft' },
-  { id: 'RS-14', title: 'Understanding inflammation', kind: 'Article', updated: '12 Aug 2026', status: 'Draft' },
-  { id: 'RS-21', title: 'Ten-minute mobility', kind: 'Video', updated: '22 Jul 2026', status: 'Draft' },
-  { id: 'RS-22', title: 'Shopping the outside aisles', kind: 'Download', updated: '19 Jul 2026', status: 'Draft' },
-];
+  /* Where the signed-in administrator's account is signed in right now. */
+  const mySessions = [
+    { id: uuid('session:me:1'), portal: 'admin', current: true, createdAt: ago(0, 1, 4), lastSeenAt: ago(0, 0, 2), remember: true },
+    { id: uuid('session:me:2'), portal: 'admin', current: false, createdAt: ago(2, 5), lastSeenAt: ago(1, 22), remember: true },
+  ];
 
-SEED.notices = [
-  { id: 'NO-01', title: 'August programmes are open', body: 'Guided places for August are open until the 22nd.', channel: 'In-app', audience: 'Everyone', status: 'Active', updated: '13 Aug 2026' },
-  { id: 'NO-02', title: 'Planned maintenance on Sunday', body: 'Veye will be unavailable between 02:00 and 04:00 Pacific on Sunday 17 August.', channel: 'In-app', audience: 'Everyone', status: 'Scheduled', updated: '12 Aug 2026' },
-  { id: 'NO-03', title: 'Finish your onboarding', body: 'You are part-way through. It takes about four minutes to finish.', channel: 'Email', audience: 'Onboarding incomplete', status: 'Active', updated: '11 Aug 2026' },
-  { id: 'NO-04', title: 'Your blood results are ready', body: 'Your coach has looked at the markers you submitted.', channel: 'Email', audience: 'Rule driven', status: 'Active', updated: '02 Aug 2026' },
-  { id: 'NO-05', title: 'Refer a friend', body: 'Share Veye with someone who would enjoy it.', channel: 'In-app', audience: 'High adherence', status: 'Draft', updated: '09 Aug 2026' },
-  { id: 'NO-06', title: 'Spring reset 2026', body: 'The spring reset starts on 1 March.', channel: 'Email', audience: 'Everyone', status: 'Inactive', updated: '04 Mar 2026' },
-];
+  /* ---- stored results, written out as stored ---- */
+  let seq = 0;
+  const att = (key) => uuid('attempt:' + key + ':' + (++seq));
+  const HN = (d, score, status, category) => ({ attempt_id: att('hn'), displayed_score: score, status, category, calculation_version: '1.5.0', completed_at: on(d, 14, 30) });
+  const BC = (d, sex, weight, bmi, bf, reason) => {
+    const fat = bf == null ? null : Math.round(weight * bf * 10 / 100) / 10;
+    return { attempt_id: att('bc'), sex, bmi, body_fat_percent: bf, fat_mass_lb: fat, lean_mass_lb: fat == null ? null : Math.round((weight - fat) * 10) / 10,
+      body_fat_available: bf != null, unavailable_reason: reason || null, calculation_version: '1.0.0', completed_at: on(d, 14, 30) };
+  };
+  /* Blood markers: the ratios, the four goal tests, and the tier the client's
+     table gives — 2.5g all optimal, 3.5g every out-of-range moderate, 5g every
+     out-of-range high, review for a mix. Each row was checked by hand. */
+  const BM = (d, tg_hdl, homa_ir, aa_epa, hba1c, inRange, rec) => ({
+    attempt_id: att('bm'), tg_hdl, homa_ir, aa_epa, markers: { hba1c },
+    in_range: { tg_hdl: inRange[0], homa_ir: inRange[1], aa_epa: inRange[2], hba1c: inRange[3] },
+    recommendation: rec === 'review' ? { state: 'review', epa_dha_dose: null } : { state: 'ok', epa_dha_dose: rec },
+    calculation_version: '1.0.0', completed_at: on(d, 14, 30),
+  });
+  const HA = (d, total, status, dose) => ({ attempt_id: att('ha'), total, status, epa_dha_dose: dose, calculation_version: 'health-assessment-2026-08-25-v2', completed_at: on(d, 14, 30) });
+  const SQ = (d, yes) => ({ attempt_id: att('sq'), yes_count: yes, no_count: 8 - yes, summary: `${8 - yes} No / ${yes} Yes`, calculation_version: 'simple-quiz-2026-08-20-v1', completed_at: on(d, 14, 30) });
 
-SEED.legalDocs = [
-  { id: 'LD-1', title: 'Terms and Conditions', category: 'Terms', version: 'v4.0', effective: '01 Apr 2026', state: 'Published',
-    accepted: 1238, of: 1284, updated: '01 Apr 2026',
-    body: 'PROTOTYPE CONTENT — NOT LEGAL TEXT.\n\nThese terms describe the agreement between a member and Veye Health, Inc. covering account creation, acceptable use, subscription and cancellation, the limits of the service, and how disputes are handled.\n\nThe wording that ships to members must be drafted and approved by counsel. This placeholder exists so the console can demonstrate versioning, publishing and re-acceptance.',
+  const MOOD_LABELS = { happy: 'Happy', excited: 'Excited', calm: 'Calm', neutral: 'Neutral', tired: 'Tired', stressed: 'Stressed', sad: 'Sad', angry: 'Angry' };
+  const moods = (key, startDaysAgo, pattern, notes = {}) => pattern.map((mood, i) => ({
+    id: uuid('mood:' + key + ':' + i), entry_date: dateOnly(startDaysAgo + i), mood, mood_label: MOOD_LABELS[mood], note: notes[i] || '',
+    created_at: on(startDaysAgo + i, 20, 15), updated_at: on(startDaysAgo + i, 20, 15),
+  }));
+  const meal = (key, d, time, description, feelings = [], notes = '') => ({
+    id: uuid('meal:' + key + ':' + d + ':' + time), entry_date: dateOnly(d), meal_time: time, description, feelings, notes,
+    created_at: on(d, +time.slice(0, 2), +time.slice(3)), updated_at: on(d, +time.slice(0, 2), +time.slice(3)),
+  });
+  const session = (flow, status, node, startedDaysAgo, updatedDaysAgo, completed) => ({
+    flow_key: flow, flow_title: flow === 'first_time_user' ? 'First-Time User' : 'Progress Tracker Guide', flow_version: 1,
+    status, current_node: node, started_at: on(startedDaysAgo, 19, 40), updated_at: on(updatedDaysAgo, 19, 52),
+    completed_at: completed ? on(updatedDaysAgo, 19, 52) : null,
+  });
+
+  /* ---- sharing: what the member decided, and the email that asked ---- */
+  const sent = (email, d, h = 0) => ({ status: 'sent', attempts: 1, last_error: null, sent_at: ago(d, h), next_attempt_at: null, to_email: email });
+  const share = {
+    granted: (email, askedDays) => ({ state: 'granted', requested_at: ago(askedDays), requested_by_name: 'Cara Hogue', decided_at: ago(askedDays - 1, 3), revoked_at: null,
+      policy_version: 'health-sharing-terms-v1', source: 'member_app', delivery: sent(email, askedDays) }),
+    none: () => ({ state: 'not_requested', requested_at: null, requested_by_name: '', decided_at: null, revoked_at: null, policy_version: '', delivery: null }),
+  };
+
+  const member = (key, first, last, o) => {
+    const email = o.email || `${first.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()}.${last.toLowerCase()}@demo.veye.test`;
+    return {
+      id: uuid('member:' + key), accountId: uuid('account:' + key), firstName: first, lastName: last, name: first + ' ' + last,
+      initials: (first[0] + last[0]).toUpperCase(), email, pendingEmail: null,
+      emailVerified: true, isActive: true, deactivatedAt: null, isSynthetic: true, adminAccess: false,
+      joinedAt: ago(o.joined, 2 + (first.length % 5), (last.length * 7) % 60), lastActiveAt: o.lastActive === null ? null : ago(...(o.lastActive || [1])),
+      onboarding: 'Complete', phone: null, postalCode: null, photo: null, photoVersion: null,
+      activeSessions: 0, lastSessionAt: null,
+      sharing: share.none(),
+      records: { health_number: [], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
+      mood: [], diary: [], guided: [],
+      ...o, email,
+    };
+  };
+
+  const members = [
+    member('cara-morgan', 'Cara', 'Morgan', {
+      joined: 212, lastActive: [0, 1, 12], phone: '+1 555 0142', postalCode: '97205', activeSessions: 1, lastSessionAt: ago(0, 1, 12),
+      sharing: share.granted('cara.morgan@demo.veye.test', 61),
+      records: {
+        health_number: [HN(33, 3.5, 'Relatively Good Health', 'food'), HN(121, 4, 'Moderately Good Health', 'mixed')],
+        body_composition: [BC(40, 'Woman', 148, 24.6, 29)],
+        blood_markers: [BM(36, 1.58, 1.05, 2.25, 5, [false, false, true, true], '3.5g'), BM(118, 3.33, 2.04, 4, 5.5, [false, false, false, false], 'review')],
+        health_assessment: [HA(35, 16, 'Low Inflammation', '2.5g')],
+        simple_quiz: [SQ(12, 2), SQ(74, 4)],
+      },
+      mood: moods('cara-morgan', 1, ['calm', 'happy', 'neutral', 'tired', 'calm', 'happy', 'stressed', 'calm', 'excited', 'calm', 'neutral', 'happy', 'tired', 'calm', 'happy', 'calm', 'neutral', 'calm'],
+        { 0: 'Walked to the farmers market', 3: 'Short night — up early with the dog', 6: 'Deadline week' }),
+      diary: [
+        meal('cara-morgan', 1, '07:40', 'Greek yoghurt with walnuts and blueberries', ['Hungry'], ''),
+        meal('cara-morgan', 1, '12:30', 'Grilled chicken salad with avocado', ['Rushed'], 'At my desk'),
+        meal('cara-morgan', 1, '19:10', 'Baked salmon, broccoli and quinoa', ['Relaxed'], ''),
+        meal('cara-morgan', 2, '08:05', 'Two eggs and spinach', ['Not hungry', 'Tired'], ''),
+        meal('cara-morgan', 2, '13:00', 'Lentil soup and a side salad', ['Hungry'], ''),
+        meal('cara-morgan', 2, '19:30', 'Turkey chilli with black beans', ['Relaxed'], 'Batch-cooked for the week'),
+        meal('cara-morgan', 4, '07:55', 'Overnight oats with almond butter', ['Hungry'], ''),
+        meal('cara-morgan', 4, '12:45', 'Tuna and white bean salad', ['Energized'], ''),
+        meal('cara-morgan', 4, '18:50', 'Chicken thigh, sweet potato and green beans', ['Hungry', 'Tired'], ''),
+      ],
+      guided: [session('first_time_user', 'completed', 'complete', 58, 57, true), session('progress_tracker_guide', 'in_progress', 'pt_blood', 13, 12)],
+    }),
+    member('lena-ortiz', 'Lena', 'Ortiz', {
+      joined: 186, lastActive: [0, 4, 5], phone: '+1 555 0188', postalCode: '78704', pendingEmail: 'lena.ortiz.home@demo.veye.test',
+      sharing: share.granted('lena.ortiz@demo.veye.test', 44),
+      records: {
+        health_number: [HN(16, 2.5, 'Relatively Good Health', 'lifestyle'), HN(92, 3, 'Relatively Good Health', 'lifestyle')],
+        health_assessment: [HA(18, 14, 'Low Inflammation', '2.5g')],
+        simple_quiz: [SQ(17, 1)],
+        body_composition: [], blood_markers: [],
+      },
+      mood: moods('lena-ortiz', 0, ['happy', 'calm', 'calm', 'excited', 'neutral', 'calm', 'happy', 'tired', 'calm', 'happy'], { 0: 'Yoga before work' }),
+      diary: [
+        meal('lena-ortiz', 0, '07:15', 'Smoked salmon on rye with cucumber', ['Hungry'], ''),
+        meal('lena-ortiz', 1, '12:20', 'Quinoa bowl with chickpeas and feta', ['Energized'], ''),
+        meal('lena-ortiz', 1, '19:00', 'Prawn stir-fry with bok choy', ['Relaxed'], ''),
+        meal('lena-ortiz', 3, '08:10', 'Cottage cheese with peaches', ['Hungry'], ''),
+      ],
+      guided: [session('first_time_user', 'completed', 'complete', 40, 40, true)],
+    }),
+    member('robert-williams', 'Robert', 'Williams', {
+      joined: 361, lastActive: [0, 19, 40], phone: '+1 555 0165', postalCode: '60614', activeSessions: 1, lastSessionAt: ago(0, 19, 40),
+      sharing: share.granted('robert.williams@demo.veye.test', 70),
+      records: {
+        health_number: [HN(9, 7.5, 'Insulin Resistance Risk', 'mixed'), HN(68, 8, 'Insulin Resistance Risk', 'mixed'), HN(150, 7, 'Insulin Resistance Risk', 'food')],
+        blood_markers: [BM(11, 3.6, 3.4, 7.2, 8.4, [false, false, false, false], '5g'), BM(95, 0.92, 1.4, 3.4, 5.6, [true, false, false, false], '3.5g')],
+        body_composition: [BC(66, 'Man', 205, 29.4, 24)],
+        health_assessment: [], simple_quiz: [],
+      },
+      mood: moods('robert-williams', 2, ['tired', 'stressed', 'neutral', 'tired', 'sad', 'neutral']),
+      guided: [session('progress_tracker_guide', 'paused', 'pt_body', 21, 20)],
+    }),
+    member('aisha-bello', 'Aisha', 'Bello', {
+      joined: 136, lastActive: [0, 2, 30], phone: '+1 555 0221', postalCode: '33130',
+      sharing: share.granted('aisha.bello@demo.veye.test', 50),
+      records: {
+        health_number: [HN(8, 1, 'Good Health', 'food'), HN(71, 1.5, 'Relatively Good Health', 'food')],
+        body_composition: [BC(10, 'Woman', 141, 23.5, 27), BC(73, 'Woman', 146, 24.3, 28)],
+        blood_markers: [BM(14, 0.85, 0.9, 2.4, 5, [true, true, true, true], '2.5g')],
+        health_assessment: [HA(9, 11, 'Very Low Inflammation', '2.5g')],
+        simple_quiz: [SQ(9, 0)],
+      },
+      mood: moods('aisha-bello', 0, ['happy', 'happy', 'calm', 'excited', 'calm', 'happy', 'calm', 'neutral', 'happy', 'happy', 'calm', 'excited', 'calm', 'happy', 'calm', 'happy', 'neutral', 'calm', 'happy', 'calm', 'happy'],
+        { 2: 'Long run, felt great' }),
+      diary: [
+        meal('aisha-bello', 0, '07:30', 'Spinach omelette with feta', ['Hungry'], ''),
+        meal('aisha-bello', 0, '12:40', 'Chicken and avocado lettuce wraps', ['Energized'], ''),
+        meal('aisha-bello', 1, '19:20', 'Cod, asparagus and new potatoes', ['Relaxed'], ''),
+        meal('aisha-bello', 2, '07:45', 'Berries, Greek yoghurt and almonds', ['Hungry'], ''),
+        meal('aisha-bello', 2, '13:10', 'Turkey and hummus wholegrain wrap', ['Hungry'], ''),
+        meal('aisha-bello', 3, '18:55', 'Beef and broccoli stir-fry', ['Relaxed'], 'Cooked with my sister'),
+      ],
+      guided: [session('first_time_user', 'completed', 'complete', 49, 48, true)],
+    }),
+    member('daniel-kim', 'Daniel', 'Kim', {
+      joined: 137, lastActive: [1, 2, 15], phone: '+1 555 0199', postalCode: '02116',
+      sharing: { state: 'requested', requested_at: ago(1, 3), requested_by_name: 'Cara Hogue', decided_at: null, revoked_at: null, policy_version: '',
+        delivery: sent('daniel.kim@demo.veye.test', 1, 3) },
+      records: {
+        health_number: [HN(8, 5, 'Moderately Good Health', 'food')],
+        blood_markers: [BM(15, 1.58, 1.05, 2.25, 5, [false, false, true, true], '3.5g')],
+        body_composition: [], health_assessment: [], simple_quiz: [],
+      },
+      mood: moods('daniel-kim', 1, ['neutral', 'calm', 'tired']),
+      guided: [session('first_time_user', 'in_progress', 'b4', 6, 6)],
+    }),
+    member('sophie-patel', 'Sophie', 'Patel', {
+      joined: 207, lastActive: [2, 5], phone: '+1 555 0177', postalCode: '98103',
+      sharing: { state: 'requested', requested_at: ago(2, 1), requested_by_name: 'Cara Hogue', decided_at: null, revoked_at: null, policy_version: '',
+        delivery: { status: 'retry', attempts: 2, last_error: '421 4.7.0 Temporary system problem. Try again later.', sent_at: null, next_attempt_at: ago(0, -1), to_email: 'sophie.patel@demo.veye.test' } },
+      records: { health_number: [HN(27, 4.5, 'Moderately Good Health', 'lifestyle')], simple_quiz: [SQ(26, 3)], body_composition: [], blood_markers: [], health_assessment: [] },
+      mood: moods('sophie-patel', 2, ['stressed', 'tired', 'neutral', 'calm']),
+    }),
+    member('tomas-rivera', 'Tomás', 'Rivera', {
+      joined: 313, lastActive: [5, 7], phone: '+1 555 0233', postalCode: '85004',
+      sharing: { state: 'declined', requested_at: ago(21), requested_by_name: 'Priya Shah', decided_at: ago(19, 4), revoked_at: null, policy_version: 'health-sharing-terms-v1',
+        delivery: sent('tomas.rivera@demo.veye.test', 21) },
+      records: { health_number: [HN(36, 4, 'Moderately Good Health', 'mixed'), HN(126, 4.5, 'Moderately Good Health', 'mixed')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
+    }),
+    member('peter-novak', 'Peter', 'Novak', {
+      joined: 427, lastActive: [3, 1], phone: '+1 555 0250', postalCode: '10023',
+      sharing: { state: 'revoked', requested_at: ago(88), requested_by_name: 'Cara Hogue', decided_at: ago(87), revoked_at: ago(9, 2), policy_version: 'health-sharing-terms-v1',
+        delivery: sent('peter.novak@demo.veye.test', 88) },
+      records: {
+        health_number: [HN(40, 3, 'Relatively Good Health', 'lifestyle'), HN(140, 3.5, 'Relatively Good Health', 'lifestyle')],
+        body_composition: [BC(42, 'Man', 172, 24.7, 13)], health_assessment: [HA(41, 19, 'Moderate Inflammation', '5g')],
+        blood_markers: [], simple_quiz: [],
+      },
+      mood: moods('peter-novak', 10, ['calm', 'neutral', 'happy']),
+    }),
+    member('maya-chen', 'Maya', 'Chen', {
+      joined: 3, lastActive: [2, 22], emailVerified: false, onboarding: 'Not started', phone: '+1 555 0210', postalCode: '80202',
+    }),
+    member('grace-lin', 'Grace', 'Lin', {
+      joined: 13, lastActive: [0, 6, 40], postalCode: '92101',
+      records: { health_number: [HN(13, 6, 'Moderately Good Health', 'food')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
+      guided: [session('progress_tracker_guide', 'skipped', 'pt_intro', 12, 12)],
+    }),
+    member('hannah-weiss', 'Hannah', 'Weiss', {
+      joined: 260, lastActive: [31], isActive: false, deactivatedAt: ago(26, 4),
+      records: { health_number: [HN(80, 2, 'Relatively Good Health', 'lifestyle')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
+    }),
+    member('sam-okonkwo', 'Sam', 'Okonkwo', {
+      joined: 49, lastActive: [0, 9, 10], phone: '+1 555 0266', postalCode: '30309',
+      sharing: share.granted('sam.okonkwo@demo.veye.test', 30),
+      records: {
+        health_number: [HN(48, 5.5, 'Moderately Good Health', 'mixed')],
+        health_assessment: [HA(20, 22, 'Moderate Inflammation', '7.5g')],
+        simple_quiz: [SQ(6, 3), SQ(45, 5)], body_composition: [BC(44, 'Man', 196, 27.9, null, 'Measurements outside the supplied table')], blood_markers: [],
+      },
+      mood: moods('sam-okonkwo', 0, ['neutral', 'tired', 'calm', 'happy', 'neutral', 'stressed', 'calm']),
+      diary: [meal('sam-okonkwo', 0, '08:30', 'Scrambled eggs with smoked salmon', ['Hungry'], ''), meal('sam-okonkwo', 1, '13:15', 'Chicken caesar salad, no croutons', ['Rushed'], '')],
+      guided: [session('first_time_user', 'in_progress', 'a2', 3, 2)],
+    }),
+    member('owen-wright', 'Owen', 'Wright', {
+      joined: 52, lastActive: [1, 4], adminAccess: true,
+      sharing: share.granted('owen.wright@demo.veye.test', 20),
+      records: { health_number: [HN(19, 2.5, 'Relatively Good Health', 'food')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
+    }),
+  ];
+  const byKey = (key) => members.find((m) => m.id === uuid('member:' + key));
+  const mid = (key) => uuid('member:' + key);
+
+  /* ---- Sprout: conversations, as the console's transcript view shows them ---- */
+  const SRC = { hn: { title: 'Health Number guide', source_version: 1 }, help: { title: 'Help and FAQs', source_version: 1 }, comp: { title: 'How Sprout helps', source_version: 1 } };
+  let msgSeq = 0;
+  const say = (d, h, m, content, o = {}) => ({ id: uuid('msg:' + (++msgSeq)), role: 'member', content, created_at: ago(d, h, m), outcome: null,
+    policy_decision: o.policy ? { outcome: o.policy[0], category: o.policy[1] || null } : null, sources: [], provider: null, model: null,
+    latency_ms: null, safety_result: null, feedback: null });
+  const sprout = (d, h, m, content, o = {}) => ({ id: uuid('msg:' + (++msgSeq)), role: 'sprout', content, created_at: ago(d, h, m),
+    outcome: o.outcome || 'answered', policy_decision: null, sources: o.sources || [],
+    provider: o.model === false ? null : 'mock', model: o.model === false ? null : 'veye-mock-1',
+    latency_ms: o.model === false ? null : (o.latency || 6), safety_result: o.model === false ? 'not_generated' : 'pass', feedback: o.feedback || null });
+  const conversation = (key, memberKey, o) => {
+    const messages = o.messages;
+    return { id: uuid('conversation:' + key), member_id: mid(memberKey), started_at: messages[0].created_at,
+      last_message_at: messages[messages.length - 1].created_at, message_count: messages.length,
+      flagged: !!o.flag, flag_reason: o.flag || null, reviewed_at: o.reviewedAt || null, reviewed_by: o.reviewedBy || null, messages };
+  };
+  const conversations = [
+    conversation('cara-1', 'cara-morgan', {
+      flag: "Handed to a person: Policy is to hand this to a person. (rule 'nothing is working').",
+      messages: [
+        say(0, 5, 22, 'Explain what my Health Number means in plain language', { policy: ['allow', 'assessments'] }),
+        sprout(0, 5, 21, 'Your Health Number runs from 1 to 10, and a lower number is better. Yours sits in the relatively good range: some lifestyle or food changes would help you optimise your health. It is not a diagnosis, and body composition and blood markers do not change it.',
+          { sources: [SRC.hn], feedback: { rating: 'helpful', reason: null } }),
+        say(0, 5, 19, 'How much EPA should I take each day?', { policy: ['prohibit', 'supplement_amounts'] }),
+        sprout(0, 5, 19, COMPANION_SETTINGS.safe_response, { outcome: 'prohibited', model: false }),
+        say(0, 5, 16, "I haven't slept properly in a week and I feel like nothing is working.", { policy: ['escalate', 'wellbeing_concern'] }),
+        sprout(0, 5, 16, COMPANION_SETTINGS.escalation_response, { outcome: 'escalated', model: false }),
+      ],
+    }),
+    conversation('robert-1', 'robert-williams', {
+      flag: "Handed to a person: Always handed to a person. (rule 'metformin').",
+      messages: [
+        say(1, 2, 40, 'My number went up again. Can I stop my metformin if I follow the plan properly?', { policy: ['escalate', 'medical'] }),
+        sprout(1, 2, 40, COMPANION_SETTINGS.escalation_response, { outcome: 'escalated', model: false }),
+      ],
+    }),
+    conversation('lena-1', 'lena-ortiz', {
+      messages: [
+        say(3, 6, 2, 'What should I eat for lunch today?', { policy: ['allow', 'food'] }),
+        sprout(3, 6, 2, 'Build lunch around a palm-sized protein, then add favorable carbohydrates such as leafy greens and a little healthy fat like olive oil or avocado. Your Food Choices list has the ones you picked.',
+          { sources: [SRC.help], latency: 7, feedback: { rating: 'helpful', reason: null } }),
+        say(3, 6, 0, 'Thanks — and a snack for later?', { policy: ['allow', 'food'] }),
+        sprout(3, 5, 59, 'A handful of almonds with an apple, or cottage cheese with berries, keeps the protein in.', { sources: [SRC.help], latency: 5 }),
+      ],
+    }),
+    conversation('aisha-1', 'aisha-bello', {
+      flag: "Handed to a person: Always handed to a person. (rule 'symptom').", reviewedAt: ago(14, 2), reviewedBy: 'Priya Shah',
+      messages: [
+        say(15, 4, 10, 'I get a headache every afternoon — is that a symptom of something?', { policy: ['escalate', 'medical'] }),
+        sprout(15, 4, 10, COMPANION_SETTINGS.escalation_response, { outcome: 'escalated', model: false }),
+        say(15, 4, 4, 'Ok, thanks.', { policy: ['off_topic'] }),
+        sprout(15, 4, 4, COMPANION_SETTINGS.fallback, { outcome: 'off_topic', model: false, feedback: { rating: 'helpful', reason: null } }),
+      ],
+    }),
+    conversation('sam-1', 'sam-okonkwo', {
+      messages: [
+        say(2, 9, 30, 'Can you recommend a good film for tonight?', { policy: ['off_topic'] }),
+        sprout(2, 9, 30, COMPANION_SETTINGS.fallback, { outcome: 'off_topic', model: false, feedback: { rating: 'not_helpful', reason: 'Did not answer my question', comment: 'Fair enough, just curious.' } }),
+        say(2, 9, 27, 'How do I retake the Health Number?', { policy: ['allow', 'assessments'] }),
+        sprout(2, 9, 27, 'You can re-take the Health Number assessment whenever you like from My Progress. Every result is kept, so your history shows how the number has moved.', { sources: [SRC.hn], latency: 6 }),
+      ],
+    }),
+    conversation('owen-1', 'owen-wright', {
+      messages: [
+        say(6, 3, 12, 'What can you help me with?', { policy: ['allow', 'using_veye'] }),
+        sprout(6, 3, 12, 'I can explain how the Veye assessments work, help you think through meals from the Veye food lists, look at how your week is going from your own diary and check-ins, and point you to the right part of your dashboard.',
+          { sources: [SRC.comp], latency: 8, feedback: { rating: 'helpful', reason: null } }),
+      ],
+    }),
+  ];
+
+  /* Member feedback on Sprout replies, with the review state the console keeps. */
+  const feedback = [];
+  conversations.forEach((c) => c.messages.forEach((msg) => {
+    if (!msg.feedback) return;
+    const reviewed = c.id === uuid('conversation:aisha-1');
+    feedback.push({ id: uuid('feedback:' + msg.id), conversation_id: c.id, message_id: msg.id, member_id: c.member_id,
+      rating: msg.feedback.rating, reason: msg.feedback.reason || null, comment: msg.feedback.comment || null,
+      submitted_at: new Date(Date.parse(msg.created_at) + 90 * 1000).toISOString(),
+      reviewed_at: reviewed ? ago(13, 22) : null, reviewed_by: reviewed ? 'Priya Shah' : null, reply_excerpt: msg.content.slice(0, 140) });
+  }));
+
+  /* ---- Requests & Inbox ---- */
+  const reply = (key, d, h, body, to, by, failed) => ({ id: uuid('reply:' + key), body, to_email: to, sent_by_name: by,
+    delivery_status: failed ? 'failed' : 'sent', delivery_detail: failed ? '550 5.1.1 Mailbox unavailable' : null, created_at: ago(d, h) });
+  const request = (key, o) => ({ id: uuid('request:' + key), kind: 'contact_us', status: 'new', source: 'public', member_id: null, name: '', email: '',
+    subject: '', message: '', page: null, created_at: ago(o.d, o.h || 0), updated_at: ago(o.d, o.h || 0), handled_by: null, handled_at: null,
+    resolution_note: '', replies: [], ...o });
+  const requests = [
+    request('cara-history', { d: 0, h: 2, kind: 'contact_us', source: 'member', member_id: mid('cara-morgan'), name: 'Cara Morgan', email: 'cara.morgan@demo.veye.test',
+      subject: 'Question about my assessment history', page: '/app/contact',
+      message: 'Hi — my Health Number from the summer is not showing in My Progress any more. Did it get deleted when I retook it?',
+      replies: [reply('cara-history-1', 0, 1, 'Hi Cara,\n\nNothing was deleted — every result is kept. My Progress shows the latest one first; open History under the Health Number card to see the earlier result.\n\nBest,\nCara (Veye team)', 'cara.morgan@demo.veye.test', 'Cara Hogue', false)] }),
+    request('visitor-marker', { d: 0, h: 7, kind: 'help_question', status: 'in_progress', name: '', email: 'visitor.r@demo.veye.test', subject: '',
+      message: 'Where can I update a blood marker?', page: '/help', handled_by: 'Cara Hogue', handled_at: ago(0, 6, 40),
+      resolution_note: 'Checking whether they already have an account under another address.' }),
+    request('grace-beta', { d: 1, h: 4, kind: 'join_beta', source: 'member', member_id: mid('grace-lin'), name: 'Grace Lin', email: 'grace.lin@demo.veye.test',
+      subject: 'Beta application', message: '', page: '/app' }),
+    request('robert-quiz', { d: 6, h: 2, kind: 'help_question', status: 'resolved', source: 'member', member_id: mid('robert-williams'), name: 'Robert Williams',
+      email: 'robert.williams@demo.veye.test', subject: 'How do I retake the Simple Quiz?', message: 'How do I retake the Simple Quiz? I can only see my old answers.', page: '/app/help',
+      handled_by: 'Priya Shah', handled_at: ago(5, 20), resolution_note: 'Pointed to My Progress → Simple Quiz → Take it again.',
+      replies: [reply('robert-quiz-1', 5, 21, 'Hi Robert,\n\nOpen My Progress, choose Simple Quiz and press "Take it again" under your last result. Your earlier answers stay in the history.\n\nPriya', 'robert.williams@demo.veye.test', 'Priya Shah', false)] }),
+    request('marsh-contact', { d: 2, h: 3, kind: 'contact_us', status: 'in_progress', name: 'Jordan Marsh', email: 'jordan.marsh@bounces.demo.veye.test',
+      subject: 'Pricing for a family of four', message: 'Do you offer a family plan? There are four of us and two would like the coaching.', page: '/contact',
+      handled_by: 'Cara Hogue', handled_at: ago(1, 23), resolution_note: 'Reply bounced. Try the phone number on the form next.',
+      replies: [reply('marsh-1', 1, 23, 'Hi Jordan,\n\nThank you for asking. A family plan is not offered in the Beta yet; I have added your interest to the list and will write as soon as it is.\n\nCara', 'jordan.marsh@bounces.demo.veye.test', 'Cara Hogue', true)] }),
+    request('anon-help', { d: 3, h: 1, kind: 'help_question', name: '', email: '', subject: '',
+      message: 'Is the Simple Quiz the same as the Health Number? The help page does not say.', page: '/help' }),
+    request('sam-beta', { d: 9, h: 5, kind: 'join_beta', status: 'resolved', source: 'member', member_id: mid('sam-okonkwo'), name: 'Sam Okonkwo', email: 'sam.okonkwo@demo.veye.test',
+      subject: 'Beta application', message: '', page: '/app', handled_by: 'Cara Hogue', handled_at: ago(8, 20), resolution_note: 'Added to the Beta cohort.',
+      replies: [reply('sam-beta-1', 8, 21, 'Hi Sam,\n\nYou are in — welcome to the Veye Beta. Your dashboard already has everything switched on.\n\nCara', 'sam.okonkwo@demo.veye.test', 'Cara Hogue', false)] }),
+    request('daniel-email', { d: 0, h: 9, kind: 'contact_us', source: 'member', member_id: mid('daniel-kim'), name: 'Daniel Kim', email: 'daniel.kim@demo.veye.test',
+      subject: 'Please correct the email on my account', message: 'I signed up with my work address by mistake. Can it be changed to my personal one?', page: '/app/contact' }),
+  ];
+  requests.forEach((r) => { if (r.replies.length) r.updated_at = r.replies[r.replies.length - 1].created_at; });
+
+  /* ---- Prospects: visitors' saved results — metadata only ---- */
+  const EV = (type, actor, d, h = 0, policyVersion = null) => ({ event_type: type, actor_type: actor, at: ago(d, h), policy_version: policyVersion });
+  const prospect = (key, o) => {
+    const captured = o.captured;
+    const days = o.days || 30;
+    return {
+      id: uuid('prospect:' + key), email: o.email || null, status: o.status, captured_at: ago(captured[0], captured[1] || 0),
+      expires_at: o.expires !== undefined ? o.expires : new Date(Date.parse(ago(captured[0], captured[1] || 0)) + days * DAY).toISOString(),
+      retention_mode: 'days', retention_days: days, source: 'public_assessment', email_verified: !!o.verified,
+      registered_member_id: o.member || null, claimed_at: o.claimedAt || null, erased_at: o.erasedAt || null,
+      consent_version: 'prospect-capture-2026-11-14-draft-v1', retention_policy_version: o.policy || 2, calculation_version: '1.5.0',
+      events: o.events,
+    };
+  };
+  const prospects = [
+    prospect('p01', { email: 'adele.fox@demo.veye.test', status: 'unverified', captured: [0, 3], events: [EV('captured', 'visitor', 0, 3, 2)] }),
+    prospect('p02', { email: 'ben.ortega@demo.veye.test', status: 'unverified', captured: [2, 1], events: [EV('captured', 'visitor', 2, 1, 2)] }),
+    prospect('p03', { email: 'chloe.marr@demo.veye.test', status: 'verified', verified: true, captured: [4, 6], events: [EV('captured', 'visitor', 4, 6, 2), EV('email_verified', 'visitor', 4, 5)] }),
+    prospect('p04', { email: 'dev.raman@demo.veye.test', status: 'verified', verified: true, captured: [9, 2], events: [EV('captured', 'visitor', 9, 2, 2), EV('email_verified', 'visitor', 9, 1), EV('link_resent', 'visitor', 3, 4)] }),
+    prospect('p05', { email: 'elle.brandt@demo.veye.test', status: 'unverified', captured: [24, 2], events: [EV('captured', 'visitor', 24, 2, 2)] }),
+    prospect('p06', { email: 'finn.osei@demo.veye.test', status: 'verified', verified: true, captured: [27, 5], events: [EV('captured', 'visitor', 27, 5, 2), EV('email_verified', 'visitor', 27, 4)] }),
+    prospect('p07', { email: 'gita.mehra@demo.veye.test', status: 'pending_claim', verified: false, captured: [6, 4], events: [EV('captured', 'visitor', 6, 4, 2), EV('linked_at_signup', 'member', 5, 23)] }),
+    prospect('p08', { email: 'grace.lin@demo.veye.test', status: 'claimed', verified: true, captured: [14, 2], member: mid('grace-lin'), claimedAt: ago(13),
+      events: [EV('captured', 'visitor', 14, 2, 2), EV('email_verified', 'visitor', 14, 1), EV('linked_at_signup', 'member', 13, 1), EV('claimed', 'member', 13)] }),
+    prospect('p09', { email: 'sam.okonkwo@demo.veye.test', status: 'claimed', verified: true, captured: [50, 3], member: mid('sam-okonkwo'), claimedAt: ago(49),
+      events: [EV('captured', 'visitor', 50, 3, 1), EV('email_verified', 'visitor', 50, 2), EV('linked_at_signup', 'member', 49, 2), EV('claimed', 'member', 49)], days: 45, policy: 1 }),
+    prospect('p10', { status: 'expired', captured: [72, 1], days: 45, policy: 1, expires: ago(40),
+      events: [EV('captured', 'visitor', 72, 1, 1), EV('retention_shortened', 'administrator', 40, 0, 2), EV('purged', 'system', 40)] }),
+    prospect('p11', { status: 'expired', captured: [48, 2], days: 45, policy: 1, expires: ago(18, 2),
+      events: [EV('captured', 'visitor', 48, 2, 1), EV('retention_shortened', 'administrator', 40, 0, 2), EV('purged', 'system', 18)] }),
+    prospect('p12', { status: 'erased', captured: [20, 7], erasedAt: ago(18, 3), expires: ago(-10, 7),
+      events: [EV('captured', 'visitor', 20, 7, 2), EV('erased', 'visitor', 18, 3)] }),
+    prospect('p13', { status: 'erased', verified: true, captured: [11, 6], erasedAt: ago(10, 2), expires: ago(-19, 6),
+      events: [EV('captured', 'visitor', 11, 6, 2), EV('email_verified', 'visitor', 11, 5), EV('erased', 'administrator', 10, 2)] }),
+    prospect('p14', { email: 'hugo.lind@demo.veye.test', status: 'unverified', captured: [31, 4], events: [EV('captured', 'visitor', 31, 4, 2)] }),
+  ];
+
+  /* Retention: how long an unsigned-up visitor's saved result is kept. */
+  const retention = {
+    mode: 'days', days: 30, version: 2, published_at: ago(40), published_by: 'Cara Hogue',
     history: [
-      { version: 'v3.2', effective: '12 Feb 2026', note: 'Added the annual plan and its cancellation terms.' },
-      { version: 'v3.0', effective: '14 Sep 2025', note: 'First public release.' },
-    ] },
-  { id: 'LD-2', title: 'Privacy Policy', category: 'Privacy', version: 'v3.2', effective: '01 Apr 2026', state: 'Published',
-    accepted: 1238, of: 1284, updated: '01 Apr 2026',
-    body: 'PROTOTYPE CONTENT — NOT LEGAL TEXT.\n\nThis policy describes what personal data Veye collects, why it is collected, how long it is kept, who it is shared with, and the choices a member has over it.\n\nThe wording that ships to members must be drafted and approved by counsel.',
-    history: [{ version: 'v3.1', effective: '12 Feb 2026', note: 'Named the email delivery provider.' }] },
-  { id: 'LD-3', title: 'Health Data Notice', category: 'Consent', version: 'v2.1', effective: '12 Feb 2026', state: 'Published',
-    accepted: 1201, of: 1284, updated: '12 Feb 2026',
-    body: 'PROTOTYPE CONTENT — NOT LEGAL TEXT.\n\nThis notice describes the health information a member gives Veye — assessment answers, blood marker values, body measurements, mood entries and food diary entries — what it is used for, and how a member withdraws it.\n\nThe wording that ships to members must be drafted and approved by counsel.',
-    history: [{ version: 'v2.0', effective: '14 Sep 2025', note: 'First release.' }] },
-  { id: 'LD-4', title: 'Companion and AI Notice', category: 'Consent', version: 'v1.4 draft', effective: 'Not set', state: 'Draft',
-    accepted: 1144, of: 1284, updated: '13 Aug 2026',
-    body: 'PROTOTYPE CONTENT — NOT LEGAL TEXT.\n\nThis notice explains that Veye Companion generates its replies automatically, that some replies are held for a person to read before the member sees them, that conversations are stored against the member record, and that Companion does not diagnose, treat or prevent any condition.\n\nThe wording that ships to members must be drafted and approved by counsel.',
-    history: [{ version: 'v1.3', effective: '02 Jun 2026', note: 'Published. Added the held-reply explanation.' }] },
-];
-
-/* --------------------------------------------------------- plans and billing -- */
-SEED.plans = [
-  { id: 'PL-1', name: 'DIY', price: '$29 / month', includes: 'Dashboard, assessments and the food tools', members: 742, status: 'Live' },
-  { id: 'PL-2', name: 'Guided', price: '$89 / month', includes: 'Everything in DIY, plus a coach and programmes', members: 386, status: 'Live' },
-  { id: 'PL-3', name: 'Trial', price: 'Free for 14 days', includes: 'Onboarding and the Health Number', members: 156, status: 'Live' },
-  { id: 'PL-4', name: 'Guided Annual', price: '$890 / year', includes: 'Guided, billed once a year', members: 0, status: 'Draft' },
-];
-
-SEED.billing = {
-  plan: 'Veye Business',
-  seats: 11,
-  seatsUsed: 10,
-  renews: '04 Jan 2027',
-  method: 'Card ending 4242',
-  contact: 'elena.fischer@veye.example',
-  invoices: [
-    { id: 'IV-2608', date: '01 Aug 2026', amount: '$1,320.00', period: 'August 2026', status: 'Paid' },
-    { id: 'IV-2607', date: '01 Jul 2026', amount: '$1,320.00', period: 'July 2026', status: 'Paid' },
-    { id: 'IV-2606', date: '01 Jun 2026', amount: '$1,200.00', period: 'June 2026', status: 'Paid' },
-  ],
-};
-
-SEED.integrations = [
-  { id: 'IG-1', name: 'Laboratory results feed', kind: 'Health data', status: 'Attention', lastSync: '13 Aug 2026, 23:10', detail: 'Two rows were rejected on the last run because the HDL unit was not recognised.' },
-  { id: 'IG-2', name: 'Email delivery', kind: 'Communication', status: 'Connected', lastSync: '14 Aug 2026, 08:00', detail: 'Sending member emails and notices.' },
-  { id: 'IG-3', name: 'Payment processor', kind: 'Billing', status: 'Connected', lastSync: '14 Aug 2026, 07:45', detail: 'Subscriptions, renewals and refunds.' },
-  { id: 'IG-4', name: 'Wearable activity', kind: 'Health data', status: 'Not connected', lastSync: '—', detail: 'Would bring in step and activity data. Not set up.' },
-];
-
-/* -------------------------------------------------- member feature releases --
-   Every feature is member-visible; the development sections carry their own
-   in-product notice while their content is written. */
-SEED.features = [
-  { id: 'FT-01', name: 'Dashboard', desc: 'The member home screen.', state: 'Live', enabled: true, locked: false },
-  { id: 'FT-02', name: 'Onboarding and Health Number', desc: 'The twelve questions and the result.', state: 'Live', enabled: true, locked: false },
-  /* The four portals the member actually has. The old wording here named a
-     taxonomy that never existed on their screen. */
-  { id: 'FT-03', name: 'Food Choices', desc: 'The Proteins, Fats, Favorable Carbohydrates and Unfavorable Carbohydrates portals.', state: 'Live', enabled: true, locked: false },
-  { id: 'FT-04', name: 'Meal Planning', desc: 'Building and assigning days.', state: 'Live', enabled: true, locked: false },
-  { id: 'FT-05', name: 'Food Diary', desc: 'Daily meal entries, time eaten, pre-meal feelings, notes, prototype macro estimates, daily summary and history.', state: 'Live', enabled: true, locked: false },
-  { id: 'FT-06', name: 'Mood Tracker', desc: 'The daily mood entry and its calendar.', state: 'Live', enabled: true, locked: false },
-  { id: 'FT-07', name: 'Veye Companion', desc: 'Sprout, the in-product companion.', state: 'Live', enabled: true, locked: false },
-  { id: 'FT-08', name: 'Blood markers', desc: 'Marker entry and the calculated ratios.', state: 'Live', enabled: true, locked: false },
-  { id: 'FT-09', name: 'Activity Tracker', desc: 'Shown without a connected data source.', state: 'Live', enabled: true, locked: false },
-/* These consumer areas are retained as Phase 2 references. They are neither
-   live member experiences nor operational management surfaces in this Beta. */
-  { id: 'FT-10', name: 'Supplements', desc: 'Phase 2 reference — content and clinical review remain outside this Beta.', state: 'Phase 2', enabled: false, locked: true },
-  { id: 'FT-11', name: 'Resources', desc: 'Phase 2 reference — publishing experience remains outside this Beta.', state: 'Phase 2', enabled: false, locked: true },
-  { id: 'FT-12', name: 'Fitness', desc: 'Phase 2 reference — final workout content and media remain deferred.', state: 'Phase 2', enabled: false, locked: true },
-  { id: 'FT-13', name: 'Mindfulness', desc: 'A polished In Development destination between Fitness and Resources.', state: 'Live', enabled: true, locked: false },
-];
-
-/* Only Mindfulness has a simple Beta notice. The other named areas are kept as
-   Phase 2 references, not editable member content. */
-SEED.memberSections = {
-  supplements: {
-    devNote: 'Supplements — this section is being developed. For now, Veye offers some important information.',
-    lede: 'While you cannot fix a macronutrient issue with micronutrients, with an anti-inflammation diet supplements can enhance your health.',
-    otherTitle: 'Individual vitamin pros and cons',
-    otherProvisional: 'Provisional educational content supplied by the Veye team — pending citation and clinical review.',
-    otherNote: 'The Other Supplements button opens the client-supplied Vitamin Overview. The text is managed as one supplied document; edits here change what members read.',
-  },
-  fitness: {
-    devNote: 'Content in development.',
-    links: [
-      { id: 'FL-1', label: 'Interested in Martial Arts and Boxing?', sub: 'Veye recommends the EYR system.', url: 'https://withme.so/EngageYourRage' },
-      { id: 'FL-2', label: 'Here are 5 exercises to avoid', sub: 'Watch on YouTube.', url: 'https://youtu.be/XLlHJ5-vHWw' },
-      { id: 'FL-3', label: 'Need to improve your range of motion?', sub: 'Veye recommends the NeoRomX system — watch on YouTube.', url: 'https://youtu.be/7YLttuiwGvw' },
+      { version: 2, mode: 'days', days: 30, published_at: ago(40), published_by: 'Cara Hogue', note: 'Approved by Cara — 30 days is enough to come back and sign up' },
+      { version: 1, mode: 'days', days: 45, published_at: ago(75), published_by: 'Cara Hogue', note: 'Beta launch' },
     ],
-    embedNote: 'The current member screen is a static visual preview, not a working video player. Real playback begins only after final video assets and permissions are supplied.',
-  },
-  mindfulness: {
-    devNote: 'In Development',
-    /* Only the development status is client-supplied — no future scope is
-       described until Cara defines it. */
-    body: 'Under development — more coming.',
-  },
-  resources: {
-    devNote: 'Resources are in development.',
-    cards: [
-      { id: 'RC-1', order: 1, title: 'Blogs', status: 'Coming Soon',
-        desc: 'Veye contributors comment on a number of factors related to wellness. Read our regularly updated articles and view the videos that interest you. Not seeing what interests you? Let us know and we will create a post with your interests in mind.' },
-      { id: 'RC-2', order: 2, title: 'Lifestyle', status: 'Coming Soon',
-        desc: 'Explore media that focuses on daily living, personal interests, and hobbies. Veye topics include fashion, food, travel, wellness, plastic surgery, and even home decor. Want recipes, cooking tips, and tips for dining out? We have that, too.' },
-      { id: 'RC-3', order: 3, title: 'Articles', status: 'Coming Soon',
-        desc: 'Research papers, excerpts, and articles giving you insight to the science behind the Veye program. Want academic or accessible, expert content or beginner guides, advanced research or quick reads? Veye has it all.' },
-      { id: 'RC-4', order: 4, title: 'Biohacks', status: 'Coming Soon',
-        desc: 'Interested in making intentional changes to your exercise routine, lifestyle, or environment to optimize your physical and mental performance? Often called "do-it-yourself biology", Biohacks use science, data, and self-experimentation to take a proactive role in health and longevity. Discover Veye offerings and recommendations.' },
-    ],
-  },
-};
+    last_cleanup: { job: 'purge-prospects', status: 'ok', dry_run: false, started_at: ago(0, 6, 1), finished_at: ago(0, 6), counts: { due: 0, purged: 0 }, error: null, triggered_by: 'nightly schedule' },
+    encryption_ready: true, encryption_is_development_key: true,
+  };
 
-/* ------------------------------------------------------- where does it appear --
-   The one question this console could not answer before: does what I change
-   here reach a member, or does it only tell me something?
+  /* ---- Deletions (erasure requests): ids, states and dates only ---- */
+  const erasures = [
+    { request_id: uuid('erasure:1'), subject_user_id: uuid('erasure-user:1'), subject_member_id: uuid('erasure-member:1'), scope: 'entire_identity', state: 'purge_blocked',
+      requested_at: ago(1, 5), completed_at: null, attempts: 2, failure_category: 'object_storage', stage: 'access_closed' },
+    { request_id: uuid('erasure:2'), subject_user_id: uuid('erasure-user:2'), subject_member_id: uuid('erasure-member:2'), scope: 'entire_identity', state: 'access_closed',
+      requested_at: ago(0, 0, 4), completed_at: null, attempts: 0, failure_category: null, stage: 'access_closed' },
+    { request_id: uuid('erasure:3'), subject_user_id: uuid('erasure-user:3'), subject_member_id: uuid('erasure-member:3'), scope: 'member_data', state: 'erased',
+      requested_at: ago(12, 3), completed_at: ago(12, 3), attempts: 1, failure_category: null, stage: 'receipt_queued' },
+    { request_id: uuid('erasure:4'), subject_user_id: uuid('erasure-user:4'), subject_member_id: uuid('erasure-member:4'), scope: 'entire_identity', state: 'erased',
+      requested_at: ago(33, 6), completed_at: ago(33, 6), attempts: 1, failure_category: null, stage: 'receipt_queued' },
+  ];
 
-   Three effects, and every row is exactly one of them:
+  /* ---- Care Studio and Content ---- */
+  const careItems = CARE_ITEMS.map((c, i) => ({
+    id: uuid('care:' + i), kind: c.kind, title: c.title, description: c.description || '', category: c.category || null, content_type: c.content_type,
+    youtube_url: c.youtube_url || null, external_url: c.external_url || null, video_object_key: null, body: c.body || '', cautions: c.cautions || null,
+    references: c.references || null, display_order: c.display_order, status: c.status, source: c.source,
+    created_at: ago(56, 4), updated_at: ago(56, 4), updated_by: CARE_SEED_BY,
+    published_at: c.status === 'Published' ? ago(56, 4) : null, published_by: c.status === 'Published' ? CARE_SEED_BY : null,
+  }));
+  const contentEntries = HELP_FAQ.map(([key, category, title, body], i) => ({
+    id: uuid('content:help:' + key), group: 'help_faq', key, category, title, body, display_order: i + 1, status: 'Published',
+    source: 'build/help.html (client-approved FAQ)', updated_at: ago(56, 4), updated_by: CARE_SEED_BY, published_at: ago(56, 4), published_by: CARE_SEED_BY,
+  })).concat(MEMBER_COPY.map((c) => ({
+    id: uuid('content:copy:' + c.key), group: 'member_copy', key: c.key, category: null, title: c.title, body: c.body, display_order: c.order, status: c.status,
+    source: c.source || 'Approved member screens (build/dashboard.html)', updated_at: ago(56, 4), updated_by: CARE_SEED_BY,
+    published_at: c.status === 'Published' ? ago(56, 4) : null, published_by: c.status === 'Published' ? CARE_SEED_BY : null,
+  })));
 
-     control     an edit changes copy, availability, scoring, content or a plan
-                 that a member or a visitor sees
-     view        derived from member activity; reading it changes nothing
-     admin       affects administrators or administration only
+  /* ---- Knowledge sources Sprout may draw on ---- */
+  const approver = 'Cara Hogue';
+  const source = (key, title, type, scope, description, filename, chunks, status, passagesKey) => {
+    const id = uuid('knowledge:' + key);
+    const doc = { id: uuid('document:' + key), source_version: 1, filename, content_type: 'text/markdown', byte_size: 900 + chunks * 410,
+      sha256: hex('sha:' + key, 64), is_current: true, ingestion_status: 'ingested', ingestion_error: null, extraction_note: null,
+      chunk_count: chunks, ingested_at: ago(60, 2), created_at: ago(60, 2) };
+    return { id, title, type, scope_key: scope, description, reference_label: filename, status, version: 1, approved_by: approver,
+      approved_at: ago(60, 1), effective_date: null, is_synthetic: true, created_at: ago(60, 3), updated_at: ago(60, 1),
+      archived_at: status === 'Archived' ? ago(58) : null, current_document: doc, documents: [doc], storage: 'local-file',
+      passages: (PASSAGES[passagesKey] || []).map(([heading, text], i) => ({ chunk_id: uuid('chunk:' + key + ':' + i), document_id: doc.id, heading, text })) };
+  };
+  const knowledgeSources = [
+    source('hn', 'Health Number guide', 'VEYE educational document', 'health_number', 'Plain-language explanation of the Health Number and what a lower result means.', 'health-number-guide.md', 7, 'Active', 'hn'),
+    source('help', 'Help and FAQs', 'FAQ / Help', 'help', 'Approved answers to common member questions about using VEYE.', 'help-and-faqs.md', 23, 'Active', 'help'),
+    source('comp', 'How Sprout helps', 'Companion guidance', 'companion', 'What the Companion can and cannot do, and how member data is handled.', 'companion-guidance.md', 5, 'Active', 'companion'),
+    source('food', 'Food Choices reference', 'Food Choices reference', 'food_choices', 'Approved food-category wording used when members ask about their selections.', 'food-choices-reference.md', 6, 'Inactive', null),
+    source('old', 'Superseded welcome note', 'Companion guidance', 'companion', 'An earlier welcome wording retained as an archived record.', 'superseded-welcome-note.md', 2, 'Archived', null),
+  ];
 
-   Rendered by a "Where does this appear?" control in the page header, so the
-   answer is one click away on the screen it concerns rather than a paragraph on
-   every screen. The full audit is in
-   docs/qa/prototype-client/ADMIN_TO_CONSUMER_CONTROL_MAP.md. */
-SEED.whereShown = {
-  home: { title: 'Home', lede: 'Home reports. It changes almost nothing.', rows: [
-    ['The four figures, the trend and the health line', 'view', 'Counted from member activity. Reading Home changes nothing a member sees.'],
-    ['Needs attention', 'view', 'A working queue for the Veye team. Members are never told they are on it.'],
-    ['Add a member', 'control', 'Starts a real member journey: the person is invited and completes onboarding themselves.'],
-    ['Edit website content', 'control', 'Opens the public website copy.'],
-    ['Review Companion messages', 'admin', 'Opens staff review. A held reply stays held until somebody sends it.'],
-  ] },
+  /* ---- Guided experiences: Cara's decision trees, published as versions ---- */
+  const flows = window.VeyeGuidedFlowData || {};
+  const guidedFlows = ['first_time_user', 'progress_tracker_guide'].map((key) => {
+    const def = flows[key] || { title: key, nodes: {}, content_meta: {} };
+    return { id: uuid('flow:' + key + ':1'), key, title: def.title, version: 1, status: 'Active', source: 'Cara Decision Tree',
+      content_meta: def.content_meta || {}, node_count: Object.keys(def.nodes || {}).length, created_at: ago(57, 5), updated_at: ago(57, 5),
+      published_at: ago(57, 5), published_by: 'seed' };
+  });
 
-  members: { title: 'Members and Member 360', lede: 'A record of what members did. Two controls change their experience.', rows: [
-    ['Every directory column', 'view', 'Signup, plan, onboarding, assessment and usage data.'],
-    ['Storyline', 'view', 'A read-only chronology of member actions and staff interventions.'],
-    ['Assessments tab', 'view', 'The same Health Number, Simple Health Quiz, Health Assessment, markers and body composition the member sees on their dashboard.'],
-    ['Assign a plan', 'control', 'Changes the program and the days the member is shown.'],
-    ['Message', 'control', 'A real message into the member’s Companion thread.'],
-    ['Internal note', 'admin', 'Team-only. It appears on the storyline and never to the member.'],
-  ] },
+  /* ---- telemetry: one masked record per Sprout turn ---- */
+  const telemetry = [];
+  conversations.forEach((c) => {
+    const ref = hex('member-ref:' + c.member_id, 16);
+    const session = hex('session-ref:' + c.id, 16);
+    let lastPolicy = null;
+    c.messages.forEach((msg) => {
+      if (msg.role === 'member') { lastPolicy = msg.policy_decision; return; }
+      const answered = !!msg.provider;
+      telemetry.push({ trace_id: uuid('trace:' + msg.id), created_at: msg.created_at, member_ref: ref, session_ref: session, conversation_id: c.id,
+        provider: msg.provider, model: msg.model, latency_ms: answered ? msg.latency_ms : 0, input_tokens: null, output_tokens: null,
+        policy_outcome: lastPolicy ? lastPolicy.outcome : 'off_topic', policy_category: lastPolicy ? lastPolicy.category : null,
+        safety_result: msg.safety_result || 'not_generated', retrieval_count: msg.sources.length,
+        top_retrieval_score: msg.sources.length ? 0.58 + (fnv(msg.id) % 30) / 100 : null,
+        feedback: msg.feedback ? msg.feedback.rating : null, error_category: null, exporters: 'database' });
+    });
+  });
+  telemetry.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
-  care: { title: 'Care Studio', lede: 'The most consumer-facing screen in the console.', rows: [
-    ['Programs and member plans', 'control', 'The plan and the days a member follows.'],
-    ['Food Library — portals and groups', 'control', 'The four portals on the member’s Food Choices screen and the groups inside them.'],
-    ['Portal description', 'control', 'The paragraph a member reads at the top of that portal.'],
-    ['Custom foods', 'admin', 'A reconciliation queue. Nothing here reaches Food Choices until it is matched or promoted.'],
-    ['Meal templates', 'control', 'Feed Meal Planning. The slots fill from the member’s own selected foods.'],
-    ['Development sections — Mindfulness', 'control', 'A simple in-development notice shown to members. Supplements and Fitness remain Phase 2 references.'],
-  ] },
+  /* ---- the admin audit log: who changed what, newest first ---- */
+  let auditSeq = 0;
+  const A = (d, h, actor, action, entityType, entityId, details = {}) => ({ id: uuid('audit:' + (++auditSeq)), created_at: ago(d, h), actor_name: actor,
+    action, entity_type: entityType, entity_id: entityId, details });
+  const adminId = (key) => uuid('admin:' + key);
+  const audit = [
+    A(0, 1, 'Cara Hogue', 'requests.replied', 'member_request', uuid('request:cara-history'), { kind: 'contact_us', delivery: 'sent' }),
+    A(0, 6, 'Cara Hogue', 'requests.in_progress', 'member_request', uuid('request:visitor-marker'), { kind: 'help_question', status: 'in_progress' }),
+    A(1, 2, 'Cara Hogue', 'member_account.verification_resent', 'user_account', uuid('account:maya-chen'), { email: 'maya.chen@demo.veye.test' }),
+    A(1, 3, 'Cara Hogue', 'health_permission.requested', 'member', mid('daniel-kim'), { state: 'requested', policy_version: 'health-sharing-terms-v1', with_reason: false }),
+    A(1, 6, 'Cara Hogue', 'administrator.invited', 'user_account', adminId('jonah-reid'), { email: 'jonah.reid@veye.example', new_account: true, delivery: 'sent' }),
+    A(1, 23, 'Cara Hogue', 'requests.replied', 'member_request', uuid('request:marsh-contact'), { kind: 'contact_us', delivery: 'failed' }),
+    A(2, 1, 'Cara Hogue', 'health_permission.requested', 'member', mid('sophie-patel'), { state: 'requested', policy_version: 'health-sharing-terms-v1', with_reason: false }),
+    A(3, 2, 'Priya Shah', 'member_account.password_reset_sent', 'user_account', uuid('account:robert-williams'), { email: 'robert.williams@demo.veye.test' }),
+    A(5, 2, 'Cara Hogue', 'administrator.invited', 'user_account', adminId('james-lee'), { email: 'james.lee@veye.example', new_account: true, delivery: 'sent' }),
+    A(5, 20, 'Priya Shah', 'requests.resolved', 'member_request', uuid('request:robert-quiz'), { kind: 'help_question', status: 'resolved' }),
+    A(10, 2, 'Cara Hogue', 'prospect.erased', 'prospect', uuid('prospect:p13'), { reason: 'Asked by phone to delete it' }),
+    A(12, 4, 'Cara Hogue', 'settings.health_sharing.notification_published', 'policy', 'health_sharing_notification', { version: 2, mode: 'manual', resend_interval_hours: 72 }),
+    A(13, 22, 'Priya Shah', 'feedback.reviewed', 'companion_feedback', (feedback.find((f) => f.reviewed_at) || {}).id || null, {}),
+    A(14, 2, 'Priya Shah', 'conversation.reviewed', 'companion_conversation', uuid('conversation:aisha-1'), { note: null }),
+    A(21, 0, 'Priya Shah', 'health_permission.requested', 'member', mid('tomas-rivera'), { state: 'requested', policy_version: 'health-sharing-terms-v1', with_reason: false }),
+    A(26, 4, 'Cara Hogue', 'member_account.deactivated', 'user_account', uuid('account:hannah-weiss'), { email: 'hannah.weiss@demo.veye.test' }),
+    A(30, 3, 'Cara Hogue', 'settings.health_sharing.template_published', 'policy', 'health_sharing_email', { version: 1, hash: hex('tpl:1', 64) }),
+    A(30, 3, 'Cara Hogue', 'settings.health_sharing.terms_published', 'policy', 'health_sharing_terms', { version: 1, hash: hex('terms:1', 64), material_change: false }),
+    A(30, 4, 'Cara Hogue', 'settings.health_sharing.notification_published', 'policy', 'health_sharing_notification', { version: 1, mode: 'manual', resend_interval_hours: 168 }),
+    A(33, 2, 'Cara Hogue', 'settings.updated', 'companion_settings', '1', { enabled: true, policy_version: '1.0.0' }),
+    A(40, 0, 'Cara Hogue', 'settings.prospect_retention.applied_to_existing', 'policy', 'prospect_retention', { version: 2, shortened: 2, purged_now: 1 }),
+    A(40, 0, 'Cara Hogue', 'settings.prospect_retention.published', 'policy', 'prospect_retention', { version: 2, mode: 'days', days: 30, previous_version: 1, acknowledged_forever: false }),
+    A(45, 0, 'Cara Hogue', 'administrator.deactivated', 'user_account', adminId('sara-okafor'), { email: 'sara.okafor@veye.example' }),
+    A(52, 0, 'Cara Hogue', 'administrator.invited', 'user_account', uuid('account:owen-wright'), { email: 'owen.wright@demo.veye.test', new_account: false, delivery: 'sent' }),
+    A(57, 5, 'Cara Hogue', 'guided_flow.activated', 'guided_flow', uuid('flow:first_time_user:1'), { key: 'first_time_user', version: 1 }),
+    A(57, 5, 'Cara Hogue', 'guided_flow.activated', 'guided_flow', uuid('flow:progress_tracker_guide:1'), { key: 'progress_tracker_guide', version: 1 }),
+    A(60, 1, 'Cara Hogue', 'knowledge_source.activated', 'knowledge_source', uuid('knowledge:hn'), { title: 'Health Number guide' }),
+    A(60, 1, 'Cara Hogue', 'knowledge_source.activated', 'knowledge_source', uuid('knowledge:help'), { title: 'Help and FAQs' }),
+    A(60, 1, 'Cara Hogue', 'knowledge_source.activated', 'knowledge_source', uuid('knowledge:comp'), { title: 'How Sprout helps' }),
+    A(64, 0, 'Cara Hogue', 'administrator.invited', 'user_account', adminId('priya-shah'), { email: 'priya.shah@veye.example', new_account: true, delivery: 'sent' }),
+    A(75, 0, 'Cara Hogue', 'settings.prospect_retention.published', 'policy', 'prospect_retention', { version: 1, mode: 'days', days: 45, previous_version: 0, acknowledged_forever: false }),
+  ];
 
-  assessments: { title: 'Assessments & Scoring', lede: 'Definitions, not results. Editing one changes what every member is asked and told.', rows: [
-    ['Questions and options', 'control', 'The wording a member reads during the assessment.'],
-    ['Weights and bands', 'control', 'The number and the band a member is given.'],
-    ['Band wording', 'control', 'The sentence a member reads with their result.'],
-    ['Version history', 'admin', 'Results already stored keep the version that produced them.'],
-    ['The canonical logic', 'admin', 'Held in the member product’s own veye-calculations.js. The console displays and edits source-backed definitions; it does not invent a second formula.'],
-  ] },
+  /* ---- Settings → Product settings → Health sharing: three versioned policies ---- */
+  const sharingSettings = {
+    notification: { mode: 'manual', resend_interval_hours: 72, sender_name: 'VEYE Team', version: 2, published_at: ago(12, 4), published_by: 'Cara Hogue',
+      history: [
+        { version: 2, published_at: ago(12, 4), published_by: 'Cara Hogue', note: null, hash: hex('notification:2', 64) },
+        { version: 1, published_at: ago(30, 4), published_by: 'Cara Hogue', note: null, hash: hex('notification:1', 64) },
+      ] },
+    template: { value: JSON.parse(JSON.stringify(SHARING_TEMPLATE)), version: 1, draft: null,
+      history: [{ version: 1, published_at: ago(30, 3), published_by: 'Cara Hogue', note: null, hash: hex('tpl:1', 64) }] },
+    terms: { value: JSON.parse(JSON.stringify(SHARING_TERMS)), version: 1, draft: null,
+      history: [{ version: 1, published_at: ago(30, 3), published_by: 'Cara Hogue', note: null, hash: hex('terms:1', 64) }] },
+  };
 
-  companion: { title: 'Companion', lede: 'Settings shape Sprout. Conversations are review.', rows: [
-    ['Availability, opening line, quick prompts', 'control', 'What a member sees when they open Sprout.'],
-    ['Allowed topics, safe response, fallback', 'control', 'What Sprout will and will not answer.'],
-    ['Knowledge Sources', 'control', 'Approved product-level source metadata: title, type, scope, status and last update. No files, indexing or provider settings.'],
-    ['Conversations', 'view', 'Review. Reading one changes nothing.'],
-    ['Member feedback', 'admin', 'Read a member’s helpful/not-helpful response and mark existing feedback reviewed.'],
-  ] },
-
-  content: { title: 'Content', lede: 'Almost everything here is read by somebody outside the console.', rows: [
-    ['Website', 'control', 'Public website copy — anyone can read it, signed in or not.'],
-    ['Dashboard Content', 'control', 'Member tips, personal suggestions, the Companion entry wording and dashboard promotions.'],
-    ['Notifications', 'control', 'The notice templates members receive, and who receives them.'],
-    ['Legal Documents', 'control', 'Terms and Privacy, their effective versions, and whether members are asked to accept again.'],
-    ['Resources & Media', 'control', 'The four member resource cards (Blogs, Lifestyle, Articles, Biohacks), their descriptions, order and Coming Soon status.'],
-  ] },
-
-  insights: { title: 'Insights', lede: 'Analysis only. Nothing on this screen writes anything.', rows: [
-    ['Every chart and figure', 'view', 'Counted from member activity. It describes the group and never an individual.'],
-    ['Date range and series', 'admin', 'Changes what you are looking at, not what anybody has.'],
-    ['Export', 'admin', 'A file for the Veye team. Nothing leaves the browser in this prototype.'],
-  ] },
-
-  settings: { title: 'Settings', lede: 'Two of these five reach members.', rows: [
-    ['Organization', 'control', 'The name, logo and support details used in member communications and documents.'],
-    ['Plans & Billing', 'control', 'Public pricing and what members are told their plan includes.'],
-    ['Administrators', 'admin', 'Invites another administrator with the same access. There are no roles.'],
-    ['Integrations', 'admin', 'Data-source configuration and status.'],
-    ['Feature Availability', 'control', 'Whether a Beta feature appears to members. Supplements, Fitness and Resources remain Phase 2 references.'],
-  ] },
-
-  profile: { title: 'Your profile', lede: 'Entirely your own. None of it reaches a member.', rows: [
-    ['Name, email, phone, timezone', 'admin', 'Your name appears on changes you make and messages you send. It does not change any member’s identity.'],
-    ['Notifications', 'admin', 'When the console emails you. Not member notifications — those are in Content.'],
-    ['Security and sessions', 'admin', 'Your own sign-in only.'],
-    ['Display', 'admin', 'How this console is drawn for you, in this browser.'],
-  ] },
-};
-
-/* ------------------------------------------------------------ recent activity --
-   Plain language. A short record of what changed, not a governance ledger. */
-SEED.activity = [
-  { id: 'RA-1', who: 'Cara Hogue',   what: 'Updated the announcement bar', when: '13 Aug 2026, 17:40' },
-  { id: 'RA-2', who: 'Priya Shah',   what: 'Added ApoB to the blood marker list as a draft', when: '13 Aug 2026, 14:12' },
-  { id: 'RA-3', who: 'Nina Alvarez', what: 'Edited the daily tip “Front-load your protein”', when: '13 Aug 2026, 11:05' },
-  { id: 'RA-4', who: 'Tom Becker',   what: 'Marked a Companion conversation reviewed', when: '13 Aug 2026, 09:22' },
-  { id: 'RA-5', who: 'Maya Patel',   what: 'Created the Longevity Nutrition Plan draft', when: '12 Aug 2026, 16:48' },
-  { id: 'RA-6', who: 'Elena Fischer', what: 'Invited Jonah Reid as an administrator', when: '12 Aug 2026, 10:30' },
-];
-
-/* ----------------------------------------------------------------- insights -- */
-SEED.insights = {
-  members: {
-    total: 1284, active: 1109, paused: 96, lapsed: 79,
-    joined: [64, 71, 58, 83, 96, 88, 104, 121, 112, 97, 118, 126],
-    months: ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
-    funnel: [
-      { step: 'Started onboarding', n: 1642 },
-      { step: 'Answered the twelve questions', n: 1401 },
-      { step: 'Received a Health Number', n: 1284 },
-      { step: 'Chose their foods', n: 1046 },
-      { step: 'Built a first day', n: 812 },
-    ],
-    bySubscription: [
-      { label: 'DIY', n: 742 }, { label: 'Guided', n: 386 }, { label: 'Trial', n: 156 },
-    ],
-  },
-  engagement: {
-    weekly: [58, 61, 60, 64, 67, 66, 70, 72, 71, 74, 76, 78],
-    dau: 412, wau: 861, diaryEntries: 5820, moodEntries: 7431, companionChats: 2214,
-    surfaces: [
-      { label: 'Food Choices', n: 3120 },
-      { label: 'Mood Tracker', n: 2740 },
-      { label: 'Food Diary', n: 2380 },
-      { label: 'Companion', n: 2214 },
-      { label: 'Meal Planning', n: 1890 },
-      { label: 'Blood markers', n: 640 },
-    ],
-  },
-  health: {
-    /* A lower Health Number is better, so this distribution reads left to right
-       from best to worst. */
-    distribution: [
-      { band: 'Good Health', range: '0 to 1', n: 148 },
-      { band: 'Relatively Good Health', range: '1.5 to 3.5', n: 462 },
-      { band: 'Moderately Good Health', range: '4 to 6', n: 481 },
-      { band: 'Insulin Resistance Risk', range: '6.5 to 10', n: 193 },
-    ],
-    averageByMonth: [4.9, 4.8, 4.8, 4.7, 4.6, 4.6, 4.5, 4.4, 4.4, 4.3, 4.2, 4.2],
-    retakes: 318,
-    improved: 211, unchanged: 74, worsened: 33,
-    programCompletion: [
-      { name: 'Stabilize Your Day', members: 214, completion: 68 },
-      { name: 'Steady Mornings', members: 168, completion: 74 },
-      { name: 'Nutrition Reset', members: 96, completion: 55 },
-      { name: 'Movement Foundations', members: 41, completion: 32 },
-    ],
-  },
-  operations: {
-    openItems: 10, resolvedThisWeek: 34, medianFirstLook: '3h 20m',
-    byKind: [
-      { label: 'Onboarding', n: 2 }, { label: 'Blood markers', n: 1 },
-      { label: 'Companion', n: 1 }, { label: 'Mood', n: 1 },
-      { label: 'Plan', n: 1 }, { label: 'Message', n: 1 },
-      { label: 'Billing', n: 1 }, { label: 'Assessment', n: 1 }, { label: 'System', n: 1 },
-    ],
-    weeklyResolved: [22, 27, 25, 31, 28, 34, 30, 36, 33, 29, 35, 34],
-    integrations: 4, integrationsHealthy: 2,
-  },
-};
-
-/* ---------------------------------------------------------- member detail ----
-   Explicit records for four members, and a deterministic generator for the rest
-   so every member profile is populated without inventing a different shape.
-   Nothing here is random: the generator is seeded from the member id. */
-
-const DETAIL = {
-  'HM-001238': {
-    biomarkers: [
-      { date: '14 Aug 2026', tc: 196, hdl: 58, tg: 104, glucose: 92, insulin: 7.4, aa: 9.2, epa: 3.1, hba1c: 5.2,
-        ratioResults: [{ name: 'TG / HDL ratio', value: 1.79, goal: 'Under 1', status: 'Outside goal' }, { name: 'AA / EPA ratio', value: 2.97, goal: '1.5 to 3', status: 'Inside goal' }, { name: 'HOMA-IR', value: 1.68, goal: 'Under 1', status: 'Outside goal' }, { name: 'HbA1c', value: 5.2, goal: '4.9 to 5.1%', status: 'Outside goal' }] },
-      { date: '02 Mar 2026', tc: 208, hdl: 54, tg: 141, glucose: 96, insulin: 9.1, aa: 11.4, epa: 2.4, hba1c: 5.4,
-        ratioResults: [{ name: 'TG / HDL ratio', value: 2.61, goal: 'Under 1', status: 'Outside goal' }, { name: 'AA / EPA ratio', value: 4.75, goal: '1.5 to 3', status: 'Outside goal' }, { name: 'HOMA-IR', value: 2.16, goal: 'Under 1', status: 'Outside goal' }, { name: 'HbA1c', value: 5.4, goal: '4.9 to 5.1%', status: 'Outside goal' }] },
-    ],
-    mood: [4, 4, 3, 5, 4, 4, 5, 3, 4, 5, 5, 4, 4, 3, 4, 5, 4, 4, 5, 5, 4, 3, 4, 4, 5, 4, 4, 5],
-    quiz: [{ date: '10 Aug 2026', yes: 2, no: 6 }, { date: '02 Jun 2026', yes: 4, no: 4 }],
-    hsr: [{ date: '02 Aug 2026', total: 27 }, { date: '12 Feb 2026', total: 23 }],
-    body: { sex: 'Woman', height: 65, weight: 148, hips: 39, abdomen: 31, bodyFat: 26.6, bmi: 24.6, date: '02 Aug 2026' },
-    hnHistory: [{ date: '02 Aug 2026', score: 3.5 }, { date: '02 May 2026', score: 4.0 }, { date: '12 Feb 2026', score: 4.5 }],
-    storyline: [
-      { at: '14 Aug 2026, 06:40', kind: 'health', text: 'Submitted six blood markers.' },
-      { at: '12 Aug 2026, 19:22', kind: 'companion', text: 'Asked Companion what the Health Number measures.' },
-      { at: '10 Aug 2026, 08:02', kind: 'assessment', text: 'Completed the Simple Health Quiz. 2 Yes, 6 No.' },
-      { at: '02 Aug 2026, 07:15', kind: 'assessment', text: 'Retook the Health Number. 3.5, down from 4.0.' },
-      { at: '28 Jul 2026, 20:10', kind: 'care', text: 'Finished week 6 of Stabilize Your Day.' },
-      { at: '12 Feb 2026, 09:00', kind: 'account', text: 'Joined Veye on the DIY plan.' },
-    ],
-  },
-  'HM-000992': {
-    biomarkers: [
-      { date: '04 Aug 2026', tc: 244, hdl: 38, tg: 218, glucose: 112, insulin: 18.2, aa: 14.8, epa: 1.9, hba1c: 5.9,
-        ratioResults: [{ name: 'TG / HDL ratio', value: 5.74, goal: 'Under 1', status: 'Outside goal' }, { name: 'AA / EPA ratio', value: 7.79, goal: '1.5 to 3', status: 'Outside goal' }, { name: 'HOMA-IR', value: 5.03, goal: 'Under 1', status: 'Outside goal' }, { name: 'HbA1c', value: 5.9, goal: '4.9 to 5.1%', status: 'Outside goal' }] },
-      { date: '11 Feb 2026', tc: 238, hdl: 40, tg: 196, glucose: 106, insulin: 15.6, aa: 13.2, epa: 2.1, hba1c: 5.7,
-        ratioResults: [{ name: 'TG / HDL ratio', value: 4.9, goal: 'Under 1', status: 'Outside goal' }, { name: 'AA / EPA ratio', value: 6.29, goal: '1.5 to 3', status: 'Outside goal' }, { name: 'HOMA-IR', value: 4.08, goal: 'Under 1', status: 'Outside goal' }, { name: 'HbA1c', value: 5.7, goal: '4.9 to 5.1%', status: 'Outside goal' }] },
-    ],
-    mood: [2, 2, 3, 2, 1, 2, 3, 2, 2, 1, 2, 3, 3, 2, 2, 1, 1, 2, 2, 3, 2, 2, 1, 1, 1, 2, 2, 2],
-    quiz: [{ date: '06 Aug 2026', yes: 6, no: 2 }, { date: '02 Apr 2026', yes: 5, no: 3 }],
-    hsr: [{ date: '04 Aug 2026', total: 18 }, { date: '18 Jan 2026', total: 16 }],
-    body: { sex: 'Man', height: 70, weight: 214, waist: 43, wrist: 7.5, bodyFat: 31.4, bmi: 30.7, date: '04 Aug 2026' },
-    hnHistory: [{ date: '04 Aug 2026', score: 7.5 }, { date: '02 May 2026', score: 7.0 }, { date: '18 Nov 2025', score: 6.5 }],
-    storyline: [
-      { at: '13 Aug 2026, 22:10', kind: 'companion', text: 'Companion held a reply after the member described a difficult week.' },
-      { at: '13 Aug 2026, 20:02', kind: 'life', text: 'Third low mood entry in a row, each mentioning broken sleep.' },
-      { at: '06 Aug 2026, 07:40', kind: 'assessment', text: 'Completed the Simple Health Quiz. 6 Yes, 2 No.' },
-      { at: '04 Aug 2026, 09:12', kind: 'health', text: 'New blood markers. TG/HDL 5.74, HOMA-IR 5.03.' },
-      { at: '04 Aug 2026, 08:55', kind: 'assessment', text: 'Retook the Health Number. 7.5, up from 7.0.' },
-      { at: '18 Nov 2025, 10:20', kind: 'account', text: 'Joined Veye on the Guided plan.' },
-    ],
-  },
-  'HM-002402': {
-    biomarkers: [
-      { date: '01 Aug 2026', tc: 178, hdl: 71, tg: 62, glucose: 84, insulin: 4.1, aa: 6.4, epa: 3.9, hba1c: 5.0,
-        ratioResults: [{ name: 'TG / HDL ratio', value: 0.87, goal: 'Under 1', status: 'Inside goal' }, { name: 'AA / EPA ratio', value: 1.64, goal: '1.5 to 3', status: 'Inside goal' }, { name: 'HOMA-IR', value: 0.85, goal: 'Under 1', status: 'Inside goal' }, { name: 'HbA1c', value: 5.0, goal: '4.9 to 5.1%', status: 'Inside goal' }] },
-    ],
-    mood: [5, 5, 4, 5, 5, 5, 4, 5, 5, 4, 5, 5, 5, 4, 5, 5, 5, 5, 4, 5, 5, 5, 4, 5, 5, 5, 5, 5],
-    quiz: [{ date: '01 Aug 2026', yes: 1, no: 7 }],
-    hsr: [{ date: '01 Aug 2026', total: 31 }],
-    body: { sex: 'Woman', height: 67, weight: 139, hips: 37, abdomen: 27, bodyFat: 21.5, bmi: 21.8, date: '01 Aug 2026' },
-    hnHistory: [{ date: '01 Aug 2026', score: 1.0 }, { date: '01 Jul 2026', score: 1.5 }],
-    storyline: [
-      { at: '13 Aug 2026, 08:15', kind: 'companion', text: 'Asked Companion to build a day around salmon and sweet potato.' },
-      { at: '01 Aug 2026, 07:02', kind: 'assessment', text: 'Retook the Health Number. 1.0, down from 1.5.' },
-      { at: '01 Aug 2026, 06:50', kind: 'health', text: 'First blood markers submitted. All four ratios inside their goals.' },
-      { at: '01 Jul 2026, 12:00', kind: 'account', text: 'Joined Veye on the Guided plan.' },
-    ],
-  },
-  'HM-002341': {
-    biomarkers: [],
-    mood: [3, 4, 3],
-    quiz: [],
-    hsr: [],
-    body: null,
-    hnHistory: [],
-    storyline: [
-      { at: '11 Aug 2026, 21:14', kind: 'account', text: 'Stopped at step 7 of 12, the blood marker step.' },
-      { at: '10 Aug 2026, 19:30', kind: 'life', text: 'Third mood entry recorded.' },
-      { at: '09 Aug 2026, 18:02', kind: 'account', text: 'Started onboarding on the Trial plan.' },
-    ],
-  },
-};
-
-/* Deterministic filler so every member profile is complete. Seeded from the id
-   so the same member always shows the same figures. */
-function seedFrom(id) {
-  let n = 0;
-  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) % 9973;
-  return n;
-}
-function fill(member) {
-  const s = seedFrom(member.id);
-  const pick = (k, lo, hi) => lo + ((s * (k + 7)) % (hi - lo + 1));
-  const hn = member.hn;
-  const good = hn == null ? 3 : hn <= 3.5 ? 4 : hn <= 6 ? 3 : 2;
-  const mood = [];
-  for (let i = 0; i < 28; i++) mood.push(Math.max(1, Math.min(5, good + ((s + i * 13) % 3) - 1)));
   return {
-    biomarkers: hn == null ? [] : [{
-      date: member.hnTaken, tc: pick(1, 170, 240), hdl: pick(2, 38, 70), tg: pick(3, 70, 210),
-      glucose: pick(4, 82, 110), insulin: pick(5, 4, 17) + 0.4, aa: pick(6, 6, 15) + 0.2,
-      epa: pick(7, 1, 4) + 0.3, hba1c: 4.9 + (pick(8, 0, 9) / 10),
-    }],
-    mood,
-    quiz: hn == null ? [] : [{ date: member.hnTaken, yes: Math.min(8, Math.max(0, Math.round((hn || 4) - 1))), no: 8 - Math.min(8, Math.max(0, Math.round((hn || 4) - 1))) }],
-    hsr: hn == null ? [] : [{ date: member.hnTaken, total: Math.max(12, Math.min(33, 33 - Math.round((hn || 4) * 2.4))) }],
-    body: null,
-    hnHistory: hn == null ? [] : [
-      { date: member.hnTaken, score: hn },
-      { date: member.joined, score: Math.max(0, Math.min(10, hn - (member.hnTrend || 0))) },
-    ],
-    storyline: [
-      { at: member.lastActive, kind: 'life', text: 'Last opened Veye.' },
-      { at: member.hnTaken === '—' ? member.joined : member.hnTaken, kind: 'assessment',
-        text: hn == null ? 'Onboarding is not finished, so there is no Health Number yet.' : 'Completed the Health Number. ' + hn.toFixed(1) + '.' },
-      { at: member.joined, kind: 'account', text: 'Joined Veye on the ' + member.subscription + ' plan.' },
-    ],
+    schema: 3,
+    generatedAt: new Date(NOW).toISOString(),
+    org: { name: 'Veye', supportEmail: 'contact@veye.co', supportPhone: '', supportUpdatedAt: ago(9, 3), supportUpdatedBy: 'Cara Hogue' },
+    meId: ME,
+    admins, mySessions, members, conversations, feedback, requests, prospects, retention, erasures,
+    careItems, contentEntries, knowledgeSources, guidedFlows, telemetry, audit, sharingSettings,
+    companion: JSON.parse(JSON.stringify(COMPANION_SETTINGS)),
+    companionUpdatedAt: ago(33, 2), companionUpdatedBy: 'Cara Hogue',
+    invitations: {},
   };
 }
 
-SEED.memberDetail = {};
-SEED.members.forEach((m) => { SEED.memberDetail[m.id] = DETAIL[m.id] || fill(m); });
-
-/* Messages, per member. */
-SEED.threads = [
-  { id: 'TH-1', memberId: 'HM-001238', unread: 1, last: '14 Aug 2026, 07:40', messages: [
-    { who: 'member', at: '14 Aug 2026, 07:40', text: 'I uploaded my results this morning — anything I should look at?' },
-    { who: 'admin', at: '13 Aug 2026, 16:02', from: 'Cara Hogue', text: 'Week six looks steady. Keep the evening meal where it is.' },
-  ] },
-  { id: 'TH-2', memberId: 'HM-002118', unread: 1, last: '12 Aug 2026, 12:45', messages: [
-    { who: 'member', at: '12 Aug 2026, 12:45', text: 'How much EPA should I take each day?' },
-  ] },
-  { id: 'TH-3', memberId: 'HM-000992', unread: 1, last: '13 Aug 2026, 20:02', messages: [
-    { who: 'member', at: '13 Aug 2026, 20:02', text: 'Sleep has been rough this week.' },
-    { who: 'admin', at: '10 Aug 2026, 09:15', from: 'James Lee', text: 'Let us look at the evening routine on Friday.' },
-  ] },
-  { id: 'TH-4', memberId: 'HM-001556', unread: 0, last: '09 Aug 2026, 09:12', messages: [
-    { who: 'member', at: '09 Aug 2026, 09:12', text: 'Thanks, I will take a look at the plan.' },
-    { who: 'admin', at: '08 Aug 2026, 14:40', from: 'Maya Patel', text: 'Nutrition Reset is assigned and ready when you are.' },
-  ] },
-  { id: 'TH-5', memberId: 'HM-002402', unread: 0, last: '06 Aug 2026, 10:20', messages: [
-    { who: 'member', at: '06 Aug 2026, 10:20', text: 'Thanks for the plan, the mornings are much easier now.' },
-  ] },
-];
-
 window.Veye = window.Veye || { screens: {} };
-window.Veye.SEED = SEED;
-window.Veye.TODAY_LABEL = TODAY_LABEL;
+window.Veye.buildSeed = buildSeed;
+window.Veye.SEED_CONTENT = { KNOWLEDGE_TYPES, SHARING_TEMPLATE, SHARING_TERMS, COMPANION_SETTINGS, txt, paragraphs, uuid, hex };
 
 })();
