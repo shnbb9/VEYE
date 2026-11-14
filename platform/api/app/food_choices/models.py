@@ -15,6 +15,13 @@ own. It never reaches the rules engine.
 
 `member_how_to_plans` holds one HOW TO conversation as the JSON state the
 state machine in `how_to.py` produces, so a plan survives a page reload.
+
+`member_food_selections.checklist` is the screen the member actually uses
+since 14 Nov 2026: the approved prototype's four checklists (`checklist.py`),
+with the member's ticks, their own foods and which notes they have read. It is
+a separate field because its lists are the prototype's, not the HOW TO
+builder's — the names differ, and neither list may be checked against the
+other's.
 """
 
 import uuid
@@ -48,6 +55,10 @@ class MemberFoodSelection(Base):
     selections: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # {"<tier>": ["the member's own words", ...]} — recorded, never scored.
     write_ins: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # The prototype's checklists: {"selections": {category: [name, ...]},
+    # "custom": {category: [{"name", "tier", "status"}, ...]},
+    # "gotit": {category: bool}}. Names are from `checklist.py`.
+    checklist: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
@@ -74,12 +85,16 @@ class MemberHowToPlan(Base):
 def has_food_choices(db, member_id) -> bool:
     """Has this member used Food Choices at all?
 
-    Either half counts: ticking foods on the checklists, or building a plan.
+    Any part counts: ticking or adding foods on the checklists, or building a
+    plan.
     The guided flows ask this to avoid offering a section the member has
     already filled in.
     """
     row = (db.query(MemberFoodSelection)
            .filter(MemberFoodSelection.member_id == member_id).one_or_none())
+    checklist = (row.checklist or {}) if row is not None else {}
+    if any(checklist.get("selections", {}).values()) or any(checklist.get("custom", {}).values()):
+        return True
     if row is not None and any((row.selections or {}).get(group) for group in ("protein", "carbohydrate", "fat")):
         return True
     if row is not None and (row.write_ins or {}):

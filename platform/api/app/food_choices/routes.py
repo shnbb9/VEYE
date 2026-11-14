@@ -3,6 +3,11 @@
 The lists, the member's own checklist, and the HOW TO conversation. Everything
 here reads `principal.member_id`; nothing accepts a member id from the client.
 
+The member screen uses `/checklist` — the approved prototype's four lists
+(`checklist.py`), chosen by the owner on 14 Nov 2026. `/catalog`,
+`/selections` and `/how-to` are the HOW TO builder's, kept and tested but not
+on the member screen until the owner asks for the builder back.
+
 The HOW TO state machine lives in `how_to.py` and the rules in `rules.py` —
 these routes only store and fetch. That separation is the point: the rules are
 tested without a database or a model, and no screen can hold a second copy of
@@ -14,12 +19,12 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth.principal import CurrentPrincipal, require_member
 from app.db.session import get_db
-from app.food_choices import catalog, how_to, rules
+from app.food_choices import catalog, checklist, how_to, rules
 from app.food_choices.models import MemberFoodSelection, MemberHowToPlan, utcnow
 
 router = APIRouter(prefix="/api/v1/members/me/food-choices", tags=["food-choices"])
@@ -208,6 +213,184 @@ def save_selections(payload: SelectionsIn, principal: CurrentPrincipal = Depends
     db.commit()
     db.refresh(row)
     return _selections_out(row)
+
+
+# ---- the prototype's checklists (the screen members use) ---------------------
+
+class ChecklistGroupOut(BaseModel):
+    tier: str
+    label: str
+    items: list[str]
+
+
+class ChecklistCategoryOut(BaseModel):
+    key: str
+    label: str
+    info: str
+    tier_info: str
+    groups: list[ChecklistGroupOut]
+
+
+class ChecklistCatalogOut(BaseModel):
+    categories: list[ChecklistCategoryOut]
+    custom_tiers: list[str]
+
+
+@router.get("/checklist/catalog", response_model=ChecklistCatalogOut)
+def checklist_catalog(principal: CurrentPrincipal = Depends(require_member)) -> ChecklistCatalogOut:
+    """The four lists exactly as the approved prototype shows them."""
+    return ChecklistCatalogOut(
+        categories=[
+            ChecklistCategoryOut(
+                key=c.key, label=c.label, info=c.info, tier_info=c.tier_info,
+                groups=[ChecklistGroupOut(tier=g.tier, label=g.label, items=list(g.items)) for g in c.groups])
+            for c in checklist.CATEGORIES
+        ],
+        custom_tiers=list(checklist.CUSTOM_TIERS),
+    )
+
+
+class CustomFoodIn(BaseModel):
+    """A food the member adds: their words, their label. Nothing else — the
+    review status is not the member's to set."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    tier: str
+
+    @field_validator("name")
+    @classmethod
+    def _named(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("A food you add needs a name.")
+        if len(value) > checklist.CUSTOM_NAME_MAX:
+            raise ValueError(f"Keep a food's name to {checklist.CUSTOM_NAME_MAX} characters.")
+        return value
+
+    @field_validator("tier")
+    @classmethod
+    def _labelled(cls, value: str) -> str:
+        if value not in checklist.CUSTOM_TIERS:
+            raise ValueError("Choose Best, Fair or Limit for this food before adding it.")
+        return value
+
+
+class CustomFoodOut(BaseModel):
+    name: str
+    tier: str
+    # Always "pending": no review of a member's own food exists yet.
+    status: str
+
+
+def _known_category(key: str) -> checklist.Category:
+    found = checklist.category(key)
+    if found is None:
+        raise ValueError(f"{key} is not a Food Choices category.")
+    return found
+
+
+class ChecklistIn(BaseModel):
+    """The whole checklist, as the screen holds it. A category left out is
+    saved empty."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    selections: dict[str, list[str]] = Field(default_factory=dict)
+    custom: dict[str, list[CustomFoodIn]] = Field(default_factory=dict)
+    gotit: dict[str, bool] = Field(default_factory=dict)
+
+    @field_validator("selections")
+    @classmethod
+    def _on_the_lists(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        """A ticked food is a name from that category's list, spelled as the
+        list spells it."""
+        cleaned: dict[str, list[str]] = {}
+        for key, names in value.items():
+            found = _known_category(key)
+            allowed = set(found.names())
+            picked: list[str] = []
+            for name in names:
+                if name not in allowed:
+                    raise ValueError(f"{name} is not on the {found.label} list. Add it as a custom food instead.")
+                if name not in picked:
+                    picked.append(name)
+            cleaned[key] = picked
+        return cleaned
+
+    @field_validator("custom")
+    @classmethod
+    def _own_foods(cls, value: dict[str, list[CustomFoodIn]]) -> dict[str, list[CustomFoodIn]]:
+        """One entry per name, the first kept — as the prototype adds a name
+        only once."""
+        cleaned: dict[str, list[CustomFoodIn]] = {}
+        for key, foods in value.items():
+            _known_category(key)
+            kept: dict[str, CustomFoodIn] = {}
+            for food in foods:
+                kept.setdefault(food.name, food)
+            if len(kept) > checklist.CUSTOM_PER_CATEGORY_MAX:
+                raise ValueError(f"A category holds at most {checklist.CUSTOM_PER_CATEGORY_MAX} foods of your own.")
+            cleaned[key] = list(kept.values())
+        return cleaned
+
+    @field_validator("gotit")
+    @classmethod
+    def _read_notes(cls, value: dict[str, bool]) -> dict[str, bool]:
+        for key in value:
+            _known_category(key)
+        return value
+
+
+class ChecklistOut(BaseModel):
+    selections: dict[str, list[str]]
+    custom: dict[str, list[CustomFoodOut]]
+    gotit: dict[str, bool]
+    saved_at: str | None
+
+
+def _checklist_out(row: MemberFoodSelection | None) -> ChecklistOut:
+    data = (row.checklist or {}) if row is not None else {}
+    selections = data.get("selections") or {}
+    custom = data.get("custom") or {}
+    gotit = data.get("gotit") or {}
+    return ChecklistOut(
+        selections={key: list(selections.get(key, [])) for key in checklist.ORDER},
+        custom={key: [CustomFoodOut(**food) for food in custom.get(key, [])] for key in checklist.ORDER},
+        gotit={key: bool(gotit.get(key, False)) for key in checklist.ORDER},
+        saved_at=data.get("saved_at"),
+    )
+
+
+@router.get("/checklist", response_model=ChecklistOut)
+def read_checklist(principal: CurrentPrincipal = Depends(require_member),
+                   db: Session = Depends(get_db)) -> ChecklistOut:
+    assert principal.member_id is not None
+    return _checklist_out(_selection_row(db, principal.member_id))
+
+
+@router.put("/checklist", response_model=ChecklistOut)
+def save_checklist(payload: ChecklistIn, principal: CurrentPrincipal = Depends(require_member),
+                   db: Session = Depends(get_db)) -> ChecklistOut:
+    assert principal.member_id is not None
+    row = _selection_row(db, principal.member_id)
+    if row is None:
+        row = MemberFoodSelection(member_id=principal.member_id,
+                                  selections={g: [] for g in catalog.GROUPS}, write_ins={})
+        db.add(row)
+    # A new dict, never an in-place edit: the JSON column only notices a
+    # replaced value.
+    row.checklist = {
+        "selections": {key: payload.selections.get(key, []) for key in checklist.ORDER},
+        "custom": {key: [{"name": food.name, "tier": food.tier, "status": "pending"}
+                         for food in payload.custom.get(key, [])] for key in checklist.ORDER},
+        "gotit": {key: bool(payload.gotit.get(key, False)) for key in checklist.ORDER},
+        "saved_at": utcnow().isoformat(),
+    }
+    db.commit()
+    db.refresh(row)
+    return _checklist_out(row)
 
 
 # ---- the HOW TO conversation -------------------------------------------------

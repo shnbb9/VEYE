@@ -1,455 +1,340 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useToast } from "@/components/member/member-chrome";
 import {
-  answerHowToPlan, discardHowToPlan, getFoodCatalog, getFoodSelections, getHowToPlan,
-  saveFoodSelections, startHowToPlan,
-  type FoodChoiceCatalog, type FoodChoiceSelections, type FoodOccasion, type FoodSex,
-  type HowToAnswer, type HowToPlan,
+  getFoodChecklist, getFoodChecklistCatalog, saveFoodChecklist,
+  type FoodChecklist, type FoodChecklistCatalog, type FoodCustomFood, type FoodCustomTier,
 } from "@/lib/member-api";
+import { prefersReducedMotion } from "@/lib/member-format";
 
-/* Food Choices: the client's four food lists, and the HOW TO meal builder from
-   `AI Chatbot Training.docx`.
+/* Food Choices exactly as the approved prototype shows it (build/dashboard.html,
+   view-food-choices): the four illustrated category cards, and for each a
+   checklist of the foods the member commonly eats, a custom food with the
+   member's own Best / Fair / Limit label, the category note's "I got it", and
+   "Save category choices". The owner chose this screen over the HOW TO meal
+   builder on 14 Nov 2026.
 
-   The screen deliberately holds no food data. Every tier, every portion, every
-   piece of advice and the order of the questions come from the API, which
-   reads them from the single transcribed source. The prototype's scoring once
-   returned 0 because two screens spelled an option differently, so the lists
-   are fetched, never retyped.
+   The lists come from the API (`checklist.py`, taken from the prototype
+   itself), never from a copy here. What the member does is saved to their own
+   record as they do it — the prototype kept it in the browser; here it
+   belongs to the member's account, so it follows them and is erased with it.
 
-   What the member can do here:
-   - Build a meal or a snack, one question at a time, with the amounts for
-     them and the next time to eat worked out.
-   - Tick the foods they commonly eat, and add their own under "Other" — which
-     is recorded as they wrote it and given no tier or amount, because the
-     source supplies those only for the foods on its lists. */
+   Headings: the prototype's cards are h3 under the page's h1. Here they are h2
+   (the audit in e2e/responsive.spec.ts refuses a skipped level), styled by a
+   copy of the prototype's own h3 rule in member.css, so nothing moves. */
 
-type Tab = "build" | "lists";
-
-const GROUP_TITLE: Record<string, string> = {
-  protein: "Proteins",
-  carbohydrate: "Carbohydrates",
-  fat: "Fats",
+type Local = {
+  selections: Record<string, string[]>;
+  custom: Record<string, FoodCustomFood[]>;
+  gotit: Record<string, boolean>;
 };
 
-const STEP_TITLE: Record<string, string> = {
-  wake_time: "Your day",
-  occasion: "Snack or meal",
-  protein: "Protein",
-  carbohydrate: "Carbohydrate",
-  fat: "Fat",
-  confirm: "Does this look right?",
-  fix: "What to change",
-  continue: "Anything else today?",
-  bedtime: "Bedtime",
-  complete: "Your day",
-};
+const EMPTY: Local = { selections: {}, custom: {}, gotit: {} };
+
+const ARROW = (
+  <span className="fc-arrow" aria-hidden="true">
+    <svg viewBox="0 0 26 26" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="13" cy="13" r="12.2" />
+      <path d="M7 13h13M16.5 9.5 20 13l-3.5 3.5" />
+    </svg>
+  </span>
+);
+
+/* The overview cards' words are the prototype's markup, as Cara approved it. */
+const TILES: { key: string; image: string; title: string; text: string; cta: string }[] = [
+  {
+    key: "proteins", image: "/assets/web/img/fc-proteins.png?v=2", title: "Proteins", cta: "Choose your Proteins",
+    text: "Proteins contain amino acids that are important building blocks for muscles and cells. Proteins are also important for satiety — letting the body know you have eaten and feel full. 30g of protein has the same effect in the body as new GLP1 weight loss drugs. In addition, protein in sufficient quantities helps activate hormones that burn fat and decrease inflammation.",
+  },
+  {
+    key: "fats", image: "/assets/web/img/fc-fats.png?v=2", title: "Fats", cta: "Choose your Fats",
+    text: "Healthy fats support hormones, brain function, and long-lasting energy. Prioritize monounsaturated Omega-9 fats like olive oil, avocado, almonds, and macadamia nuts. Avoid trans fats and limit pro-inflammatory Omega-6 vegetable oils. The right fats help signal satiety and support cell health.",
+  },
+  {
+    key: "favorable_carbs", image: "/assets/web/img/fc-fav.png?v=2", title: "Favorable Carbohydrates", cta: "Choose your Carbs",
+    text: "Carbohydrates are the energy source for the brain, and a “no carb” diet can be harmful. All carbohydrates become blood sugar, and favorable carbohydrates are best for controlling blood sugar, therefore insulin, and therefore inflammation.",
+  },
+  {
+    key: "unfavorable_carbs", image: "/assets/web/img/fc-unfav.png?v=2", title: "Unfavorable Carbohydrates", cta: "Choose your Carbs",
+    text: "Unfavorable Carbohydrates enter the bloodstream quickly as sugar, and make the brain very happy. This is why it is easy to have carbohydrate addiction, your brain loves the sugar. The resulting spike in insulin causes an increase in inflammation — which can lead to disease. It is important to limit unfavorable carbohydrates.",
+  },
+];
+
+const TIER_TAG: Record<string, string> = { super: "★★★", very: "★★", best: "Best", fair: "Fair", avoid: "Avoid" };
+const tagText = (tier: string) => TIER_TAG[tier] ?? "Limit";
+const customTagText = (tier: string) => (tier === "best" ? "Best" : tier === "fair" ? "Fair" : "Limit");
+const CUSTOM_TIERS: { tier: FoodCustomTier; label: string }[] = [
+  { tier: "best", label: "Best" }, { tier: "fair", label: "Fair" }, { tier: "limit", label: "Limit" },
+];
+
+function fromSaved(saved: FoodChecklist): Local {
+  return { selections: saved.selections, custom: saved.custom, gotit: saved.gotit };
+}
+
+function toInput(local: Local) {
+  return {
+    selections: local.selections,
+    custom: Object.fromEntries(Object.entries(local.custom)
+      .map(([key, foods]) => [key, foods.map((food) => ({ name: food.name, tier: food.tier }))])),
+    gotit: local.gotit,
+  };
+}
+
+function scrollMainToTop() {
+  document.querySelector<HTMLElement>(".main")?.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+}
 
 export default function FoodChoicesPage() {
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("build");
-  const [plan, setPlan] = useState<HowToPlan | null>(null);
-  const [selections, setSelections] = useState<FoodChoiceSelections | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [catalog, setCatalog] = useState<FoodChecklistCatalog | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [state, setState] = useState<Local>(EMPTY);
+  const [active, setActive] = useState("proteins");
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [tierInfoOpen, setTierInfoOpen] = useState(false);
+  // Like the prototype, the custom-food row is one control shared by the four
+  // categories: its text, label choice and messages stay when you switch.
+  const [customName, setCustomName] = useState("");
+  const [customTier, setCustomTier] = useState<FoodCustomTier | null>(null);
+  const [hintShown, setHintShown] = useState(false);
+  const [note, setNote] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
+  const customInput = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const [currentPlan, currentSelections] = await Promise.all([getHowToPlan(), getFoodSelections()]);
-      setPlan(currentPlan);
-      setSelections(currentSelections);
-      setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Food Choices could not be loaded.");
-    }
+  /* ---- saving --------------------------------------------------------------
+     Every change is saved as it happens, one request at a time and always the
+     newest state, so a quick run of ticks can never land out of order and put
+     back an older list. A failed save is said; the next change or "Save
+     category choices" sends the newest state again. */
+  const latest = useRef<{ version: number; data: Local }>({ version: 0, data: EMPTY });
+  const savedVersion = useRef(0);
+  const running = useRef(false);
+  const waiters = useRef<{ version: number; resolve: () => void; reject: (reason: unknown) => void }[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getFoodChecklistCatalog(), getFoodChecklist()])
+      .then(([lists, saved]) => {
+        if (!alive) return;
+        const local = fromSaved(saved);
+        latest.current = { version: 0, data: local };
+        setCatalog(lists);
+        setState(local);
+      })
+      .catch(() => { if (alive) setLoadError("Food Choices could not be loaded. Please try again later."); });
+    return () => { alive = false; };
   }, []);
-  useEffect(() => { void load(); }, [load]);
 
-  const run = useCallback(async (work: () => Promise<void>) => {
-    setBusy(true);
+  const drain = useCallback(async () => {
+    if (running.current) return;
+    running.current = true;
+    const settle = (upTo: number, outcome: { ok: true } | { ok: false; reason: unknown }) => {
+      waiters.current = waiters.current.filter((waiter) => {
+        if (waiter.version > upTo) return true;
+        if (outcome.ok) waiter.resolve(); else waiter.reject(outcome.reason);
+        return false;
+      });
+    };
     try {
-      await work();
-      setError("");
-    } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "That could not be saved.";
-      setError(message);
-      toast.flash(message);
+      while (latest.current.version > savedVersion.current) {
+        const { version, data } = latest.current;
+        try {
+          await saveFoodChecklist(toInput(data));
+          savedVersion.current = version;
+          settle(version, { ok: true });
+        } catch (reason) {
+          settle(version, { ok: false, reason });
+          toast.flash("Your food choices could not be saved. Please try again.");
+          // A newer change made meanwhile is tried once more; otherwise stop
+          // until the member changes something or presses Save.
+          if (latest.current.version === version) break;
+        }
+      }
     } finally {
-      setBusy(false);
+      running.current = false;
     }
   }, [toast]);
 
-  return (
-    <>
-      <h1 className="fd-title">Food Choices</h1>
-      <p className="fcx-blurb">
-        Build a meal or a snack one choice at a time, with the amounts for you and the time to eat
-        next. The lists and the rules are Cara&rsquo;s.
-      </p>
+  const persist = useCallback((next: Local): Promise<void> => {
+    const version = latest.current.version + 1;
+    latest.current = { version, data: next };
+    setState(next);
+    const done = new Promise<void>((resolve, reject) => { waiters.current.push({ version, resolve, reject }); });
+    void drain();
+    return done;
+  }, [drain]);
 
-      <div className="fcx-tabs" role="tablist" aria-label="Food Choices">
-        <button type="button" role="tab" aria-selected={tab === "build"}
-          className={`fcx-tab${tab === "build" ? " is-on" : ""}`} onClick={() => setTab("build")}>
-          Build a meal
-        </button>
-        <button type="button" role="tab" aria-selected={tab === "lists"}
-          className={`fcx-tab${tab === "lists" ? " is-on" : ""}`} onClick={() => setTab("lists")}>
-          My food lists
-        </button>
-      </div>
+  const ready = catalog !== null;
+  const category = catalog?.categories.find((entry) => entry.key === active) ?? null;
+  const label = category?.label ?? TILES.find((tile) => tile.key === active)?.title ?? "";
+  const selected = new Set(state.selections[active] ?? []);
+  const custom = state.custom[active] ?? [];
+  const gotit = !!state.gotit[active];
 
-      {error ? <p className="fcx-err" role="alert">{error}</p> : null}
+  function openDetail(key: string) {
+    setActive(key);
+    setTierInfoOpen(false);
+    setDetailOpen(true);
+    scrollMainToTop();
+  }
 
-      {tab === "build" ? (
-        <BuildPanel plan={plan} busy={busy} selections={selections}
-          onStart={(sex) => run(async () => { setPlan(await startHowToPlan(sex)); })}
-          onAnswer={(answer) => run(async () => { setPlan(await answerHowToPlan(answer)); })}
-          onDiscard={() => run(async () => { await discardHowToPlan(); setPlan(null); })} />
-      ) : (
-        <ListsPanel selections={selections} busy={busy}
-          onSave={(input) => run(async () => { setSelections(await saveFoodSelections(input)); })} />
-      )}
-    </>
-  );
-}
+  function closeDetail() {
+    setDetailOpen(false);
+    scrollMainToTop();
+  }
 
-/* ---- Build a meal (the HOW TO conversation) ------------------------------ */
+  function toggleFood(name: string) {
+    if (!ready) return;
+    const current = latest.current.data;
+    const list = new Set(current.selections[active] ?? []);
+    if (list.has(name)) list.delete(name); else list.add(name);
+    void persist({ ...current, selections: { ...current.selections, [active]: Array.from(list) } }).catch(() => undefined);
+  }
 
-function BuildPanel({ plan, busy, selections, onStart, onAnswer, onDiscard }: {
-  plan: HowToPlan | null;
-  busy: boolean;
-  selections: FoodChoiceSelections | null;
-  onStart: (sex: FoodSex) => void;
-  onAnswer: (answer: HowToAnswer) => void;
-  onDiscard: () => void;
-}) {
-  const remembered = selections?.sex === "woman" || selections?.sex === "man" ? selections.sex : "";
-  const [sex, setSex] = useState<FoodSex | "">(remembered);
-  useEffect(() => { if (remembered) setSex(remembered); }, [remembered]);
+  function onFoodKey(event: KeyboardEvent<HTMLDivElement>, name: string) {
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      toggleFood(name);
+    }
+  }
 
-  if (!plan) {
-    return (
-      <section className="fcx-panel">
-        <h2 className="fcx-panel__title">Build a meal</h2>
-        <p className="fcx-note">
-          The food lists give an amount for a woman and an amount for a man, so the plan needs to
-          know which to use. Nothing else about you is used here.
-        </p>
-        <div className="fcx-choices">
-          {(["woman", "man"] as FoodSex[]).map((option) => (
-            <button key={option} type="button"
-              className={`fcx-choice${sex === option ? " is-on" : ""}`}
-              onClick={() => setSex(option)}>
-              {option === "woman" ? "Woman" : "Man"}
-            </button>
-          ))}
-        </div>
-        {!sex ? <p className="fcx-hint">Choose whose amounts to use, then press Start.</p> : null}
-        <button type="button" className="btn-primary fcx-action" disabled={!sex || busy}
-          title={sex ? undefined : "Not yet - choose a woman's or a man's amounts first"}
-          aria-label={sex ? undefined : "Start. Not yet - choose a woman's or a man's amounts first"}
-          onClick={() => sex && onStart(sex)}>
-          Start
-        </button>
-      </section>
-    );
+  function toggleGotIt() {
+    if (!ready) return;
+    setTierInfoOpen(false); // the prototype redraws the card, which closes the tier note
+    const current = latest.current.data;
+    void persist({ ...current, gotit: { ...current.gotit, [active]: !current.gotit[active] } }).catch(() => undefined);
+  }
+
+  async function addCustom() {
+    if (!ready) return;
+    const value = customName.trim();
+    if (!value) { customInput.current?.focus(); return; }
+    if (!customTier) { setHintShown(true); return; } // the label is required
+    const current = latest.current.data;
+    const foods = current.custom[active] ?? [];
+    const next = foods.some((food) => food.name === value)
+      ? foods
+      : [...foods, { name: value, tier: customTier, status: "pending" as const }];
+    setCustomName("");
+    setCustomTier(null);
+    try {
+      await persist({ ...current, custom: { ...current.custom, [active]: next } });
+      setNote(`“${value}” was added to your list and is ready to use.`);
+    } catch {
+      setNote("");
+    }
+  }
+
+  function removeCustom(name: string) {
+    const current = latest.current.data;
+    const foods = (current.custom[active] ?? []).filter((food) => food.name !== name);
+    void persist({ ...current, custom: { ...current.custom, [active]: foods } }).catch(() => undefined);
+  }
+
+  async function saveCategory() {
+    if (!ready) return;
+    try {
+      await persist({ ...latest.current.data });
+      setSavedFlash(true);
+      window.setTimeout(() => setSavedFlash(false), 1400);
+    } catch {
+      /* the failure has been said */
+    }
   }
 
   return (
-    <div className="fcx-grid">
-      <section className="fcx-panel">
-        <h2 className="fcx-panel__title">{STEP_TITLE[plan.step] ?? "Your meal"}</h2>
-        <PromptBlock plan={plan} busy={busy} onAnswer={onAnswer} />
-      </section>
-      <DayPanel plan={plan} busy={busy} onDiscard={onDiscard} />
-    </div>
-  );
-}
-
-function PromptBlock({ plan, busy, onAnswer }: {
-  plan: HowToPlan; busy: boolean; onAnswer: (answer: HowToAnswer) => void;
-}) {
-  const { prompt } = plan;
-  const [time, setTime] = useState("");
-  const [picked, setPicked] = useState<string[]>([]);
-  const [cooked, setCooked] = useState(false);
-  const [other, setOther] = useState("");
-
-  // A new question starts from nothing chosen. `submit` also clears, because
-  // a step can repeat with the same id when an answer is refused, and leaving
-  // the refused food in the box would send it again with the next answer.
-  useEffect(() => { setPicked([]); setOther(""); setTime(""); }, [prompt.step, plan.occasions.length]);
-
-  const toggle = (name: string) =>
-    setPicked((current) => current.includes(name) ? current.filter((n) => n !== name) : [...current, name]);
-
-  const submit = (answer: HowToAnswer) => {
-    setPicked([]);
-    setOther("");
-    setTime("");
-    onAnswer(answer);
-  };
-
-  return (
     <>
-      <div data-testid="fc-notes">
-        {prompt.notes.map((note, index) => (
-          <p key={index} className="fcx-prompt-note">{note}</p>
-        ))}
-      </div>
-
-      {prompt.recap.length ? (
-        <ul className="fcx-recap" data-testid="fc-recap">
-          {prompt.recap.map((line) => <li key={line}>{line}</li>)}
-        </ul>
-      ) : null}
-
-      <p className="fcx-ask" data-testid="fc-ask">{prompt.text}</p>
-
-      {prompt.answer === "time" ? (
-        <div className="fcx-answer">
-          <label className="fcx-label" htmlFor="fcx-time">Time</label>
-          <input id="fcx-time" className="fcx-input" type="time" value={time}
-            onChange={(event) => setTime(event.target.value)} />
-          <button type="button" className="btn-primary fcx-action" disabled={!time || busy}
-            title={time ? undefined : "Not yet - give the time first"}
-            aria-label={time ? undefined : "Continue. Not yet - give the time first"}
-            onClick={() => submit({ time })}>Continue</button>
-        </div>
-      ) : null}
-
-      {prompt.answer === "choice" ? (
-        <div className="fcx-choices">
-          {prompt.options.map((option) => (
-            <button key={option} type="button" className="fcx-choice" disabled={busy}
-              onClick={() => submit({ choice: option })}>
-              {CHOICE_LABEL[option] ?? option}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {prompt.answer === "foods" ? (
-        <div className="fcx-answer">
-          <div className="fcx-candidates">
-            {prompt.candidates.map((name) => (
-              <button key={name} type="button"
-                className={`fcx-food${picked.includes(name) ? " is-on" : ""}`}
-                onClick={() => toggle(name)}>
-                {name}
+      {/* Overview: 2x2 illustrated category cards */}
+      <section className="fc-overview" id="fcOverview" hidden={detailOpen}>
+        <h1 className="fc-overview-title fade-in">Food Choices</h1>
+        <div className="fc-overview-grid fade-in d1">
+          {TILES.map((tile) => (
+            <article className="fc-card-tile" data-cat={tile.key} key={tile.key}>
+              <div className="fc-tile-illu">
+                <img src={tile.image} alt="" />
+              </div>
+              <h2>{tile.title}</h2>
+              <p>{tile.text}</p>
+              <button className="fc-tile-cta" data-cat-cta={tile.key} type="button" onClick={() => openDetail(tile.key)}>
+                {tile.cta} {ARROW}
               </button>
-            ))}
-          </div>
-          <label className="fcx-label" htmlFor="fcx-other">Or name something else from the list</label>
-          <input id="fcx-other" className="fcx-input" value={other} placeholder="For example, Cottage cheese"
-            onChange={(event) => setOther(event.target.value)} />
-          {prompt.step === "protein" ? (
-            <label className="fcx-check">
-              <input type="checkbox" checked={cooked}
-                onChange={(event) => setCooked(event.target.checked)} />
-              I will cook it
-            </label>
-          ) : null}
-          <button type="button" className="btn-primary fcx-action"
-            disabled={busy || (!picked.length && !other.trim())}
-            title={picked.length || other.trim() ? undefined : "Not yet - choose a food first"}
-            aria-label={picked.length || other.trim() ? undefined : "Continue. Not yet - choose a food first"}
-            onClick={() => submit({
-              foods: [...picked, ...(other.trim() ? [other.trim()] : [])],
-              ...(prompt.step === "protein" ? { cooked } : {}),
-            })}>
-            Continue
-          </button>
-        </div>
-      ) : null}
-
-    </>
-  );
-}
-
-const CHOICE_LABEL: Record<string, string> = {
-  meal: "A meal (5 hours)",
-  snack: "A snack (2 hours)",
-  yes: "Yes, that is right",
-  no: "No, change something",
-  another: "Plan something else",
-  finished: "That is everything",
-  protein: "The protein",
-  carbohydrate: "The carbohydrate",
-  fat: "The fat",
-};
-
-function DayPanel({ plan, busy, onDiscard }: { plan: HowToPlan; busy: boolean; onDiscard: () => void }) {
-  return (
-    <section className="fcx-panel fcx-panel--day">
-      <h2 className="fcx-panel__title">Your day</h2>
-      {plan.wake_label ? <p className="fcx-note">Up at {plan.wake_label}.</p> : null}
-      {plan.occasions.length ? (
-        <ol className="fcx-day" data-testid="fc-day">
-          {plan.occasions.map((occasion, index) => (
-            <li key={index} className={`fcx-day-row${occasion.confirmed ? " is-done" : ""}`}>
-              <span className="fcx-day-time">{occasion.at_label ?? "—"}</span>
-              <span className="fcx-day-kind">{occasion.kind === "meal" ? "Meal" : "Snack"}</span>
-              <span className="fcx-day-foods">
-                {[...occasion.proteins, ...occasion.carbohydrates, ...occasion.fats].join(", ") || "choosing…"}
-              </span>
-            </li>
+            </article>
           ))}
-        </ol>
-      ) : <p className="fcx-empty">Nothing planned yet.</p>}
-      {plan.done_eating_reason
-        ? <p className="fcx-prompt-note" data-testid="fc-done">{plan.done_eating_reason}</p>
-        : null}
-      <button type="button" className="btn-ghost fcx-action" disabled={busy} onClick={onDiscard}>
-        {plan.complete ? "Plan another day" : "Start again"}
-      </button>
-    </section>
-  );
-}
-
-/* ---- My food lists ------------------------------------------------------- */
-
-function ListsPanel({ selections, busy, onSave }: {
-  selections: FoodChoiceSelections | null;
-  busy: boolean;
-  onSave: (input: { sex?: string; selections?: Record<string, string[]>; write_ins?: Record<string, string[]> }) => void;
-}) {
-  const [sex, setSex] = useState<FoodSex>("woman");
-  const [occasion, setOccasion] = useState<FoodOccasion>("meal");
-  const [catalog, setCatalog] = useState<FoodChoiceCatalog | null>(null);
-  const [checked, setChecked] = useState<Record<string, string[]>>({ protein: [], carbohydrate: [], fat: [] });
-  const [writeIns, setWriteIns] = useState<Record<string, string[]>>({});
-  const [catalogError, setCatalogError] = useState("");
-
-  useEffect(() => {
-    if (selections?.sex === "woman" || selections?.sex === "man") setSex(selections.sex);
-    if (selections) {
-      setChecked(selections.selections);
-      setWriteIns(selections.write_ins);
-    }
-  }, [selections]);
-
-  useEffect(() => {
-    let live = true;
-    getFoodCatalog(sex, occasion)
-      .then((result) => { if (live) { setCatalog(result); setCatalogError(""); } })
-      .catch((reason) => {
-        if (live) setCatalogError(reason instanceof Error ? reason.message : "The food lists could not be loaded.");
-      });
-    return () => { live = false; };
-  }, [sex, occasion]);
-
-  const toggle = (group: string, name: string) =>
-    setChecked((current) => {
-      const existing = current[group] ?? [];
-      return {
-        ...current,
-        [group]: existing.includes(name) ? existing.filter((n) => n !== name) : [...existing, name],
-      };
-    });
-
-  const total = useMemo(
-    () => Object.values(checked).reduce((sum, names) => sum + names.length, 0),
-    [checked],
-  );
-
-  return (
-    <section className="fcx-panel">
-      <div className="fcx-lists-head">
-        <h2 className="fcx-panel__title">My food lists</h2>
-        <div className="fcx-filters">
-          <label className="fcx-label" htmlFor="fcx-sex">Amounts for</label>
-          <select id="fcx-sex" className="fcx-select" value={sex}
-            onChange={(event) => setSex(event.target.value as FoodSex)}>
-            <option value="woman">A woman</option>
-            <option value="man">A man</option>
-          </select>
-          <label className="fcx-label" htmlFor="fcx-occasion">Per</label>
-          <select id="fcx-occasion" className="fcx-select" value={occasion}
-            onChange={(event) => setOccasion(event.target.value as FoodOccasion)}>
-            <option value="meal">Meal</option>
-            <option value="snack">Snack</option>
-          </select>
         </div>
-      </div>
+      </section>
 
-      {catalogError ? <p className="fcx-err" role="alert">{catalogError}</p> : null}
+      {/* Detail panel: opens when a Choose your … button is clicked */}
+      <section className="fc-detail" id="fcDetail" hidden={!detailOpen}>
+        <header className="quiz-topbar fade-in">
+          <button className="quiz-back" id="fcDetailBack" type="button" onClick={closeDetail}>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="10,3 5,8 10,13" /></svg>
+            Back to Food Choices
+          </button>
+        </header>
 
-      {catalog ? (
-        <>
-          <p className="fcx-note">{catalog.notes.not_protein}</p>
-          <p className="fcx-note">{catalog.notes.whole_grain}</p>
+        <div className="fc-card fc-content fade-in d1">
+          <h2 className="fc-content-title" id="fcContentTitle">{`${label} `}
+            <button className="fc-tier-info" id="fcTierInfoBtn" type="button" aria-expanded={tierInfoOpen}
+              aria-controls="fcTierInfoPanel" aria-label="What the tiers mean" onClick={() => setTierInfoOpen((open) => !open)}>i</button>
+          </h2>
+          <div className="fc-tier-panel" id="fcTierInfoPanel" hidden={!tierInfoOpen}>{category?.tier_info ?? ""}</div>
+          <div className="fc-info-box" id="fcInfoBox">
+            <p id="fcInfoText">{category?.info ?? ""}</p>
+            <button className={`fc-info-cta${gotit ? " done" : ""}`} id="fcGotIt" type="button" onClick={toggleGotIt}>
+              {gotit ? "Got it ✓" : "I got it"}
+            </button>
+          </div>
 
-          {catalog.groups.map((group) => (
-            <div key={group.group} className="fcx-group">
-              <h3 className="fcx-group__title">{GROUP_TITLE[group.group] ?? group.group}</h3>
-              {group.tiers.map((tier) => (
-                <div key={tier.tier} className="fcx-tier">
-                  <p className="fcx-tier__label">
-                    {tier.label}
-                    {tier.allowance ? <span className="fcx-allowance">{tier.allowance}</span> : null}
-                  </p>
-                  <div className="fcx-foods">
-                    {tier.foods.map((food) => (
-                      <button key={food.name} type="button"
-                        className={`fcx-food${(checked[group.group] ?? []).includes(food.name) ? " is-on" : ""}`}
-                        onClick={() => toggle(group.group, food.name)}
-                        title={food.portion ?? "The food lists give no amount for this one."}>
-                        <span>{food.name}</span>
-                        <span className="fcx-portion">{food.portion ?? "no amount given"}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {/* Keyed by section, not by tier: "best" and "poor" are
-                      tier names on both the protein and the fat list. */}
-                  <WriteIns section={`${group.group}:${tier.tier}`} label={tier.label}
-                    entries={writeIns[`${group.group}:${tier.tier}`] ?? []}
-                    onChange={(entries) => setWriteIns((current) => ({
-                      ...current, [`${group.group}:${tier.tier}`]: entries,
-                    }))} />
-                </div>
+          <div className="fc-select-label">Select foods you commonly eat</div>
+          {loadError ? <p className="fc-custom-hint" role="alert">{loadError}</p> : null}
+          <div className="fc-food-grid" id="fcFoodGrid">
+            {category?.groups.flatMap((group) => group.items.map((name) => (
+              <div key={name} className={`fc-food-row${selected.has(name) ? " checked" : ""}`} data-name={name}
+                data-tier={group.tier} title={group.label} role="checkbox" aria-checked={selected.has(name)} tabIndex={0}
+                onClick={() => toggleFood(name)} onKeyDown={(event) => onFoodKey(event, name)}>
+                <span className="fc-check"></span>
+                <span className="fc-food-label">{name}</span>
+                <span className={`fc-food-tag fc-tag-${group.tier}`}>{tagText(group.tier)}</span>
+              </div>
+            )))}
+          </div>
+
+          <div className="fc-custom-section">
+            <div className="fc-custom-label">Add custom food</div>
+            <div className="fc-custom-row">
+              <input ref={customInput} type="text" id="fcCustomInput" placeholder="Type a custom food" aria-label="Custom food name"
+                value={customName} onChange={(event) => setCustomName(event.target.value)}
+                onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void addCustom(); } }} />
+              <div className="fc-tier-pick" role="group" aria-label="Choose a tier for this food">
+                {CUSTOM_TIERS.map((entry) => (
+                  <button key={entry.tier} className={`fc-tier-btn${customTier === entry.tier ? " selected" : ""}`} data-fc-tier={entry.tier}
+                    type="button" onClick={() => { setCustomTier(entry.tier); setHintShown(false); }}>{entry.label}</button>
+                ))}
+              </div>
+              <button className="fc-save-btn" id="fcCustomAdd" type="button" style={{ padding: "10px 20px", borderRadius: 8 }}
+                onClick={() => void addCustom()}>Add</button>
+            </div>
+            <p className="fc-custom-hint" id="fcCustomHint" hidden={!hintShown}>Choose Best, Fair or Limit for this food before adding it.</p>
+            <p className="fc-custom-note" id="fcCustomNote" hidden={!note}>{note}</p>
+            <div className="fc-custom-list" id="fcCustomList">
+              {custom.map((food) => (
+                <span className="fc-custom-chip" key={food.name}>{food.name}
+                  <span className={`fc-food-tag fc-tag-${food.tier}`}>{customTagText(food.tier)}</span>
+                  {food.status === "pending" ? <span className="fc-pending" title="Not reviewed by the Veye team yet.">Pending Review</span> : null}
+                  <button type="button" aria-label={`Remove ${food.name}`} onClick={() => removeCustom(food.name)}>&times;</button>
+                </span>
               ))}
             </div>
-          ))}
+          </div>
 
-          <p className="fcx-note">{selections?.write_in_note}</p>
-          <div className="fcx-lists-actions">
-            <span className="fcx-count">{total} food{total === 1 ? "" : "s"} ticked</span>
-            <button type="button" className="btn-primary fcx-action" disabled={busy}
-              onClick={() => onSave({ sex, selections: checked, write_ins: writeIns })}>
-              Save my lists
+          <div className="fc-content-foot">
+            <button className="fc-save-btn" id="fcSave" type="button" onClick={() => void saveCategory()}>
+              {savedFlash ? "Saved ✓" : "Save category choices"}
             </button>
           </div>
-        </>
-      ) : catalogError ? null : <p className="fcx-empty">Loading the food lists…</p>}
-    </section>
-  );
-}
-
-function WriteIns({ section, label, entries, onChange }: {
-  section: string; label: string; entries: string[]; onChange: (entries: string[]) => void;
-}) {
-  const [draft, setDraft] = useState("");
-  return (
-    <div className="fcx-writeins">
-      {entries.map((entry) => (
-        <span key={entry} className="fcx-writein">
-          {entry}
-          <button type="button" aria-label={`Remove ${entry}`}
-            onClick={() => onChange(entries.filter((e) => e !== entry))}>&times;</button>
-        </span>
-      ))}
-      <input className="fcx-input fcx-input--inline" value={draft} placeholder="Other (write in)"
-        aria-label={`Add your own to ${label}`}
-        data-section={section}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" || !draft.trim()) return;
-          event.preventDefault();
-          onChange([...entries, draft.trim()]);
-          setDraft("");
-        }} />
-    </div>
+        </div>
+      </section>
+    </>
   );
 }

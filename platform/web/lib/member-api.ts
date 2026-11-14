@@ -167,10 +167,36 @@ export type SupportDetails = { support_email: string; support_phone: string };
 export const getSupportDetails = () => apiJson<SupportDetails>("/api/v1/settings/support");
 
 /* ---- Food Choices -------------------------------------------------------- */
-/* The client's four food lists and the HOW TO meal builder. Every tier,
-   portion and rule comes from the API, which reads them from one transcribed
-   source (`app/food_choices/`). The screen holds no food data of its own:
+/* The member screen is the approved prototype's four checklists (owner's
+   choice, 14 Nov 2026). Their lists come from the API (`checklist.py`, taken
+   from the prototype itself), so the screen holds no food data of its own:
    a second copy here is exactly how the prototype's scoring once drifted. */
+
+export type FoodChecklistGroup = { tier: string; label: string; items: string[] };
+export type FoodChecklistCategory = { key: string; label: string; info: string; tier_info: string; groups: FoodChecklistGroup[] };
+export type FoodChecklistCatalog = { categories: FoodChecklistCategory[]; custom_tiers: string[] };
+export type FoodCustomTier = "best" | "fair" | "limit";
+export type FoodCustomFood = { name: string; tier: FoodCustomTier; status: "pending" };
+export type FoodChecklist = {
+  selections: Record<string, string[]>;
+  custom: Record<string, FoodCustomFood[]>;
+  gotit: Record<string, boolean>;
+  saved_at: string | null;
+};
+export type FoodChecklistInput = {
+  selections: Record<string, string[]>;
+  custom: Record<string, { name: string; tier: FoodCustomTier }[]>;
+  gotit: Record<string, boolean>;
+};
+
+const FOOD_CHECKLIST = `/api/v1/members/${ME}/food-choices/checklist`;
+export const getFoodChecklistCatalog = () => apiJson<FoodChecklistCatalog>(`${FOOD_CHECKLIST}/catalog`);
+export const getFoodChecklist = () => apiJson<FoodChecklist>(FOOD_CHECKLIST);
+export const saveFoodChecklist = (input: FoodChecklistInput) => postJson<FoodChecklist>(FOOD_CHECKLIST, input, "PUT");
+
+/* The HOW TO meal builder's lists and plan. Kept with its API, but not on the
+   member screen since 14 Nov 2026. Every tier, portion and rule comes from
+   the API, which reads them from one transcribed source (`app/food_choices/`). */
 
 export type FoodSex = "woman" | "man";
 export type FoodOccasion = "meal" | "snack";

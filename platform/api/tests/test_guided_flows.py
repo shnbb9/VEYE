@@ -95,6 +95,24 @@ class TestDefinitions:
         assert FIRST["content_meta"]["client_supplied"] is True and FIRST["content_meta"]["clinical_review_status"] == "pending"
         assert FIRST["content_meta"]["source_version"] == "260627"
 
+    def test_the_built_in_flows_are_the_ones_the_approved_prototype_runs(self):
+        """`build/js/veye-guided-flows-data.js` is the approved prototype's copy
+        of these definitions. A version, once published, never changes — the
+        code's v1 was once rewritten in place, and the database kept serving
+        the published words while the code said something else. A revision is
+        a new version, regenerated into the prototype in the same change."""
+        import json
+        from pathlib import Path
+
+        data_file = Path(__file__).resolve().parents[3] / "build" / "js" / "veye-guided-flows-data.js"
+        if not data_file.exists():
+            pytest.skip("the approved prototype is not in this checkout")
+        source = data_file.read_text(encoding="utf-8")
+        body = source[source.index("window.VeyeGuidedFlowData = ") + len("window.VeyeGuidedFlowData = "):].rstrip().rstrip(";")
+        prototype = json.loads(body)
+        for definition in BUILTIN_DEFINITIONS:
+            assert prototype[definition["key"]] == json.loads(json.dumps(definition)), definition["key"]
+
     def test_progress_tree_shape_matches_cara_document(self):
         nodes = GUIDE["nodes"]
         assert nodes["labs_q"]["text"].endswith("Do you have any recent lab results you can enter?")
@@ -211,10 +229,15 @@ class TestFirstTimeFlow:
         start(member)
         step = answer(member, choice="how_to")
         assert step["node"]["type"] == "AI_TASK" and step["node"]["task"] == "how_to_meal_planning"
-        # Until 10 Nov 2026 this said the HOW TO was "not connected in the Veye
-        # application yet". It is connected now, so Sprout describes it instead.
-        assert "Food Choices" in step["node"]["text"]
-        assert "not connected" not in step["node"]["text"]
+        # v1 as published (18 Sep 2026) and as the approved prototype words it.
+        # On 10 Nov the code's copy of v1 was rewritten to describe the HOW TO
+        # builder; a published version is never changed, so the database kept
+        # this text, and since 14 Nov the builder is off the member screen
+        # (owner's choice: the prototype's Food Choices), so it is true again.
+        assert step["node"]["text"] == (
+            "The “how to” — building your meal plan with me — is the AI part of the program, and it is not "
+            "connected in the Veye application yet. Cara’s training material for it is still to come. For now, "
+            "Food Choices is where your meal planning begins.")
         finished = answer(member, choice="finish")
         assert finished["status"] == "completed" and finished["node"]["type"] == "COMPLETE"
         assert member.post(f"{FT}/answer", json={"choice": "finish"}).status_code == 409
