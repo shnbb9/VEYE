@@ -56,7 +56,7 @@ export function PasswordField({ value, onChange, placeholder, autoComplete, name
   );
 }
 
-export function FormError({ message }: { message: string }) {
+export function FormError({ message, link }: { message: string; link?: { href: string; label: string } | null }) {
   if (!message) return null;
-  return <p className="auth__error" role="alert">{message}</p>;
+  return <p className="auth__error" role="alert">{message}{link && <> <a href={link.href}>{link.label}</a></>}</p>;
 }

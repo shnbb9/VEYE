@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ADITYA, ADMIN, DUAL } from "./fixtures/accounts";
+import { ADITYA, ADMIN, API_URL, DUAL, freshMember } from "./fixtures/accounts";
 import { adminSignIn, expectAdminHome, expectMemberDashboard, memberSignIn, portalSessions, open } from "./fixtures/helpers";
 
 /* Portal isolation: the door a person walks through decides where they land,
@@ -91,5 +91,69 @@ test.describe("Portal isolation", () => {
     expect(sessions.admin).toBeNull();
     await open(page, "/admin");
     await expect(page).toHaveURL(/\/admin\/login/);
+  });
+});
+
+/* The page at one name for this computer, the API at another (127.0.0.1 and
+   localhost): the browser counts them as two sites and drops the session
+   cookie although the API accepted the password. The screen has to say why
+   nothing opened, and where it will — the sign-in form used to come back with
+   no word at all (15 Nov 2026). */
+test.describe("A sign-in this browser could not keep", () => {
+  test("signing in from 127.0.0.1 says why the session did not stay, and links to the address that works", async ({ page, baseURL }) => {
+    const site = new URL(baseURL!);
+    test.skip(site.hostname !== "localhost" || new URL(API_URL).hostname !== "localhost", "needs the page and the API both on localhost");
+    const elsewhere = `${site.protocol}//127.0.0.1:${site.port}`;
+    const dropped = page.getByRole("alert").filter({ hasText: "did not keep the sign-in" });
+
+    // The console's door. "Remember me" off: the session the browser drops
+    // should not outlive the test by weeks.
+    await open(page, `${elsewhere}/admin/login`);
+    await page.getByLabel(/Email address/).fill(ADMIN.email);
+    await page.getByLabel(/^Password/).fill(ADMIN.password);
+    await page.getByText("Remember me").click();
+    await expect(page.locator("#admin-remember")).not.toBeChecked();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(dropped).toContainText("Your password was accepted, but this browser did not keep the sign-in, because this page is open at 127.0.0.1 rather than localhost.");
+    await expect(dropped.getByRole("link", { name: `Continue at ${site.origin}/admin/login` })).toHaveAttribute("href", `${site.origin}/admin/login`);
+    await expect(page).toHaveURL(`${elsewhere}/admin/login`);
+
+    // The member door says the same, and its link leads somewhere that works.
+    await open(page, `${elsewhere}/login`);
+    await page.getByLabel("Your Email").fill(ADITYA.email);
+    await page.getByPlaceholder("Your Password").fill(ADITYA.password);
+    await page.getByText("Remember me").click();
+    await expect(page.locator('input[name="remember"]')).not.toBeChecked();
+    await page.getByRole("button", { name: "Login" }).click();
+    await expect(dropped).toContainText("because this page is open at 127.0.0.1 rather than localhost.");
+    await dropped.getByRole("link", { name: `Continue at ${site.origin}/login` }).click();
+    await expect(page).toHaveURL(`${site.origin}/login`);
+    await memberSignIn(page, ADITYA.email, ADITYA.password);
+    await expectMemberDashboard(page);
+  });
+
+  test("signing up from 127.0.0.1 says the account exists, and where to sign in to it", async ({ page, baseURL }) => {
+    const site = new URL(baseURL!);
+    test.skip(site.hostname !== "localhost" || new URL(API_URL).hostname !== "localhost", "needs the page and the API both on localhost");
+    const elsewhere = `${site.protocol}//127.0.0.1:${site.port}`;
+    const member = freshMember("signup");
+
+    await open(page, `${elsewhere}/signup`);
+    await page.getByLabel("First name").fill(member.firstName);
+    await page.getByLabel("Last name").fill(member.lastName);
+    await page.getByLabel("Email", { exact: true }).fill(member.email);
+    await page.getByPlaceholder("Enter your password").fill(member.password);
+    await page.getByPlaceholder("Confirm your password").fill(member.password);
+    await page.getByRole("button", { name: "Sign Up" }).click();
+    const dropped = page.getByRole("alert").filter({ hasText: "did not keep the sign-in" });
+    await expect(dropped).toContainText("Your account was created, but this browser did not keep the sign-in, because this page is open at 127.0.0.1 rather than localhost.");
+    await expect(page).toHaveURL(`${elsewhere}/signup`);
+
+    // The link goes to the sign-in at the address that works, and the new
+    // account is there to sign in to.
+    await dropped.getByRole("link", { name: `Continue at ${site.origin}/login` }).click();
+    await expect(page).toHaveURL(`${site.origin}/login`);
+    await memberSignIn(page, member.email, member.password);
+    await expect.poll(async () => (await portalSessions(page)).member?.email).toBe(member.email);
   });
 });

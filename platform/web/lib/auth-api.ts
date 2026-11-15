@@ -1,6 +1,7 @@
 import type { Answers } from "@/lib/health-number";
 import { toApiAnswers } from "@/lib/health-number";
 import { apiJson, postJson } from "@/lib/api";
+import { apiBaseUrl } from "@/lib/api-base";
 
 export type Portal = "member" | "admin";
 
@@ -118,6 +119,36 @@ export function safeNext(next: string | null, portal: Portal): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return home;
   const inside = portal === "admin" ? next.startsWith("/admin") && !next.startsWith("/admin/login") : next.startsWith("/app") || next.startsWith("/onboarding");
   return inside ? next : home;
+}
+
+/* ---- a sign-in this browser did not keep -----------------------------------
+   The API accepted the password and set the session cookie, yet the next
+   question to it comes back anonymous: the browser dropped the cookie. On a
+   developer's machine that happens when the page is open at one name for the
+   computer and the API at another (127.0.0.1 and localhost) — the browser
+   counts them as two sites. The sign-in form used to reappear with no word of
+   why (15 Nov 2026); now the screen says so, and where it will work. */
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+export type SessionNotKept = { message: string; link: { href: string; label: string } | null };
+
+/** Why a sign-in the API accepted left this browser signed out — with the
+ *  address that works when the cause is a second name for this computer.
+ *  `path` is where that link lands (this page by default). */
+export function sessionNotKept(portal: Portal, done: string, path?: string, base?: string): SessionNotKept {
+  const here = window.location;
+  let apiHost = "";
+  try { apiHost = new URL(apiBaseUrl(base)).hostname; } catch { /* a relative API address shares the page's site */ }
+  if (apiHost && apiHost !== here.hostname && LOOPBACK_HOSTS.has(apiHost) && LOOPBACK_HOSTS.has(here.hostname)) {
+    const origin = `${here.protocol}//${apiHost}${here.port ? `:${here.port}` : ""}`;
+    const target = path ?? `${here.pathname}${here.search}`;
+    return {
+      message: `${done}, but this browser did not keep the sign-in, because this page is open at ${here.hostname} rather than ${apiHost}.`,
+      link: { href: `${origin}${target}`, label: `Continue at ${origin}${target.split("?")[0]}` },
+    };
+  }
+  const place = portal === "admin" ? "the console" : "your Veye account";
+  return { message: `${done}, but this browser did not keep the sign-in, so ${place} cannot open. Allow cookies for this site, then sign in again.`, link: null };
 }
 
 /* ---- administrator invitations & account security -------------------------

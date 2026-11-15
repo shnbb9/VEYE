@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { AuthFrame, FormError, PasswordField } from "@/components/auth/auth-frame";
 import { useSession } from "@/components/session";
-import { forgotPassword, safeNext, signIn } from "@/lib/auth-api";
+import { forgotPassword, safeNext, sessionNotKept, signIn, type SessionNotKept } from "@/lib/auth-api";
 
 export default function LoginPage() {
   return (
@@ -23,6 +23,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
+  const [errorLink, setErrorLink] = useState<SessionNotKept["link"]>(null);
   const [busy, setBusy] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const next = params.get("next");
@@ -41,6 +42,7 @@ function Login() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setErrorLink(null);
     if (!email.trim() || !password) { setError("Enter your email address and password."); return; }
     setBusy(true);
     try {
@@ -51,7 +53,15 @@ function Login() {
       try {
         if (remember) localStorage.setItem("veye_last_email", account.email); else localStorage.removeItem("veye_last_email");
       } catch { /* storage unavailable */ }
-      await session.refresh();
+      const current = await session.refresh();
+      if (!current.member) {
+        // Accepted, but the cookie did not stay: moving on would only bring
+        // the member area's guard straight back here.
+        const why = sessionNotKept("member", "Your password was accepted");
+        setError(why.message);
+        setErrorLink(why.link);
+        return;
+      }
       router.replace(safeNext(next, "member"));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That email address and password do not match.");
@@ -90,7 +100,7 @@ function Login() {
         </div>
 
         <p className="legal legal--terms">By signing in to Veye, you&rsquo;re agreeing to our <Link href="/terms">Terms and Conditions</Link>, and <Link href="/privacy">Privacy Policy</Link>.</p>
-        <FormError message={error} />
+        <FormError message={error} link={errorLink} />
 
         <button type="submit" className="btn btn--primary btn--mt" disabled={busy}>{busy ? "Signing in…" : "Login"}</button>
 

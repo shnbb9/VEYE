@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { Icon } from "@/components/admin/admin-chrome";
 import { useSession } from "@/components/session";
-import { adminSignIn, forgotPassword, safeNext } from "@/lib/auth-api";
+import { adminSignIn, forgotPassword, safeNext, sessionNotKept, type SessionNotKept } from "@/lib/auth-api";
 
 /* The ADMIN portal sign-in, ported from the approved admin prototype
    (admin-panel/prototype-client/js/screens/login.js): photo panel with the
@@ -33,6 +33,7 @@ function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
+  const [errorLink, setErrorLink] = useState<SessionNotKept["link"]>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"sign-in" | "reset" | "reset-sent">("sign-in");
   const [resetNote, setResetNote] = useState("");
@@ -49,6 +50,7 @@ function AdminLogin() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setErrorLink(null);
     if (!email.trim() || !password) { setError("Enter your email address and password."); return; }
     setBusy(true);
     try {
@@ -56,7 +58,15 @@ function AdminLogin() {
       try {
         if (remember) localStorage.setItem("veye_admin_last_email", account.email); else localStorage.removeItem("veye_admin_last_email");
       } catch { /* storage unavailable */ }
-      await session.refresh();
+      const current = await session.refresh();
+      if (!current.admin) {
+        // Accepted, but the cookie did not stay: moving on would only bring
+        // the console's guard straight back here.
+        const why = sessionNotKept("admin", "Your password was accepted");
+        setError(why.message);
+        setErrorLink(why.link);
+        return;
+      }
       router.replace(safeNext(next, "admin"));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That email address and password do not match.");
@@ -144,7 +154,7 @@ function AdminLogin() {
                 <button type="button" className="btn btn--ghost btn--sm" onClick={() => { setError(""); setMode("reset"); }}>Forgot password?</button>
               </div>
 
-              {error && <p className="field__error" role="alert">{error}</p>}
+              {error && <p className="field__error" role="alert">{error}{errorLink && <> <a className="linkbtn" href={errorLink.href}>{errorLink.label}</a></>}</p>}
 
               <button className="btn btn--primary btn--lg btn--block auth__submit auth-seq__step" style={{ "--i": 3 } as React.CSSProperties} type="submit" disabled={busy}>
                 {busy ? "Signing in…" : "Sign in"}

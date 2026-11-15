@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { AuthFrame, FormError, PasswordField } from "@/components/auth/auth-frame";
 import { useSession } from "@/components/session";
-import { signUp, type Delivery } from "@/lib/auth-api";
+import { sessionNotKept, signUp, type Delivery, type SessionNotKept } from "@/lib/auth-api";
 import { PENDING_ANSWERS_KEY, PREFILL_EMAIL_KEY } from "@/lib/auth-keys";
 import type { Answers } from "@/lib/health-number";
 import { forgetSavedResultTokens, heldSavedResultToken } from "@/lib/prospects-api";
@@ -20,6 +20,7 @@ export default function SignUpPage() {
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", postal_code: "", password: "", confirm: "", remember: true });
   const [answers, setAnswers] = useState<Answers | null>(null);
   const [error, setError] = useState("");
+  const [errorLink, setErrorLink] = useState<SessionNotKept["link"]>(null);
   const [busy, setBusy] = useState(false);
   const [deliveries, setDeliveries] = useState<Delivery[] | null>(null);
   const [destination, setDestination] = useState("/app");
@@ -41,6 +42,7 @@ export default function SignUpPage() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setErrorLink(null);
     if (!form.first_name.trim() || !form.last_name.trim()) { setError("Enter your first and last name."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(form.email.trim())) { setError("Please enter a valid email address."); return; }
     if (form.password.length < 12) { setError("Choose a password of at least 12 characters."); return; }
@@ -56,7 +58,15 @@ export default function SignUpPage() {
       // The link to the saved result is remembered server-side now; the tab
       // no longer needs to hold the capability.
       if (result.prospect_link === "pending_verification") forgetSavedResultTokens();
-      await session.refresh();
+      const current = await session.refresh();
+      if (!current.member) {
+        // The account exists; only this browser's sign-in did not stay, and
+        // moving on would land on the sign-in form with no word of why.
+        const why = sessionNotKept("member", "Your account was created", "/login");
+        setError(why.message);
+        setErrorLink(why.link);
+        return;
+      }
       const failed = result.deliveries.filter((d) => d.status !== "sent");
       const target = result.health_number_attempt_id ? "/app" : "/onboarding";
       setSavedLink(result.prospect_link);
@@ -122,7 +132,7 @@ export default function SignUpPage() {
         </div>
 
         <p className="legal legal--terms">By signing in to Veye, you&rsquo;re agreeing to our <Link href="/terms">Terms and Conditions</Link>, and <Link href="/privacy">Privacy Policy</Link>.</p>
-        <FormError message={error} />
+        <FormError message={error} link={errorLink} />
 
         <button type="submit" className="btn btn--primary btn--mt" disabled={busy}>{busy ? "Creating your account…" : "Sign Up"}</button>
 
