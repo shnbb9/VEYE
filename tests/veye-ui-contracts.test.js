@@ -856,10 +856,14 @@ group('L · Correction pass (28 Aug) — consumer', () => {
   const AUTHJS = read(path.join('js', 'auth.js'));
   const CALC = read(path.join('js', 'veye-calculations.js'));
 
-  check('privacy.html exists as a clearly labelled draft', () => {
+  // The 28 Aug pass labelled the page a draft; the owner removed the label
+  // and the "This draft…" sentence on 15 Nov 2026 for the demo and staging.
+  // The wording is still not approved: the source says so for whoever edits it.
+  check('privacy.html exists, without the draft box the owner removed', () => {
     assert.ok(/Privacy Policy/.test(PRIVACY), 'no title');
-    assert.ok(/Draft — prototype content/.test(PRIVACY), 'the draft label is missing');
-    assert.ok(/admin portal/.test(PRIVACY), 'the future admin-portal note is missing');
+    assert.ok(!/Draft — prototype content/.test(PRIVACY), 'the draft label is back');
+    assert.ok(!/This draft describes/.test(PRIVACY), 'the draft sentence is back');
+    assert.ok(/NOT approved legal\s+text/.test(PRIVACY), 'the note that counsel must replace the wording is missing');
   });
   check('Privacy links open privacy.html; Terms links stay on terms.html', () => {
     [HTML.login, HTML.signup].forEach(h => {

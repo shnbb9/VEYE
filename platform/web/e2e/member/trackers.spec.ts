@@ -190,7 +190,21 @@ test.describe.serial("Member trackers", () => {
     await open(page, "/app/supplements");
     await expect(page.getByText("Veye recommends the two most important ones")).toBeVisible();
     await expect(page.getByText("EPA/DHA suggested dosage")).toBeVisible();
-    await expect(page.getByText("Individual vitamin pros and cons")).toHaveCount(0); // still a draft
+    // The prototype's Supplements card: two polyphenol lines (owner, 15 Nov 2026).
+    const polyphenols = page.locator(".sup-card__body ul").nth(1).locator("li");
+    await expect(polyphenols).toHaveText(["500mg helps reduce oxidative stress", "1000mg helps reduce inflammation"]);
+    // The Vitamin Overview waits behind "Other Supplements", as in the prototype.
+    const overview = page.getByRole("heading", { name: "Individual vitamin pros and cons" });
+    await expect(overview).toBeHidden();
+    const other = page.getByTestId("supplements-other");
+    await expect(other).toHaveAttribute("aria-expanded", "false");
+    await other.click();
+    await expect(other).toHaveAttribute("aria-expanded", "true");
+    await expect(overview).toBeVisible();
+    await expect(page.locator("#supOtherPanel")).toBeFocused();
+    await expect(page.locator("#supOtherPanel .sup-provisional").first()).toContainText("pending citation and clinical review");
+    await expect(page.locator("#supOtherPanel strong")).toHaveText(["Vitamin D", "Vitamin B12", "Vitamin C", "Vitamin A", "Beta-carotene",
+      "Vitamin E", "Zinc", "Boron", "Vitamin K", "Calcium", "Selenium"]);
 
     await open(page, "/app/resources");
     await expect(page.getByRole("heading", { name: "Blogs" })).toBeVisible();

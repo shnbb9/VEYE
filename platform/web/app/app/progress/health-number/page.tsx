@@ -167,7 +167,7 @@ function HealthNumberView() {
                 value={typeof answer === "string" ? answer : ""} onChange={(event) => setAnswer(event.target.value.trim())} />
             ) : options.map((option) => (
               <OptionWithWriteIn key={option.value} label={option.label} value={option.value} selected={isSelected(option.value)}
-                onChoose={choose}
+                multi={question.type === "multi"} onChoose={choose}
                 writeIn={"otherWriteIn" in question && option.value === "Other" ? question.otherWriteIn : null}
                 written={other[step]} onWrite={setWritten} />
             ))}
@@ -231,14 +231,17 @@ function HealthNumberView() {
   );
 }
 
-function OptionWithWriteIn({ label, value, selected, onChoose, writeIn, written, onWrite }: {
-  label: string; value: string; selected: boolean; onChoose: (value: string) => void;
+/* A tick box is drawn only where more than one answer may be chosen; a
+   single-choice answer is a plain button (owner, 15 Nov 2026 — the prototype
+   carries the same `wizard-option--multi` rule). */
+function OptionWithWriteIn({ label, value, selected, multi, onChoose, writeIn, written, onWrite }: {
+  label: string; value: string; selected: boolean; multi: boolean; onChoose: (value: string) => void;
   writeIn: string | null; written: string; onWrite: (value: string) => void;
 }) {
   return (
     <>
-      <button className={`wizard-option${selected ? " selected" : ""}`} data-value={value} type="button" aria-pressed={selected}
-        onClick={() => onChoose(value)}>{label}</button>
+      <button className={`wizard-option${multi ? " wizard-option--multi" : ""}${selected ? " selected" : ""}`} data-value={value}
+        type="button" aria-pressed={selected} onClick={() => onChoose(value)}>{label}</button>
       {/* XLSX "Other write in": optional words; the score stays with "Other". */}
       {writeIn !== null ? (
         <input className="wizard-other-input" id="wizardOtherInput" type="text" placeholder={writeIn} aria-label={writeIn}

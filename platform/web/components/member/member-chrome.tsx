@@ -9,8 +9,9 @@ import { NavIcon } from "@/components/member/nav-icons";
 import { RequirePortal, useSession } from "@/components/session";
 
 /* Member application chrome, ported from the approved consumer prototype
-   (build/dashboard.html): the 22px green strip, the 208px white sidebar with
-   its traced icon rail, and the cream main canvas with the white action pill.
+   (build/dashboard.html): the 22px green strip, the white sidebar (208px of
+   content plus a 6px scrollbar gutter, since 15 Nov 2026) with its traced
+   icon rail, and the cream main canvas with the white action pill.
    The stylesheet is the prototype's own <style> block copied verbatim to
    /member-css/dashboard.css, so every class name below is the prototype's. */
 
