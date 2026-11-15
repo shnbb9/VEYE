@@ -20,6 +20,7 @@ from app.knowledge import models as knowledge_models  # noqa: F401
 from app.companion import models as companion_models  # noqa: F401
 from app.admin import models as admin_models  # noqa: F401
 from app.care import models as care_models  # noqa: F401
+from app.fitness import models as fitness_models  # noqa: F401
 from app.content import models as content_models  # noqa: F401
 from app.requests import models as request_models  # noqa: F401
 from app.mood import models as mood_models  # noqa: F401

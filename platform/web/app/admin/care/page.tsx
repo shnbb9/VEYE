@@ -95,7 +95,8 @@ function CareStudio() {
                 actions={<button className="btn btn--primary" type="button" onClick={() => { setFormError(""); setEditing({ item: null, form: { ...EMPTY, kind, display_order: (items?.length ?? 0) + 1 } }); }}><Icon name="plus" size={18} /> New {CARE_ITEM_LABELS[kind]} item</button>} />
       {error && <p className="errorbar">{error}</p>}
 
-      <Subnav items={CARE_KINDS.map((k) => ({ key: k, label: CARE_KIND_LABELS[k], href: `/admin/care?kind=${k}`, count: summary?.find((s) => s.kind === k)?.published }))} active={kind} />
+      <Subnav items={[...CARE_KINDS.map((k) => ({ key: k, label: CARE_KIND_LABELS[k], href: `/admin/care?kind=${k}`, count: summary?.find((s) => s.kind === k)?.published })),
+                      { key: "library", label: "Fitness library", href: "/admin/care/fitness-library" }]} active={kind} />
 
       {summaryFor && (
         <div className="kpis" style={{ marginBottom: "var(--s-5)" }}>

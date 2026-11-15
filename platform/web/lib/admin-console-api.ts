@@ -443,3 +443,23 @@ export const recropMyConsolePhoto = (crop: { x: number; y: number; size: number 
 export const removeMyConsolePhoto = () => apiJson<import("@/lib/auth-api").Account>("/api/v1/admin/account/photo", { method: "DELETE" });
 export const createMyMemberProfile = (password: string) =>
   postJson<{ member_id: string; created: boolean; message: string }>("/api/v1/admin/account/member-profile", { password, understood: true });
+
+/* ---- the Fitness library (15 Nov 2026) ---------------------------------------
+   The console's side of the member Fitness screen: YouTube or Vimeo links per
+   goal, one main video per goal, shown or hidden, in the console's order. */
+export type FitnessGoalKey = "stronger" | "weight" | "fit" | "performance";
+export type AdminFitnessVideo = {
+  id: string; goal: FitnessGoalKey; provider: "youtube" | "vimeo"; title: string; subtitle: string; embed_url: string;
+  watch_url: string; thumbnail_url: string | null; is_main: boolean; url: string; position: number; published: boolean;
+  updated_at: string; updated_by: string | null;
+};
+export type AdminFitnessLibrary = { goal: FitnessGoalKey; goals: { key: FitnessGoalKey; label: string; count: number }[]; videos: AdminFitnessVideo[] };
+const FITNESS = "/api/v1/admin/fitness/videos";
+export const getAdminFitnessLibrary = (goal: FitnessGoalKey) => apiJson<AdminFitnessLibrary>(`${FITNESS}?goal=${goal}`);
+export const addFitnessVideo = (input: { goal: FitnessGoalKey; url: string; title: string; subtitle: string }) =>
+  postJson<AdminFitnessLibrary>(FITNESS, input);
+export const updateFitnessVideo = (id: string, change: { title?: string; subtitle?: string; published?: boolean }) =>
+  postJson<AdminFitnessLibrary>(`${FITNESS}/${id}`, change, "PATCH");
+export const makeMainFitnessVideo = (id: string) => postJson<AdminFitnessLibrary>(`${FITNESS}/${id}/main`, {});
+export const reorderFitnessVideos = (goal: FitnessGoalKey, ids: string[]) => postJson<AdminFitnessLibrary>(`${FITNESS}/order`, { goal, ids }, "PUT");
+export const removeFitnessVideo = (id: string) => apiJson<AdminFitnessLibrary>(`${FITNESS}/${id}`, { method: "DELETE" });

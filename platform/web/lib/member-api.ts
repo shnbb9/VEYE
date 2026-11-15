@@ -286,3 +286,20 @@ export const startHowToPlan = (sex: FoodSex) => postJson<HowToPlan>(`${FOOD_CHOI
 export const answerHowToPlan = (answer: HowToAnswer) =>
   postJson<HowToPlan>(`${FOOD_CHOICES}/how-to/answer`, answer);
 export const discardHowToPlan = () => apiJson<void>(`${FOOD_CHOICES}/how-to`, { method: "DELETE" });
+
+/* ---- the Fitness library (15 Nov 2026) ----------------------------------- */
+/* Videos the console adds per goal: one main video, the rest nine to a page.
+   Players come from the providers' privacy domains only. */
+
+export type FitnessGoalKey = "stronger" | "weight" | "fit" | "performance";
+export type FitnessVideo = {
+  id: string; goal: FitnessGoalKey; provider: "youtube" | "vimeo"; title: string; subtitle: string;
+  embed_url: string; watch_url: string; thumbnail_url: string | null; is_main: boolean;
+};
+export type FitnessLibrary = {
+  goal: FitnessGoalKey; goals: { key: FitnessGoalKey; label: string; count: number }[];
+  main: FitnessVideo | null; videos: FitnessVideo[]; page: number; pages: number; total: number; page_size: number;
+};
+
+export const getFitnessLibrary = (goal?: FitnessGoalKey, page = 1) =>
+  apiJson<FitnessLibrary>(`/api/v1/fitness/library?${goal ? `goal=${goal}&` : ""}page=${page}`);

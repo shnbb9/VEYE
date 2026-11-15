@@ -43,12 +43,14 @@ const csp = [
   "frame-ancestors 'none'",
   "form-action 'self'",
   // Member photos and console avatars come from the API origin; the approved
-  // prototype also uses data: URIs for small inline artwork.
-  `img-src 'self' data: blob: ${api}`.trim(),
+  // prototype also uses data: URIs for small inline artwork. The Fitness
+  // library's video stills come from the two providers' image hosts.
+  `img-src 'self' data: blob: ${api} https://i.ytimg.com https://i.vimeocdn.com`.trim(),
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
-  // The Fitness screens embed the client's approved YouTube videos.
-  "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
+  // The Fitness screens embed the client's approved YouTube videos, and the
+  // library's YouTube or Vimeo videos (15 Nov 2026) on their privacy domains.
+  "frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com",
   "media-src 'self'",
   `connect-src ${connect}`,
   // Development only: React's error-stack reconstruction evaluates code.

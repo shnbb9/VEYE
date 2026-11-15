@@ -68,6 +68,8 @@ const ADMIN_DEEP = [
   "/admin/settings?section=product", "/admin/settings?section=features",
   // Architecture V2: the Members area's two new views.
   "/admin/members/prospects", "/admin/members/deletions",
+  // 15 Nov 2026: Care Studio's Fitness library.
+  "/admin/care/fitness-library",
   ...COMPANION_NAV.map((n) => n.path), "/admin/companion/settings/guided-experiences", ...ADVANCED_NAV.map((n) => n.path),
 ];
 const MEMBER_DEEP = [...TRACKERS, "/app/mood", "/app/food-diary", "/app/settings", "/app/companion", "/app/progress",

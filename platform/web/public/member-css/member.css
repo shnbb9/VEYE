@@ -267,3 +267,28 @@ button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
    to the guided flow. A button does not inherit line-height, so the link takes
    the button's to keep the hero's geometry identical. */
 a.progress-hero__guide { line-height: normal; }
+
+/* ---- Fitness library (15 Nov 2026): the prototype's preview frame made real.
+   A video player needs 16:9 where the static banner was a wide crop; cards are
+   buttons that play in the big player; more than nine videos page. ---------- */
+.fit-hero--video .fit-hero__image { height: auto; aspect-ratio: 16 / 9; }
+.fit-hero--video .fit-hero__image iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.fit-hero__play { position: absolute; inset: 0; display: grid; place-items: center; width: 100%; height: 100%; padding: 0; border: 0; background: #1f2a14; cursor: pointer; }
+.fit-hero__play img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: none; margin: 0; }
+.fit-hero__play svg { position: relative; width: 84px; height: 84px; transition: transform .2s ease; }
+.fit-hero__play:hover svg { transform: scale(1.06); }
+.fit-hero__play:focus-visible { outline: 3px solid #8DC412; outline-offset: -3px; }
+.fit-thumb--video { display: block; width: 100%; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.fit-thumb--video .fit-thumb__image { display: block; aspect-ratio: 16 / 9; }
+.fit-thumb--video .fit-thumb__image img { width: 100%; height: 100%; object-fit: cover; transform: none; }
+.fit-thumb--video .fit-thumb__cap { display: flex; flex-direction: column; gap: 2px; }
+.fit-thumb.is-playing { border-color: #8DC412; box-shadow: 0 0 0 2px rgba(141, 196, 18, 0.45); }
+.fit-thumb__playing { position: absolute; top: 9px; left: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(23, 31, 12, 0.72); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.fit-empty { margin: 8px 0 0; padding: 28px 18px; text-align: center; border: 1.5px dashed #D8DCC9; border-radius: 12px; color: var(--body-text-light); }
+.fit-pages { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 20px; }
+.fit-pages button { min-width: 38px; height: 38px; padding: 0 12px; border-radius: 999px; border: 1.5px solid #E2E6D8; background: #fff; color: var(--olive-heading); font: inherit; font-size: 13px; cursor: pointer; }
+.fit-pages button[aria-current="page"] { background: var(--olive-medium); border-color: var(--olive-medium); color: #fff; }
+.fit-pages button:disabled { opacity: .45; cursor: default; }
+.fit-pages button:focus-visible { outline: 2px solid #446514; outline-offset: 2px; }
+@media (max-width: 760px) { .fit-thumbs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .fit-thumbs { grid-template-columns: minmax(0, 1fr); } }

@@ -13,6 +13,7 @@ from app.admin.knowledge_routes import router as admin_knowledge_router
 from app.assessments.routes import member_router, router as health_number_router
 from app.auth.routes import router as auth_router
 from app.care.routes import admin_router as admin_care_router, member_router as care_router
+from app.fitness.routes import admin_router as admin_fitness_router, member_router as fitness_router
 from app.companion.routes import router as companion_router
 from app.content.routes import admin_router as admin_content_router, public_router as content_router
 from app.auth.csrf import enforce as enforce_csrf, issue as issue_csrf
@@ -144,6 +145,8 @@ app.include_router(health_permission_admin_router)
 app.include_router(health_sharing_settings_router)
 app.include_router(admin_care_router)
 app.include_router(care_router)
+app.include_router(admin_fitness_router)
+app.include_router(fitness_router)
 app.include_router(admin_content_router)
 app.include_router(content_router)
 app.include_router(member_account_router)

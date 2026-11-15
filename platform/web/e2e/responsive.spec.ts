@@ -21,7 +21,7 @@ const MARKETING = ["/", "/why-veye", "/about", "/help", "/pricing"];
 const MEMBER = ["/app", "/app/progress", "/app/progress/health-assessment", "/app/progress/simple-quiz", "/app/mood", "/app/food-diary", "/app/food-choices", "/app/companion", "/app/fitness", "/app/supplements", "/app/resources", "/app/settings",
   "/app/sharing-request", "/app/saved-result"];
 const ADMIN_PAGES = ["/admin", "/admin/members", "/admin/assessments", "/admin/care", "/admin/requests", "/admin/content", "/admin/insights", "/admin/settings", "/admin/companion/conversations", "/admin/companion/settings/guided-experiences",
-  "/admin/members/prospects", "/admin/members/deletions",
+  "/admin/members/prospects", "/admin/members/deletions", "/admin/care/fitness-library",
   // Added 15 Nov 2026: Knowledge Sources ran 55px past a 390px screen and the
   // settings sections squeezed their row controls, and this list never
   // visited them.
