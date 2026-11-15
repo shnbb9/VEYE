@@ -200,6 +200,8 @@ def test_an_unknown_bucket_is_not_silently_unlimited():
     assert set(LIMITS) == {
         "companion_message", "personal_tip", "signup", "forgot_password",
         "resend_verification", "public_request", "photo_upload",
+        # Food Diary photos (15 Nov 2026): uploads, and links the API fetches.
+        "meal_photo", "meal_photo_link",
         # Architecture V2: saved results, re-authentication, template tests.
         "prospect_capture", "prospect_token", "prospect_recover", "prospect_recover_address",
         "reauthenticate", "template_test",

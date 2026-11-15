@@ -26,6 +26,8 @@ export type Account = {
   postal_code: string | null;
   /** Changes when the photo is replaced or removed; null = no photo (show the initial). */
   photo_version: string | null;
+  /** The kept original's size and the chosen square; null = nothing to re-crop. */
+  photo_crop?: { width: number; height: number; x: number; y: number; size: number } | null;
 };
 
 /** Both portals at once — either may be signed in, both, or neither. */

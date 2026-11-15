@@ -156,7 +156,18 @@ class Settings(BaseSettings):
     # Lets a staging deployment share a bucket without sharing objects. They
     # should not share one; this is for when they must.
     media_object_prefix: str = ""
-    profile_photo_max_bytes: int = 2_000_000
+    # 10 MB since 15 Nov 2026: the original is now kept to crop from, and an
+    # ordinary phone photo (3-6 MB) was being refused at 2 MB. Pixels are
+    # still capped separately (images.MAX_IMAGE_PIXELS, MAX_INPUT_SIDE).
+    profile_photo_max_bytes: int = 10_000_000
+    # A Food Diary photo: an upload, a camera snapshot or a picture fetched
+    # from a link the member pasted (app/storage/remote_image.py).
+    meal_photo_max_bytes: int = 10_000_000
+    # Hosts the link fetcher may reach although they resolve to a private
+    # address: the local stack's own containers, so the browser suite can
+    # prove the link journey without the internet (compose.local.yaml).
+    # Comma-separated "host" or "host:port". Production clears it.
+    remote_image_trusted_hosts: str = ""
 
     # ---- saved results before sign-up (prospects) -------------------------------------
     # `kid:base64(32 bytes)` entries, comma-separated; the first encrypts, all
@@ -227,6 +238,18 @@ class Settings(BaseSettings):
         if self.is_production and self.rate_limit_scale != 1.0:
             object.__setattr__(self, "rate_limit_scale", 1.0)
         return self
+
+    @model_validator(mode="after")
+    def _no_private_image_hosts_in_production(self) -> "Settings":
+        # A production link fetcher reaches the public internet only, whatever
+        # an env file copied from development says.
+        if self.is_production and self.remote_image_trusted_hosts:
+            object.__setattr__(self, "remote_image_trusted_hosts", "")
+        return self
+
+    @property
+    def remote_image_trusted_host_set(self) -> frozenset[str]:
+        return frozenset(item.strip().lower() for item in self.remote_image_trusted_hosts.split(",") if item.strip())
 
 
 def reveal(value: SecretStr | str | None) -> str | None:

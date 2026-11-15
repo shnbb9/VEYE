@@ -64,17 +64,25 @@ test.describe("Settings profile identity", () => {
     await open(page, "/app");
     await expect(page.getByRole("heading", { name: "Welcome back Emberly" })).toBeVisible();
 
-    // Photo: a real PNG through the file input → stored via ObjectStorage → both avatars show it.
+    // Photo: a real PNG through the file input → the crop editor → stored via
+    // ObjectStorage → both avatars show it.
     await open(page, "/app/settings");
     await page.getByTestId("settings-photo-input").setInputFiles({ name: "me.png", mimeType: "image/png", buffer: PNG_1PX });
+    await expect(page.getByTestId("crop-dialog")).toBeVisible();
+    await page.getByTestId("crop-save").click();
+    await expect(page.getByTestId("crop-dialog")).toBeHidden();
     await expect(page.getByTestId("settings-profile-note")).toHaveText("Profile photo updated.");
     await expect(page.getByTestId("settings-photo")).toHaveAttribute("data-has-photo", "true");
     await expect(page.getByTestId("topbar-avatar")).toHaveAttribute("data-has-photo", "true");
     const loaded = await page.locator(".member-avatar--photo img").evaluateAll((images) => images.map((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0));
     expect(loaded).toEqual([true, true]);
-    // a text file declared as PNG is refused
+    // a text file declared as PNG never reaches the API: the crop editor
+    // cannot read it and says so (the API refuses it too — test_admin_identity)
     await page.getByTestId("settings-photo-input").setInputFiles({ name: "x.png", mimeType: "image/png", buffer: Buffer.from("not an image") });
-    await expect(page.getByTestId("settings-profile-note")).toContainText(/JPG, PNG or WebP/);
+    await expect(page.getByTestId("crop-dialog").getByRole("alert")).toContainText(/could not be read as an image/);
+    await expect(page.getByTestId("crop-save")).toBeDisabled();
+    await page.getByTestId("crop-dialog").getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByTestId("crop-dialog")).toBeHidden();
     // after a reload the photo is still there; removing it brings the initial back
     await open(page, "/app/settings");
     await expect(page.getByTestId("settings-photo")).toHaveAttribute("data-has-photo", "true");

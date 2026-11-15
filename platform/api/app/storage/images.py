@@ -9,6 +9,12 @@ honouring the EXIF orientation so the picture is not saved sideways.
 Two controlled variants are written: `full` (at most 512 px on the long side)
 for Settings, and `thumb` (128 px) for the console's navigation and lists.
 Decompression bombs are refused before any pixel is decoded.
+
+A profile picture (15 Nov 2026) also keeps its ORIGINAL — rebuilt the same
+way, so it carries no metadata either — and the square the person chose in
+the circular crop frame. Both avatar variants are cut from exactly that
+square of the upright original, so what the frame showed is what the avatar
+is, and the picture can be re-cropped later without a new upload.
 """
 
 from __future__ import annotations
@@ -57,18 +63,23 @@ def _sniff(data: bytes) -> str | None:
     return None
 
 
-def _encode(image: Image.Image, fmt: str) -> bytes:
+def _encode(image: Image.Image, fmt: str, *, keep: bool = False) -> bytes:
+    """`keep` is for an original that is stored to be cut from again: a
+    higher quality, so a later crop does not inherit a second generation of
+    compression."""
     out = io.BytesIO()
     if fmt == "JPEG":
-        image.convert("RGB").save(out, format="JPEG", quality=88, optimize=True)
+        image.convert("RGB").save(out, format="JPEG", quality=92 if keep else 88, optimize=True)
     elif fmt == "PNG":
         image.save(out, format="PNG", optimize=True)
     else:
-        image.save(out, format="WEBP", quality=85, method=4)
+        image.save(out, format="WEBP", quality=92 if keep else 85, method=4)
     return out.getvalue()
 
 
-def normalise_photo(data: bytes, *, max_bytes: int) -> ProcessedPhoto:
+def _decode(data: bytes, *, max_bytes: int) -> tuple[Image.Image, str]:
+    """The upright pixels of an accepted still image, and its format. Every
+    refusal is an ImageRejected with words a person can act on."""
     if not data:
         raise ImageRejected(422, "Choose an image file.")
     if len(data) > max_bytes:
@@ -91,13 +102,7 @@ def normalise_photo(data: bytes, *, max_bytes: int) -> ProcessedPhoto:
             image = ImageOps.exif_transpose(source)
             if image.mode not in ("RGB", "RGBA", "L", "LA"):
                 image = image.convert("RGBA" if "A" in image.getbands() or image.mode == "P" else "RGB")
-            full = image.copy()
-            full.thumbnail((FULL_SIDE, FULL_SIDE), Image.Resampling.LANCZOS)
-            thumb = image.copy()
-            thumb.thumbnail((THUMB_SIDE, THUMB_SIDE), Image.Resampling.LANCZOS)
-            return ProcessedPhoto(full=_encode(full, fmt), thumb=_encode(thumb, fmt),
-                                  content_type=CONTENT_TYPES[fmt], extension=EXTENSIONS[fmt],
-                                  width=full.width, height=full.height)
+            return image.copy(), fmt
     except ImageRejected:
         raise
     except Image.DecompressionBombError as exc:
@@ -106,7 +111,88 @@ def normalise_photo(data: bytes, *, max_bytes: int) -> ProcessedPhoto:
         raise ImageRejected(415, "That file could not be read as an image.") from exc
 
 
+def normalise_photo(data: bytes, *, max_bytes: int, full_side: int = FULL_SIDE, thumb_side: int = THUMB_SIDE) -> ProcessedPhoto:
+    image, fmt = _decode(data, max_bytes=max_bytes)
+    full = image.copy()
+    full.thumbnail((full_side, full_side), Image.Resampling.LANCZOS)
+    thumb = image.copy()
+    thumb.thumbnail((thumb_side, thumb_side), Image.Resampling.LANCZOS)
+    return ProcessedPhoto(full=_encode(full, fmt), thumb=_encode(thumb, fmt),
+                          content_type=CONTENT_TYPES[fmt], extension=EXTENSIONS[fmt],
+                          width=full.width, height=full.height)
+
+
+# ---- profile pictures: the original and the person's own square ----------------
+
+MIN_CROP_SIDE = 16
+
+
+@dataclass(frozen=True)
+class Crop:
+    """A square of the UPRIGHT original, in its pixels: left, top, side."""
+    x: int
+    y: int
+    size: int
+
+
+@dataclass(frozen=True)
+class ProcessedPicture:
+    original: bytes
+    full: bytes
+    thumb: bytes
+    content_type: str
+    extension: str
+    width: int    # the upright original's size
+    height: int
+    crop: Crop
+
+
+def default_crop(width: int, height: int) -> Crop:
+    """The centred square — what a circle showed before anyone chose."""
+    side = min(width, height)
+    return Crop(x=(width - side) // 2, y=(height - side) // 2, size=side)
+
+
+def validate_crop(crop: Crop, width: int, height: int) -> Crop:
+    if crop.size < min(MIN_CROP_SIDE, width, height):
+        raise ImageRejected(422, "That crop is too small. Zoom out a little and try again.")
+    if crop.x < 0 or crop.y < 0 or crop.x + crop.size > width or crop.y + crop.size > height:
+        raise ImageRejected(422, "The crop has to stay inside the picture.")
+    return crop
+
+
+def _cut(image: Image.Image, crop: Crop, side: int) -> Image.Image:
+    """Exactly the chosen square, resampled once, never enlarged."""
+    target = min(side, crop.size)
+    return image.resize((target, target), Image.Resampling.LANCZOS,
+                        box=(crop.x, crop.y, crop.x + crop.size, crop.y + crop.size))
+
+
+def prepare_picture(data: bytes, *, max_bytes: int, crop: Crop | None) -> ProcessedPicture:
+    image, fmt = _decode(data, max_bytes=max_bytes)
+    chosen = validate_crop(crop, image.width, image.height) if crop else default_crop(image.width, image.height)
+    return ProcessedPicture(
+        original=_encode(image, fmt, keep=True),
+        full=_encode(_cut(image, chosen, FULL_SIDE), fmt), thumb=_encode(_cut(image, chosen, THUMB_SIDE), fmt),
+        content_type=CONTENT_TYPES[fmt], extension=EXTENSIONS[fmt], width=image.width, height=image.height, crop=chosen,
+    )
+
+
+def recut_picture(original: bytes, crop: Crop) -> tuple[bytes, bytes]:
+    """New avatar variants from a stored original (already upright and free
+    of metadata). Returns (full, thumb)."""
+    image, fmt = _decode(original, max_bytes=len(original) + 1)
+    chosen = validate_crop(crop, image.width, image.height)
+    return _encode(_cut(image, chosen, FULL_SIDE), fmt), _encode(_cut(image, chosen, THUMB_SIDE), fmt)
+
+
 def thumb_key(full_key: str) -> str:
     """profile-photos/<id>/<ts>.jpg -> profile-photos/<id>/<ts>.thumb.jpg"""
     stem, dot, ext = full_key.rpartition(".")
     return f"{stem}.thumb.{ext}" if dot else f"{full_key}.thumb"
+
+
+def original_key(full_key: str) -> str:
+    """profile-photos/<id>/<ts>.jpg -> profile-photos/<id>/<ts>.original.jpg"""
+    stem, dot, ext = full_key.rpartition(".")
+    return f"{stem}.original.{ext}" if dot else f"{full_key}.original"

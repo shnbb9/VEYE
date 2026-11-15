@@ -177,7 +177,7 @@ SVG = b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><script>ale
     ("x.png", GIF, "image/png", 415),
     ("x.png", b"not an image at all", "image/png", 415),
     ("x.png", image()[:40], "image/png", 415),
-    ("x.png", image() + b"\0" * 2_100_000, "image/png", 413),
+    ("x.png", image() + b"\0" * 10_100_000, "image/png", 413),  # the limit is 10 MB since 15 Nov 2026
     ("x.png", image(size=(7000, 4)), "image/png", 422),
     ("x.png", APNG, "image/png", 415),
     ("x.jpg", image("PNG"), "image/jpeg", 201),  # the bytes decide the type, consistently, not the label

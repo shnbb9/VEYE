@@ -38,6 +38,12 @@ class FoodDiaryEntry(Base):
     fat_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     kcal: Mapped[int | None] = mapped_column(Integer, nullable=True)
     estimate_version: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    # The meal's photo (15 Nov 2026): only the object key and type live here —
+    # the rebuilt picture and its thumbnail are in object storage (local files
+    # in development, Google Cloud Storage once the project exists).
+    photo_object_key: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    photo_content_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    photo_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 

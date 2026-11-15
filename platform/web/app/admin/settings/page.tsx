@@ -7,6 +7,7 @@ import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-
 import { Drawer, Field } from "@/components/admin/drawer";
 import { PrivacyProspectsCard } from "@/components/admin/privacy-prospects-card";
 import { HealthSharingCard } from "@/components/admin/health-sharing-card";
+import { AvatarCropDialog } from "@/components/avatar-crop-dialog";
 import { useSession } from "@/components/session";
 import { forgotPassword } from "@/lib/auth-api";
 import {
@@ -17,6 +18,7 @@ import {
   changeMyConsolePassword,
   createMyMemberProfile,
   myConsolePhotoUrl,
+  recropMyConsolePhoto,
   removeMyConsolePhoto,
   uploadMyConsolePhoto,
   getFeatureStates,
@@ -84,6 +86,7 @@ function AccountSection() {
   const [photoNote, setPhotoNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cropping, setCropping] = useState<{ src: string; file?: File; initial?: { x: number; y: number; size: number } } | null>(null);
 
   const loadSessions = () => listMyConsoleSessions().then((result) => setSessions(result.rows)).catch(() => setSessions(null));
   useEffect(() => { void loadSessions(); }, []);
@@ -91,19 +94,35 @@ function AccountSection() {
   if (!account) return null;
   const initials = `${account.first_name[0] ?? ""}${account.last_name[0] ?? ""}`.toUpperCase();
 
-  async function choosePhoto(file: File | undefined) {
+  // A chosen file opens the circular crop editor first; nothing is uploaded
+  // until the square is saved (owner request, 15 Nov 2026).
+  function choosePhoto(file: File | undefined) {
+    if (fileRef.current) fileRef.current.value = "";
     if (!file) return;
-    setPhotoBusy(true); setPhotoNote(null);
-    try {
-      await uploadMyConsolePhoto(file);
-      await session.refresh();
-      setPhotoNote({ tone: "ok", text: "Your picture is updated." + (account?.member_access ? " It is the same picture in the member application." : "") });
-    } catch (reason) {
-      setPhotoNote({ tone: "error", text: reason instanceof Error ? reason.message : "The picture could not be saved." });
-    } finally {
-      setPhotoBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
+    setPhotoNote(null);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setPhotoNote({ tone: "error", text: "Please choose a JPG, PNG or WebP image." }); return; }
+    if (file.size > 10_000_000) { setPhotoNote({ tone: "error", text: "The photo is too large. Please use an image under 10 MB." }); return; }
+    setCropping({ src: URL.createObjectURL(file), file });
+  }
+
+  function adjustPhoto() {
+    if (!account?.photo_version || !account.photo_crop) return;
+    const { x, y, size } = account.photo_crop;
+    setPhotoNote(null);
+    setCropping({ src: myConsolePhotoUrl(account.photo_version, "original"), initial: { x, y, size } });
+  }
+
+  function closeCropper() {
+    if (cropping?.file) URL.revokeObjectURL(cropping.src);
+    setCropping(null);
+  }
+
+  async function saveCrop(square: { x: number; y: number; size: number }) {
+    if (!cropping) return;
+    if (cropping.file) await uploadMyConsolePhoto(cropping.file, square); else await recropMyConsolePhoto(square);
+    await session.refresh();
+    closeCropper();
+    setPhotoNote({ tone: "ok", text: "Your picture is updated." + (account?.member_access ? " It is the same picture in the member application." : "") });
   }
 
   async function dropPhoto() {
@@ -170,11 +189,17 @@ function AccountSection() {
             : <span className="avatar avatar--lg" data-testid="settings-admin-initials">{initials}</span>}</div>
         <div className="card__body stack gap-5">
           <div className="row gap-2 wrap" style={{ alignItems: "center" }}>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => void choosePhoto(event.target.files?.[0])} data-testid="admin-photo-input" />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => choosePhoto(event.target.files?.[0])} data-testid="admin-photo-input" />
             <button className="btn btn--secondary btn--sm" type="button" disabled={photoBusy} onClick={() => fileRef.current?.click()} data-testid="admin-photo-change">{photoBusy ? "Saving…" : account.photo_version ? "Change picture" : "Add a picture"}</button>
+            {account.photo_version && account.photo_crop && <button className="btn btn--ghost btn--sm" type="button" disabled={photoBusy} onClick={adjustPhoto} data-testid="admin-photo-adjust">Adjust</button>}
             {account.photo_version && <button className="btn btn--ghost btn--sm" type="button" disabled={photoBusy} onClick={() => void dropPhoto()} data-testid="admin-photo-remove">Remove</button>}
-            <span className="t-support">JPG, PNG or WebP, up to 2 MB. Location and camera details are removed.</span>
+            <span className="t-support">JPG, PNG or WebP, up to 10 MB. Location and camera details are removed.</span>
           </div>
+          {cropping && (
+            <AvatarCropDialog src={cropping.src} initial={cropping.initial} primaryClass="btn btn--primary" secondaryClass="btn btn--ghost"
+                              title={cropping.file ? "Crop your new picture" : "Adjust your picture"} saveLabel="Save picture"
+                              onCancel={closeCropper} onSave={saveCrop} />
+          )}
           {photoNote && <p className={photoNote.tone === "error" ? "errorbar" : "t-support"} role="status" data-testid="admin-photo-note">{photoNote.text}</p>}
           <div><div className="t-eyebrow">Email</div><p data-testid="settings-admin-email">{account.email}</p></div>
           <div><div className="t-eyebrow">Access</div><p>Full VEYE administration{account.member_access ? " · also holds a member profile (signs into the member application separately at /login)" : ""}</p></div>

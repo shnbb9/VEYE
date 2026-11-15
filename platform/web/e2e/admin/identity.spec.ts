@@ -39,7 +39,10 @@ test.describe("an administrator's own account", () => {
     await expect(page.getByTestId("settings-admin-initials")).toBeVisible();
     const uploaded = page.waitForResponse((r) => r.url().endsWith("/api/v1/admin/account/photo") && r.request().method() === "POST");
     await page.getByTestId("admin-photo-input").setInputFiles({ name: "me.png", mimeType: "image/png", buffer: PNG });
+    await expect(page.getByTestId("crop-dialog")).toBeVisible();
+    await page.getByTestId("crop-save").click();
     expect((await uploaded).status()).toBe(201);
+    await expect(page.getByTestId("crop-dialog")).toBeHidden();
     await expect(page.getByTestId("settings-admin-photo")).toBeVisible();
     await expect(page.getByTestId("admin-chrome-photo")).toBeVisible();
     await page.reload();
@@ -49,7 +52,9 @@ test.describe("an administrator's own account", () => {
     expect((await caraAccount.json()).admin.photo_version ?? null).toBeNull();
 
     await page.getByTestId("admin-photo-input").setInputFiles({ name: "x.png", mimeType: "image/png", buffer: Buffer.from("not an image") });
-    await expect(page.getByTestId("admin-photo-note")).toContainText(/JPG, PNG or WebP|could not be read/);
+    await expect(page.getByTestId("crop-dialog").getByRole("alert")).toContainText(/could not be read as an image/);
+    await page.getByTestId("crop-dialog").getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByTestId("crop-dialog")).toBeHidden();
 
     await page.getByTestId("admin-photo-remove").click();
     await expect(page.getByTestId("settings-admin-initials")).toBeVisible();

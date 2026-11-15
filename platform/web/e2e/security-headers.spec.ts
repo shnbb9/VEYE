@@ -17,7 +17,12 @@ test.describe("Security headers and CSRF", () => {
       expect(headers["referrer-policy"], path).toBe("no-referrer");
       expect(headers["content-security-policy"], path).toContain("frame-ancestors 'none'");
       expect(headers["content-security-policy"], path).toContain("object-src 'none'");
-      expect(headers["permissions-policy"], path).toContain("camera=()");
+      // This origin may ask for the camera (Food Diary photos); nothing
+      // embedded may, and the microphone, location and payment stay off.
+      expect(headers["permissions-policy"], path).toContain("camera=(self)");
+      expect(headers["permissions-policy"], path).toContain("microphone=()");
+      expect(headers["permissions-policy"], path).toContain("geolocation=()");
+      expect(headers["permissions-policy"], path).toContain("payment=()");
     }
   });
 

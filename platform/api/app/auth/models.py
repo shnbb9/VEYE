@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -35,6 +35,15 @@ class UserAccount(Base):
     photo_object_key: Mapped[str | None] = mapped_column(String(300), nullable=True)
     photo_content_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     photo_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The rebuilt original the avatar is cut from, its upright size, and the
+    # square the person chose (left, top, side in the original's pixels).
+    # None on a picture saved before cropping existed: it cannot be re-cropped.
+    photo_original_key: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    photo_original_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    photo_original_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    photo_crop_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    photo_crop_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    photo_crop_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # An address the person asked to move to. It replaces `email` only when the
     # link sent to that address is used, so a typo can never lock them out.

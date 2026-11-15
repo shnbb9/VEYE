@@ -85,7 +85,14 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "no-referrer" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+          /* camera=(self) since 15 Nov 2026: the Food Diary's "Snap a photo"
+             opens the webcam on a computer. It has to be on every page, not
+             just /app/food-diary — the member area moves between pages
+             without a reload, and a document keeps the policy it was loaded
+             with (/login, /app, …). Only this origin may ask, the browser
+             still asks the person, and embedded third parties (the YouTube
+             players) stay refused; microphone, location and payment stay off. */
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
           { key: "Content-Security-Policy", value: csp },
         ],
       },

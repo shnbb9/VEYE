@@ -160,7 +160,8 @@ def test_profile_photo_is_validated_stored_through_object_storage_and_removable(
     # wrong type (declared PNG, actually text) and oversize are refused
     bad = member_client.post("/api/v1/members/me/photo", files={"file": ("x.png", io.BytesIO(b"not an image"), "image/png")})
     assert bad.status_code == 415
-    huge = member_client.post("/api/v1/members/me/photo", files={"file": ("x.png", io.BytesIO(PNG_1PX + b"\0" * 2_100_000), "image/png")})
+    # 10 MB since 15 Nov 2026 (the original is kept to crop from).
+    huge = member_client.post("/api/v1/members/me/photo", files={"file": ("x.png", io.BytesIO(PNG_1PX + b"\0" * 10_100_000), "image/png")})
     assert huge.status_code == 413
     ok = member_client.post("/api/v1/members/me/photo", files={"file": ("me.png", io.BytesIO(PNG_1PX), "image/png")})
     assert ok.status_code == 201, ok.text

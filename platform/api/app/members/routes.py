@@ -4,7 +4,9 @@ the signed-in member only."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,7 @@ from app.auth.schemas import (
 from app.auth.service import AuthError, AuthService
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
+from app.members.photo_crop import CropIn, form_crop
 from app.members.service import MemberProfileService, ProfileError
 
 router = APIRouter(prefix="/api/v1/members/me", tags=["member-account"])
@@ -59,14 +62,31 @@ def update_profile(payload: ProfileUpdate, principal: CurrentPrincipal = Depends
 
 
 @router.post("/photo", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
-async def upload_photo(file: UploadFile = File(...), principal: CurrentPrincipal = Depends(require_member),
+async def upload_photo(file: UploadFile = File(...), crop_x: int | None = Form(None), crop_y: int | None = Form(None),
+                       crop_size: int | None = Form(None), principal: CurrentPrincipal = Depends(require_member),
                        db: Session = Depends(get_db), service: MemberProfileService = Depends(_service)) -> AccountOut:
+    """A new picture, and optionally the square chosen in the crop frame
+    (pixels of the upright original). The original is kept for re-cropping."""
+    crop = form_crop(crop_x, crop_y, crop_size)
     user = _user(db, principal)
     # Read at most one byte over the limit so an oversized upload is refused
     # without buffering an arbitrarily large body.
     data = await file.read(service.photo_max_bytes + 1)
     try:
-        service.set_photo(user, data, file.content_type)
+        service.set_photo(user, data, file.content_type, crop)
+    except ProfileError as exc:
+        _raise(exc)
+    db.commit()
+    return account_out(user, PORTAL_MEMBER)
+
+
+@router.put("/photo/crop", response_model=AccountOut)
+def recrop_photo(payload: CropIn, principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+                 service: MemberProfileService = Depends(_service)) -> AccountOut:
+    """Cut the avatar again from the picture already kept — no new upload."""
+    user = _user(db, principal)
+    try:
+        service.recrop_photo(user, payload.crop())
     except ProfileError as exc:
         _raise(exc)
     db.commit()
@@ -85,9 +105,12 @@ def remove_photo(principal: CurrentPrincipal = Depends(require_member), db: Sess
 @router.get("/photo")
 def my_photo(size: str = "full", principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
              service: MemberProfileService = Depends(_service)) -> Response:
+    """`original` is the picture the crop editor works on — the owner's own,
+    and only through this route."""
     user = _user(db, principal)
+    variant: Literal["full", "thumb", "original"] = "thumb" if size == "thumb" else "original" if size == "original" else "full"
     try:
-        data, content_type = service.read_photo(user, "thumb" if size == "thumb" else "full")
+        data, content_type = service.read_photo(user, variant)
     except ProfileError as exc:
         _raise(exc)
     return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=0, must-revalidate"})

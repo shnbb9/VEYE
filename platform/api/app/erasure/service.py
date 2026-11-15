@@ -71,7 +71,9 @@ from app.food_choices.models import MemberFoodSelection, MemberHowToPlan
 from app.guided_flows.models import MemberGuidedFlowSession
 from app.health_permission.models import MemberHealthPermission, MemberHealthPermissionEvent
 from app.meal_plans.models import MealPlanDay
+from app.food.photos import MealPhotoService
 from app.members.models import Member
+from app.members.service import clear_photo_crop
 from app.mood.models import MoodEntry
 from app.notifications import templates
 from app.notifications.models import Notification, NotificationOutbox, NotificationPreference
@@ -278,6 +280,12 @@ class ErasureService:
     def _stage_journals(self, request: ErasureRequest) -> dict:
         m = self._members(request)
         out = {}
+        # The diary's photos are member data in object storage, under the
+        # member's own prefix: they go with the entries whatever the scope
+        # (a dual-access person keeps the console, never their meal photos).
+        # Listing the prefix also catches a photo whose entry delete could not
+        # remove it. Idempotent, so a retried or replayed purge finishes.
+        out["meal_photo_objects"] = MealPhotoService(self.db, self.media, max_bytes=0).purge_member(m)
         for name, model in (("mood_entries", MoodEntry), ("food_diary_entries", FoodDiaryEntry),
                             ("food_diary_days", FoodDiaryDay), ("meal_plans", MealPlanDay),
                             ("food_choices", MemberFoodSelection), ("how_to_plans", MemberHowToPlan)):
@@ -331,10 +339,13 @@ class ErasureService:
         if request.scope != SCOPE_ENTIRE_IDENTITY:
             return {}
         user = self.db.get(UserAccount, request.subject_user_id)
-        if user is None or not user.photo_object_key:
+        if user is None or not (user.photo_object_key or user.photo_original_key):
             return {}
         removed = 0
-        for key in (user.photo_object_key, thumb_key(user.photo_object_key)):
+        # The avatar variants AND the kept original the crop is cut from.
+        keys = [key for key in (user.photo_object_key, user.photo_object_key and thumb_key(user.photo_object_key),
+                                user.photo_original_key) if key]
+        for key in keys:
             try:
                 self.media.delete(key)
                 removed += 1
@@ -342,6 +353,7 @@ class ErasureService:
                 pass
         user.photo_object_key = None
         user.photo_content_type = None
+        clear_photo_crop(user)
         self.db.flush()
         return {"photo_objects": removed}
 

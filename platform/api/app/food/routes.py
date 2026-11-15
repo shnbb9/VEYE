@@ -6,16 +6,21 @@ entry experience (build/dashboard.html, #view-food-diary), persisted."""
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from typing import Literal, NoReturn
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth.principal import CurrentPrincipal, require_member
+from app.core.rate_limit import RateLimiter, client_address
+from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.food.estimate import ESTIMATE_VERSION, MacroEstimate, day_feedback, estimate
 from app.food.models import FEELINGS, FoodDiaryDay, FoodDiaryEntry
+from app.food.photos import MealPhotoError, MealPhotoService, meal_photo_version
+from app.storage.remote_image import RemoteImageFetcher
 
 router = APIRouter(prefix="/api/v1/members/me/food-diary", tags=["food-diary"])
 
@@ -50,6 +55,14 @@ class MealOut(BaseModel):
     kcal: int
     created_at: datetime
     updated_at: datetime
+    # Changes whenever the meal's photo does; None = no photo. The bytes come
+    # from /food-diary/{id}/photo.
+    photo_version: str | None = None
+
+
+class PhotoLinkIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(min_length=1, max_length=2048)
 
 
 class DaySummary(BaseModel):
@@ -101,7 +114,8 @@ def meal_out(row: FoodDiaryEntry) -> MealOut:
     est = _estimate_of(row)
     return MealOut(id=row.id, entry_date=row.entry_date, meal_time=row.meal_time, description=row.description,
                    feelings=list(row.feelings or []), notes=row.notes or "", protein_g=est.protein_g, carbs_g=est.carbs_g,
-                   fat_g=est.fat_g, kcal=est.kcal, created_at=row.created_at, updated_at=row.updated_at)
+                   fat_g=est.fat_g, kcal=est.kcal, created_at=row.created_at, updated_at=row.updated_at,
+                   photo_version=meal_photo_version(row))
 
 
 def _apply_estimate(row: FoodDiaryEntry) -> None:
@@ -204,15 +218,92 @@ def update_meal(meal_id: UUID, payload: MealIn, principal: CurrentPrincipal = De
 
 
 @router.delete("/{meal_id}", response_model=DayOut)
-def remove_meal(meal_id: UUID, principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db)) -> DayOut:
+def remove_meal(meal_id: UUID, principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+                runtime: Runtime = Depends(get_runtime)) -> DayOut:
     assert principal.member_id is not None
     row = _own_meal(db, principal.member_id, meal_id)
     entry_date = row.entry_date
+    photos = _photos(db, runtime)
     db.delete(row)
     db.flush()
     _forget_empty_day(db, principal.member_id, entry_date)
     db.commit()
+    # The row is gone first; its photo after. A photo that could not be
+    # removed is left under the member's prefix, where erasure still finds it.
+    photos.forget(row)
     return _day(db, principal.member_id, entry_date)
+
+
+# ---- the meal's photo (owner request, 15 Nov 2026) ---------------------------------
+
+def _photos(db: Session, runtime: Runtime) -> MealPhotoService:
+    settings = runtime.settings
+    fetcher = RemoteImageFetcher(max_bytes=settings.meal_photo_max_bytes, trusted_hosts=settings.remote_image_trusted_host_set)
+    return MealPhotoService(db, runtime.media_store, max_bytes=settings.meal_photo_max_bytes, fetcher=fetcher)
+
+
+def _photo_refused(db: Session, exc: MealPhotoError) -> NoReturn:
+    db.commit()  # keep the rate-limit hit
+    raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.put("/{meal_id}/photo", response_model=DayOut)
+async def add_meal_photo(meal_id: UUID, request: Request, file: UploadFile = File(...),
+                         principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+                         runtime: Runtime = Depends(get_runtime)) -> DayOut:
+    """A photo for this meal — a file from the device or a camera snapshot.
+    Replaces the meal's earlier photo."""
+    assert principal.member_id is not None
+    row = _own_meal(db, principal.member_id, meal_id)
+    RateLimiter(db, runtime.settings).enforce("meal_photo", subject=str(principal.user_id), address=client_address(request))
+    service = _photos(db, runtime)
+    data = await file.read(service.max_bytes + 1)
+    try:
+        service.attach(row, data, file.content_type)
+    except MealPhotoError as exc:
+        _photo_refused(db, exc)
+    db.commit()
+    return _day(db, principal.member_id, row.entry_date)
+
+
+@router.post("/{meal_id}/photo/link", response_model=DayOut)
+def add_meal_photo_from_link(meal_id: UUID, payload: PhotoLinkIn, request: Request,
+                             principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+                             runtime: Runtime = Depends(get_runtime)) -> DayOut:
+    """A photo from a link the member pasted: fetched once from the public
+    internet (never a private address), then kept like an upload."""
+    assert principal.member_id is not None
+    row = _own_meal(db, principal.member_id, meal_id)
+    RateLimiter(db, runtime.settings).enforce("meal_photo_link", subject=str(principal.user_id), address=client_address(request))
+    try:
+        _photos(db, runtime).attach_from_link(row, payload.url)
+    except MealPhotoError as exc:
+        _photo_refused(db, exc)
+    db.commit()
+    return _day(db, principal.member_id, row.entry_date)
+
+
+@router.delete("/{meal_id}/photo", response_model=DayOut)
+def remove_meal_photo(meal_id: UUID, principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+                      runtime: Runtime = Depends(get_runtime)) -> DayOut:
+    assert principal.member_id is not None
+    row = _own_meal(db, principal.member_id, meal_id)
+    _photos(db, runtime).remove(row)
+    db.commit()
+    return _day(db, principal.member_id, row.entry_date)
+
+
+@router.get("/{meal_id}/photo")
+def meal_photo(meal_id: UUID, size: Literal["full", "thumb"] = "full", principal: CurrentPrincipal = Depends(require_member),
+               db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)) -> Response:
+    assert principal.member_id is not None
+    row = _own_meal(db, principal.member_id, meal_id)
+    try:
+        data, content_type = _photos(db, runtime).read(row, size)
+    except MealPhotoError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return Response(content=data, media_type=content_type,
+                    headers={"Cache-Control": "private, max-age=0, must-revalidate", "X-Content-Type-Options": "nosniff"})
 
 
 @router.post("/days/{entry_date}/save", response_model=DayOut)

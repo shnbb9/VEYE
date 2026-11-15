@@ -422,15 +422,24 @@ export const listAccountActivity = (limit = 20) =>
 /* One picture per sign-in account: a person with both kinds of access has the
    same avatar in both portals. Only the signed-in account's own picture can
    be changed here. */
-export const myConsolePhotoUrl = (version: string, size: "full" | "thumb" = "thumb") =>
+export const myConsolePhotoUrl = (version: string, size: "full" | "thumb" | "original" = "thumb") =>
   apiPath(`/api/v1/admin/account/photo?size=${size}&v=${encodeURIComponent(version)}`);
 export const administratorPhotoUrl = (userId: string, version: string) =>
   apiPath(`/api/v1/admin/administrators/${userId}/photo?size=thumb&v=${encodeURIComponent(version)}`);
-export async function uploadMyConsolePhoto(file: File) {
+/** A new picture; the avatar is cut from `crop` (the centred square without one). */
+export async function uploadMyConsolePhoto(file: File, crop?: { x: number; y: number; size: number }) {
   const body = new FormData();
   body.append("file", file);
+  if (crop) {
+    body.append("crop_x", String(crop.x));
+    body.append("crop_y", String(crop.y));
+    body.append("crop_size", String(crop.size));
+  }
   return apiJson<import("@/lib/auth-api").Account>("/api/v1/admin/account/photo", { method: "POST", body });
 }
+/** Cut the avatar again from the kept original — no new upload. */
+export const recropMyConsolePhoto = (crop: { x: number; y: number; size: number }) =>
+  postJson<import("@/lib/auth-api").Account>("/api/v1/admin/account/photo/crop", crop, "PUT");
 export const removeMyConsolePhoto = () => apiJson<import("@/lib/auth-api").Account>("/api/v1/admin/account/photo", { method: "DELETE" });
 export const createMyMemberProfile = (password: string) =>
   postJson<{ member_id: string; created: boolean; message: string }>("/api/v1/admin/account/member-profile", { password, understood: true });

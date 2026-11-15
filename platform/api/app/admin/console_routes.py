@@ -29,6 +29,7 @@ from app.companion.models import CompanionConversation, CompanionFeedback, Compa
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.food.models import FoodDiaryEntry
+from app.food.photos import MealPhotoError, MealPhotoService
 from app.food.routes import MealOut, meal_out
 from app.guided_flows.models import GuidedFlow, MemberGuidedFlowSession
 from app.health_permission.models import (
@@ -645,6 +646,24 @@ def member_360(member_id: UUID, principal: CurrentPrincipal = Depends(require_ad
         account=_account_out(db, user, runtime),
         account_activity=account_activity(db, user_id=user.id, limit=10),
     )
+
+
+@router.get("/members/{member_id}/food-diary/{meal_id}/photo")
+def member_meal_photo(member_id: UUID, meal_id: UUID, size: Literal["full", "thumb"] = "thumb", db: Session = Depends(get_db),
+                      runtime: Runtime = Depends(get_runtime)) -> Response:
+    """A meal photo is the member's health record like the diary text: served
+    only while they share their records, read now (a withdrawal takes effect
+    on the very next request), and indistinguishable from "no photo" when not."""
+    _member_or_404(db, member_id)
+    row = db.get(FoodDiaryEntry, meal_id)
+    if row is None or row.member_id != member_id or not HealthPermissionService(db).shares_health_data(member_id):
+        raise HTTPException(status_code=404, detail="No photo.")
+    try:
+        data, content_type = MealPhotoService(db, runtime.media_store, max_bytes=0).read(row, size)
+    except MealPhotoError as exc:
+        raise HTTPException(status_code=404, detail="No photo.") from exc
+    return Response(content=data, media_type=content_type,
+                    headers={"Cache-Control": "private, max-age=0, must-revalidate", "X-Content-Type-Options": "nosniff"})
 
 
 @router.get("/members/{member_id}/photo")

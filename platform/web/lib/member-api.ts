@@ -12,16 +12,30 @@ export type ProfileInput = { first_name: string; last_name: string; phone?: stri
 
 export const updateProfile = (input: ProfileInput) => postJson<Account>(`/api/v1/members/${ME}/profile`, input, "PUT");
 
-export async function uploadPhoto(file: File): Promise<Account> {
+/** A square of the upright original, in its pixels (see AvatarCropDialog). */
+export type PhotoCrop = { x: number; y: number; size: number };
+
+/** A new picture; the avatar is cut from `crop` (the centred square without one). */
+export async function uploadPhoto(file: File, crop?: PhotoCrop): Promise<Account> {
   const body = new FormData();
   body.append("file", file, file.name);
+  if (crop) {
+    body.append("crop_x", String(crop.x));
+    body.append("crop_y", String(crop.y));
+    body.append("crop_size", String(crop.size));
+  }
   return apiJson<Account>(`/api/v1/members/${ME}/photo`, { method: "POST", body });
 }
+
+/** Cut the avatar again from the kept original — no new upload. */
+export const recropPhoto = (crop: PhotoCrop) => postJson<Account>(`/api/v1/members/${ME}/photo/crop`, crop, "PUT");
 
 export const removePhoto = () => apiJson<Account>(`/api/v1/members/${ME}/photo`, { method: "DELETE" });
 
 /** The member's own photo URL, cache-busted by the account's photo_version. */
 export const myPhotoUrl = (version: string) => apiPath(`/api/v1/members/${ME}/photo?v=${encodeURIComponent(version)}`);
+/** The kept original the crop editor works on (the owner's own only). */
+export const myOriginalPhotoUrl = (version: string) => apiPath(`/api/v1/members/${ME}/photo?size=original&v=${encodeURIComponent(version)}`);
 export const exportUrl = () => apiPath(`/api/v1/members/${ME}/export`);
 
 /* ---- mood ---------------------------------------------------------------- */
@@ -49,7 +63,9 @@ export const removeMood = (entry_date: string) => apiJson<void>(`/api/v1/members
 
 /** The prototype macro estimate (grams and kcal), calculated by the API. */
 export type Macros = { protein_g: number; carbs_g: number; fat_g: number; kcal: number };
-export type Meal = { id: string; entry_date: string; meal_time: string; description: string; feelings: string[]; notes: string; created_at: string; updated_at: string } & Macros;
+export type Meal = { id: string; entry_date: string; meal_time: string; description: string; feelings: string[]; notes: string; created_at: string; updated_at: string;
+  /** Changes when the meal's photo does; null = no photo. */
+  photo_version?: string | null } & Macros;
 export type DiaryHistoryDay = { entry_date: string; meals: number; kcal: number; saved: boolean; last_updated: string | null };
 export type DiaryDay = { entry_date: string; meals: Meal[]; totals: Macros; saved_at: string | null; history: DiaryHistoryDay[]; feelings: string[]; days_logged: number };
 export type MealInput = { entry_date: string; meal_time: string; description: string; feelings: string[]; notes: string };
@@ -62,6 +78,19 @@ export const estimateMacros = (description: string) =>
   postJson<{ estimate: Macros | null }>(`/api/v1/members/${ME}/food-diary/estimate`, { description });
 export const saveDiaryDay = (date: string) => postJson<DiaryDay>(`/api/v1/members/${ME}/food-diary/days/${date}/save`, {});
 export const getDiaryFeedback = (date: string) => apiJson<{ entry_date: string; text: string }>(`/api/v1/members/${ME}/food-diary/feedback?date=${date}`);
+
+/* A meal's photo (15 Nov 2026): a file, a camera snapshot or a link the API
+   fetches and keeps its own copy of. One per meal; a new one replaces it. */
+export async function addMealPhoto(mealId: string, photo: Blob, name = "meal.jpg"): Promise<DiaryDay> {
+  const body = new FormData();
+  body.append("file", photo, name);
+  return apiJson<DiaryDay>(`/api/v1/members/${ME}/food-diary/${mealId}/photo`, { method: "PUT", body });
+}
+export const addMealPhotoFromLink = (mealId: string, url: string) =>
+  postJson<DiaryDay>(`/api/v1/members/${ME}/food-diary/${mealId}/photo/link`, { url });
+export const removeMealPhoto = (mealId: string) => apiJson<DiaryDay>(`/api/v1/members/${ME}/food-diary/${mealId}/photo`, { method: "DELETE" });
+export const mealPhotoUrl = (mealId: string, version: string, size: "full" | "thumb" = "thumb") =>
+  apiPath(`/api/v1/members/${ME}/food-diary/${mealId}/photo?size=${size}&v=${encodeURIComponent(version)}`);
 
 /* ---- meal planning ------------------------------------------------------- */
 

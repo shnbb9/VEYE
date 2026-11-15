@@ -125,7 +125,10 @@ def test_erasure_removes_every_trace_and_leaves_a_receipt_without_health_data(ad
                     if "erase.full@demo.veye.test" in json.dumps(e.details or {})]
         assert recorded, "precondition: an audit entry holds the address"
         photo_key = db.get(UserAccount, user_id).photo_object_key
+        # The rebuilt original kept for re-cropping is the member's picture too.
+        original_key = db.get(UserAccount, user_id).photo_original_key
     assert photo_key and get_runtime().media_store.exists(photo_key)
+    assert original_key and get_runtime().media_store.exists(original_key)
 
     done = erase(http)
     assert done.status_code == 202, done.text
@@ -144,6 +147,7 @@ def test_erasure_removes_every_trace_and_leaves_a_receipt_without_health_data(ad
         for entry in kept:
             assert "erase.full@demo.veye.test" not in json.dumps(entry.details or {})
     assert not get_runtime().media_store.exists(photo_key)
+    assert not get_runtime().media_store.exists(original_key)
 
     # The session that asked is gone; the account cannot sign in; the console cannot open it.
     assert http.get("/api/v1/auth/me").json()["member"] is None

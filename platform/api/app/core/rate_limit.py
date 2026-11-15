@@ -82,6 +82,11 @@ LIMITS = {
     "public_request": Limit("public_request", per_subject=10, window_minutes=60),
     # Uploads cost storage and CPU.
     "photo_upload": Limit("photo_upload", per_subject=20, window_minutes=60),
+    # Food Diary photos: one per meal is ordinary, a few a day; a link makes
+    # the API fetch from another website, so it is tighter and per address
+    # too — the fetcher must never become a scanner aimed at someone else.
+    "meal_photo": Limit("meal_photo", per_subject=60, window_minutes=60),
+    "meal_photo_link": Limit("meal_photo_link", per_subject=20, window_minutes=60, per_address=60),
     # A visitor saving a quiz result: each one stores health answers and sends
     # an email to the address typed.
     "prospect_capture": Limit("prospect_capture", per_subject=20, window_minutes=60),

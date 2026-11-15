@@ -35,7 +35,7 @@ from app.auth.schemas import (
 from app.auth.service import AuthError, AuthService, SignUpInput
 from app.auth.housekeeping import after_successful_sign_in
 from app.auth.throttle import SignInThrottle, client_address
-from app.members.service import photo_version
+from app.members.service import photo_crop, photo_version
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.notifications.service import NotificationService
@@ -49,7 +49,7 @@ def account_out(user: UserAccount, portal: str | None = None) -> AccountOut:
         member_id=user.member_id, member_access=user.member_access, admin_access=user.admin_access, portal=portal,
         email_verified=user.email_verified_at is not None, pending_email=user.pending_email,
         is_synthetic=user.is_synthetic, created_at=user.created_at,
-        phone=user.phone, postal_code=user.postal_code, photo_version=photo_version(user),
+        phone=user.phone, postal_code=user.postal_code, photo_version=photo_version(user), photo_crop=photo_crop(user),
     )
 
 

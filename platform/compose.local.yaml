@@ -72,6 +72,11 @@ services:
       # local file store on a named volume; a cloud bucket is a client decision.
       VEYE_MEDIA_OBJECT_STORE: local
       VEYE_MEDIA_OBJECT_ROOT: /app/var/media-objects
+      # The Food Diary link fetcher reaches the public internet only. This
+      # stack's own web container is the one private host it may also reach,
+      # so the browser suite can prove "a photo from a link" without the
+      # internet. Production clears this setting whatever it is given.
+      VEYE_REMOTE_IMAGE_TRUSTED_HOSTS: ${VEYE_REMOTE_IMAGE_TRUSTED_HOSTS:-web:3000}
       # Development observability (optional; masked before export).
       VEYE_LANGFUSE_ENABLED: ${VEYE_LANGFUSE_ENABLED:-false}
       VEYE_LANGFUSE_PUBLIC_KEY: ${VEYE_LANGFUSE_PUBLIC_KEY:-}

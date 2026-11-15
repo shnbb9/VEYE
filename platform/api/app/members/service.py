@@ -32,7 +32,7 @@ from app.progress.body_composition.models import BodyCompositionAttempt
 from app.progress.health_assessment.models import HealthAssessmentAttempt
 from app.progress.simple_quiz.models import SimpleQuizAttempt
 from app.requests.models import MemberRequest
-from app.storage.images import ImageRejected, normalise_photo, thumb_key
+from app.storage.images import Crop, ImageRejected, original_key, prepare_picture, recut_picture, thumb_key
 from app.storage.object_storage import ObjectNotFound, ObjectStorage
 
 log = logging.getLogger("veye.members")
@@ -71,8 +71,25 @@ def photo_version(user: UserAccount) -> str | None:
     ).hexdigest()[:12]
 
 
+def photo_crop(user: UserAccount) -> dict[str, int] | None:
+    """What the crop editor needs to reopen where the person left it: the
+    upright original's size and the chosen square. None when the picture
+    cannot be re-cropped (no picture, or one saved before cropping)."""
+    if not user.photo_object_key or not user.photo_original_key or None in (
+            user.photo_original_width, user.photo_original_height, user.photo_crop_x, user.photo_crop_y, user.photo_crop_size):
+        return None
+    return {"width": user.photo_original_width, "height": user.photo_original_height,
+            "x": user.photo_crop_x, "y": user.photo_crop_y, "size": user.photo_crop_size}
+
+
+def clear_photo_crop(user: UserAccount) -> None:
+    user.photo_original_key = None
+    user.photo_original_width = user.photo_original_height = None
+    user.photo_crop_x = user.photo_crop_y = user.photo_crop_size = None
+
+
 class MemberProfileService:
-    def __init__(self, db: Session, media: ObjectStorage, *, photo_max_bytes: int = 2_000_000) -> None:
+    def __init__(self, db: Session, media: ObjectStorage, *, photo_max_bytes: int = 10_000_000) -> None:
         self.db = db
         self.media = media
         self.photo_max_bytes = photo_max_bytes
@@ -99,30 +116,65 @@ class MemberProfileService:
     # and administrator access has ONE avatar, shown in both portals; either
     # portal may change it, and each portal changes only its own signed-in
     # account's picture (architecture V2 §5.3).
-    def set_photo(self, user: UserAccount, data: bytes, declared_type: str | None) -> UserAccount:
+    def set_photo(self, user: UserAccount, data: bytes, declared_type: str | None, crop: Crop | None = None) -> UserAccount:
+        """A new picture: the rebuilt original is kept, and the avatar is cut
+        from `crop` (the centred square when none was chosen)."""
         if declared_type and declared_type.split(";")[0].strip() not in PHOTO_TYPES:
             raise ProfileError(415, "Please choose a JPG, PNG or WebP image.")
         try:
-            photo = normalise_photo(data, max_bytes=self.photo_max_bytes)
+            picture = prepare_picture(data, max_bytes=self.photo_max_bytes, crop=crop)
         except ImageRejected as exc:
             raise ProfileError(exc.status_code, exc.detail) from exc
         now = datetime.now(timezone.utc)
-        key = f"profile-photos/{user.id}/{now.strftime('%Y%m%dT%H%M%S%f')}.{photo.extension}"
-        old_key = user.photo_object_key
-        # Variants first, the pointer last: a failure mid-way leaves the old
+        key = f"profile-photos/{user.id}/{now.strftime('%Y%m%dT%H%M%S%f')}.{picture.extension}"
+        old_key, old_original = user.photo_object_key, user.photo_original_key
+        # Bytes first, the pointer last: a failure mid-way leaves the old
         # photo in place rather than a pointer to bytes that were never written.
-        self.media.put(thumb_key(key), photo.thumb, photo.content_type)
-        self.media.put(key, photo.full, photo.content_type)
+        self.media.put(original_key(key), picture.original, picture.content_type)
+        self.media.put(thumb_key(key), picture.thumb, picture.content_type)
+        self.media.put(key, picture.full, picture.content_type)
         user.photo_object_key = key
-        user.photo_content_type = photo.content_type
+        user.photo_content_type = picture.content_type
         user.photo_updated_at = now
+        user.photo_original_key = original_key(key)
+        user.photo_original_width, user.photo_original_height = picture.width, picture.height
+        user.photo_crop_x, user.photo_crop_y, user.photo_crop_size = picture.crop.x, picture.crop.y, picture.crop.size
         self.db.flush()
         if old_key and old_key != key:
             self._delete_quietly(old_key)
+        if old_original and old_original != user.photo_original_key:
+            self._delete_quietly(old_original, variants=False)
         return user
 
-    def _delete_quietly(self, key: str) -> None:
-        for target in (key, thumb_key(key)):
+    def recrop_photo(self, user: UserAccount, crop: Crop) -> UserAccount:
+        """A new square of the picture already kept — no new upload. The
+        original is untouched; only the avatar variants are cut again."""
+        if not user.photo_object_key or not user.photo_original_key or not user.photo_content_type:
+            raise ProfileError(409, "This picture was saved before cropping was available. Upload it again to crop it.")
+        try:
+            original = self.media.get(user.photo_original_key)
+        except ObjectNotFound as exc:
+            raise ProfileError(409, "The original of this picture is no longer available. Upload it again to crop it.") from exc
+        try:
+            full, thumb = recut_picture(original, crop)
+        except ImageRejected as exc:
+            raise ProfileError(exc.status_code, exc.detail) from exc
+        now = datetime.now(timezone.utc)
+        extension = user.photo_object_key.rpartition(".")[2]
+        key = f"profile-photos/{user.id}/{now.strftime('%Y%m%dT%H%M%S%f')}.{extension}"
+        old_key = user.photo_object_key
+        self.media.put(thumb_key(key), thumb, user.photo_content_type)
+        self.media.put(key, full, user.photo_content_type)
+        user.photo_object_key = key
+        user.photo_updated_at = now
+        user.photo_crop_x, user.photo_crop_y, user.photo_crop_size = crop.x, crop.y, crop.size
+        self.db.flush()
+        if old_key != key:
+            self._delete_quietly(old_key)
+        return user
+
+    def _delete_quietly(self, key: str, *, variants: bool = True) -> None:
+        for target in ((key, thumb_key(key)) if variants else (key,)):
             try:
                 self.media.delete(target)
             except ObjectNotFound:
@@ -137,15 +189,27 @@ class MemberProfileService:
     def remove_photo(self, user: UserAccount) -> UserAccount:
         if user.photo_object_key:
             self._delete_quietly(user.photo_object_key)
+        if user.photo_original_key:
+            self._delete_quietly(user.photo_original_key, variants=False)
         user.photo_object_key = None
         user.photo_content_type = None
         user.photo_updated_at = datetime.now(timezone.utc)
+        clear_photo_crop(user)
         self.db.flush()
         return user
 
     def read_photo(self, user: UserAccount, size: str = "full") -> tuple[bytes, str]:
+        """`original` is for the owner's crop editor only; the routes that
+        serve a picture to anyone else never ask for it."""
         if not user.photo_object_key or not user.photo_content_type:
             raise ProfileError(404, "No profile photo.")
+        if size == "original":
+            if not user.photo_original_key:
+                raise ProfileError(404, "This picture has no original to crop from.")
+            try:
+                return self.media.get(user.photo_original_key), user.photo_content_type
+            except ObjectNotFound as exc:
+                raise ProfileError(404, "This picture has no original to crop from.") from exc
         key = thumb_key(user.photo_object_key) if size == "thumb" else user.photo_object_key
         try:
             return self.media.get(key), user.photo_content_type

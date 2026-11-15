@@ -1,23 +1,43 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { CameraCapture } from "@/components/member/camera-capture";
+import { useModalDialog } from "@/components/use-modal-dialog";
+import dialog from "@/components/avatar-crop-dialog.module.css";
 import {
-  addMeal, estimateMacros, getDiaryDay, getDiaryFeedback, localDateKey, removeMeal, saveDiaryDay, updateMeal,
+  addMeal, addMealPhoto, addMealPhotoFromLink, estimateMacros, getDiaryDay, getDiaryFeedback, localDateKey, mealPhotoUrl,
+  removeMeal, removeMealPhoto, saveDiaryDay, updateMeal,
   type DiaryDay, type Macros, type Meal,
 } from "@/lib/member-api";
 import { prefersReducedMotion } from "@/lib/member-format";
 import "../prototype-type.css";
 
 /* The approved Food Diary (build/dashboard.html, #view-food-diary), reproduced
-   element for element: log a meal on the left — the photo row "In
-   Development", what you ate with the live prototype macro estimate, the
-   required time, how you felt and notes — and the day on the right with its
-   date switcher, the summary, Give me feedback, Save and History. Every value
-   is read from and written to the member's account; the estimate and the
-   feedback are the prototype's own rules, calculated by the API. */
+   element for element: log a meal on the left — the photo row, what you ate
+   with the live prototype macro estimate, the required time, how you felt and
+   notes — and the day on the right with its date switcher, the summary, Give
+   me feedback, Save and History. Every value is read from and written to the
+   member's account; the estimate and the feedback are the prototype's own
+   rules, calculated by the API.
+
+   The photo row works since 15 Nov 2026 (it said "In Development"): Snap a
+   photo (the phone's camera, or the webcam on a computer), Choose file, or a
+   link the API fetches once and keeps its own copy of — the browser never
+   loads the link itself. The meal is saved first and its photo after, so a
+   refused photo never loses the meal. */
 
 const FEELINGS = ["Hungry", "Very hungry", "Not hungry", "Stressed", "Relaxed", "Tired", "Energized", "Rushed", "Bored"];
 const EMPTY = { what: "", time: "", notes: "" };
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PHOTO_MAX_BYTES = 10_000_000;
+
+type PendingPhoto = { blob: Blob; name: string; url: string };
+
+/** A phone or tablet opens its own camera from the file input; a computer gets the webcam dialog. */
+function prefersNativeCamera(): boolean {
+  return window.matchMedia?.("(pointer: coarse)").matches || !navigator.mediaDevices?.getUserMedia;
+}
 
 function shift(key: string, delta: number): string {
   const [y, m, d] = key.split("-").map(Number);
@@ -62,6 +82,15 @@ export default function FoodDiaryPage() {
   const [savedNote, setSavedNote] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The photo that goes with the entry being written: a file or snapshot
+  // (shown from the device), or a link (fetched by the API on save).
+  const [pending, setPending] = useState<PendingPhoto | null>(null);
+  const [link, setLink] = useState("");
+  const [dropPhoto, setDropPhoto] = useState(false);
+  const [camera, setCamera] = useState(false);
+  const [viewing, setViewing] = useState<Meal | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const captureInput = useRef<HTMLInputElement>(null);
   const busy = useRef(false);
   const estimateTurn = useRef(0);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -102,10 +131,51 @@ export default function FoodDiaryPage() {
     setDate(next);
   }
 
+  // ---- the photo row ----------------------------------------------------------
+  const clearPending = useCallback(() => {
+    setPending((current) => { if (current) URL.revokeObjectURL(current.url); return null; });
+  }, []);
+  useEffect(() => () => clearPending(), [clearPending]);
+
+  function resetPhoto() {
+    clearPending();
+    setLink("");
+    setDropPhoto(false);
+  }
+
+  function takePhoto(blob: Blob, name: string) {
+    setError("");
+    if (!PHOTO_TYPES.includes(blob.type)) { setError("Please choose a JPG, PNG or WebP image."); return; }
+    if (blob.size > PHOTO_MAX_BYTES) { setError("The photo is too large. Please use an image under 10 MB."); return; }
+    clearPending();
+    setPending({ blob, name, url: URL.createObjectURL(blob) });
+    setLink("");          // the last thing chosen is the photo
+    setDropPhoto(false);
+  }
+
+  function fromInput(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = "";
+    if (file) takePhoto(file, file.name);
+  }
+
+  function snap() {
+    if (prefersNativeCamera()) captureInput.current?.click();
+    else setCamera(true);
+  }
+
+  function onLink(value: string) {
+    setLink(value);
+    if (value.trim()) { clearPending(); setDropPhoto(false); }
+  }
+
+  const editingMeal = editing ? (day?.meals.find((meal) => meal.id === editing) ?? null) : null;
+
   function startEdit(meal: Meal) {
     setEditing(meal.id);
     setForm({ what: meal.description, time: meal.meal_time, notes: meal.notes });
     setFeelings(meal.feelings);
+    resetPhoto();
     preview(meal.description);
     document.getElementById("fdxWhat")?.focus();
   }
@@ -119,10 +189,26 @@ export default function FoodDiaryPage() {
     setError("");
     try {
       const input = { entry_date: date, meal_time: form.time, description: what, feelings, notes: form.notes.trim() };
-      show(editing ? await updateMeal(editing, input) : await addMeal(input));
+      const before = new Set((day?.meals ?? []).map((meal) => meal.id));
+      let next = editing ? await updateMeal(editing, input) : await addMeal(input);
+      const id = editing ?? next.meals.find((meal) => !before.has(meal.id))?.id ?? null;
+      // The meal is saved; now its photo. A refused photo keeps the meal and
+      // leaves the form on it, so the link or file can be fixed and updated.
+      try {
+        if (id && pending) next = await addMealPhoto(id, pending.blob, pending.name);
+        else if (id && link.trim()) next = await addMealPhotoFromLink(id, link.trim());
+        else if (id && editing && dropPhoto) next = await removeMealPhoto(id);
+      } catch (reason) {
+        show(next);
+        setEditing(id);
+        setError(`Your meal is saved, but the photo was not added: ${reason instanceof Error ? reason.message : "please try again."}`);
+        return;
+      }
+      show(next);
       setEditing(null);
       setForm(EMPTY);
       setFeelings([]);
+      resetPhoto();
       estimateTurn.current++;
       setMacros(null);
     } catch (reason) {
@@ -173,18 +259,44 @@ export default function FoodDiaryPage() {
           <h2 className="fdx-panel-title" id="fdxLeftTitle">Log a meal</h2>
 
           <div className="fdx-photo">
-            <button className="fdx-photo-btn" type="button" disabled aria-disabled="true">
+            <button className="fdx-photo-btn" type="button" onClick={snap} data-testid="diary-snap">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3a1.5 1.5 0 0 1 1.5 1.5V19a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 19V9.5A1.5 1.5 0 0 1 4 8z" /><circle cx="12" cy="14" r="3.6" /></svg>
               Snap a photo
-              <span className="fdx-indev-tag">In Development</span>
             </button>
             <div className="fdx-photo-sub">
               <label className="fdx-label fdx-label--muted" htmlFor="fdxPhotoUrl">Meal photo url</label>
-              <input className="fdx-input" id="fdxPhotoUrl" type="text" disabled aria-disabled="true" placeholder="In Development" />
-              <button className="fdx-file-btn" type="button" disabled aria-disabled="true">Choose file</button>
-              <span className="fdx-indev-note">In Development</span>
+              <input className="fdx-input" id="fdxPhotoUrl" type="url" inputMode="url" autoComplete="off" placeholder="Paste a link to a picture"
+                     maxLength={2048} value={link} onChange={(event) => onLink(event.target.value)} data-testid="diary-photo-link" />
+              <button className="fdx-file-btn" type="button" onClick={() => fileInput.current?.click()}>Choose file</button>
+              <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden
+                     onChange={(event) => fromInput(event.currentTarget)} data-testid="diary-photo-file" />
+              <input ref={captureInput} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden
+                     onChange={(event) => fromInput(event.currentTarget)} data-testid="diary-photo-capture" />
             </div>
+            {(pending || link.trim() || (editingMeal?.photo_version && !dropPhoto) || dropPhoto) && (
+              <div className="fdx-photo-preview" data-testid="diary-photo-pending">
+                {pending ? (
+                  <><img src={pending.url} alt="The photo for this meal" /><p>Added when you {editing ? "update" : "add"} the entry.</p>
+                    <button className="fdx-photo-clear" type="button" onClick={clearPending}>Remove</button></>
+                ) : link.trim() ? (
+                  <><p>Veye fetches the picture at this link and keeps its own copy when you {editing ? "update" : "add"} the entry.</p>
+                    <button className="fdx-photo-clear" type="button" onClick={() => setLink("")}>Remove</button></>
+                ) : dropPhoto ? (
+                  <><p>The photo will be removed when you update the entry.</p>
+                    <button className="fdx-photo-clear" type="button" onClick={() => setDropPhoto(false)}>Keep it</button></>
+                ) : editingMeal?.photo_version ? (
+                  <><img src={mealPhotoUrl(editingMeal.id, editingMeal.photo_version)} alt="This meal's photo" />
+                    <p>This meal&rsquo;s photo. Choose another to replace it.</p>
+                    <button className="fdx-photo-clear" type="button" onClick={() => setDropPhoto(true)}>Remove photo</button></>
+                ) : null}
+              </div>
+            )}
           </div>
+          {camera && (
+            <CameraCapture onCancel={() => setCamera(false)}
+                           onUse={(photo) => { setCamera(false); takePhoto(photo, "camera.jpg"); }}
+                           onChooseFile={() => { setCamera(false); fileInput.current?.click(); }} />
+          )}
 
           <label className="fdx-label" htmlFor="fdxWhat">What did you eat?</label>
           <textarea className="fdx-input fdx-textarea" id="fdxWhat" rows={2} placeholder="e.g. Grilled chicken salad with avocado" maxLength={2000}
@@ -258,6 +370,12 @@ export default function FoodDiaryPage() {
                   <span className="fdx-meal-macros">{`P ${meal.protein_g}g · C ${meal.carbs_g}g · F ${meal.fat_g}g · ${meal.kcal} kcal`}</span>
                 </div>
                 <p className="fdx-meal-what">{meal.description}</p>
+                {meal.photo_version && (
+                  <button className="fdx-meal-photo" type="button" onClick={() => setViewing(meal)} data-testid="diary-meal-photo"
+                          aria-label={`Open the photo of: ${meal.description}`}>
+                    <img src={mealPhotoUrl(meal.id, meal.photo_version)} alt="" loading="lazy" />
+                  </button>
+                )}
                 {meal.feelings.length > 0 && <div className="fdx-meal-feels">{meal.feelings.map((f) => <span key={f}>{f}</span>)}</div>}
                 {meal.notes && <p className="fdx-meal-notes">{meal.notes}</p>}
                 <div className="fdx-meal-actions">
@@ -302,6 +420,26 @@ export default function FoodDiaryPage() {
           </div>
         </section>
       </div>
+      {viewing?.photo_version && <PhotoViewer meal={viewing} version={viewing.photo_version} onClose={() => setViewing(null)} />}
     </>
+  );
+}
+
+/* A meal's photo at full size, over the page. */
+function PhotoViewer({ meal, version, onClose }: { meal: Meal; version: string; onClose: () => void }) {
+  const card = useRef<HTMLDivElement>(null);
+  useModalDialog(true, card, onClose, "[data-photo-close]");
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className={dialog.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className={dialog.card} ref={card} role="dialog" aria-modal="true" aria-label={`Photo of ${meal.description}`} data-testid="diary-photo-view">
+        <img src={mealPhotoUrl(meal.id, version, "full")} alt={meal.description} style={{ width: "100%", borderRadius: 12, display: "block" }} />
+        <p className={dialog.sub} style={{ marginTop: 12, marginBottom: 0 }}>{`${meal.meal_time} · ${meal.description}`}</p>
+        <div className={dialog.actions}>
+          <button type="button" className="btn-primary" onClick={onClose} data-photo-close>Close</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

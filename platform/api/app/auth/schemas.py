@@ -46,6 +46,9 @@ class AccountOut(BaseModel):
     # Changes whenever the photo is replaced or removed; None = no photo (the
     # UI shows the member's initial). The bytes come from /members/me/photo.
     photo_version: str | None = None
+    # The crop editor's starting point: the original's size and the chosen
+    # square (x, y, size). None = nothing to re-crop.
+    photo_crop: dict[str, int] | None = None
 
 
 class ProfileUpdate(BaseModel):

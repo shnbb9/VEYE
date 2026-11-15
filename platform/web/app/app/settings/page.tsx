@@ -26,12 +26,18 @@ import {
   type HealthPermission,
   type HealthPermissionEvent,
 } from "@/lib/member-api";
-import { exportUrl, removePhoto, updateProfile, uploadPhoto } from "@/lib/member-api";
+import { exportUrl, myOriginalPhotoUrl, recropPhoto, removePhoto, updateProfile, uploadPhoto, type PhotoCrop } from "@/lib/member-api";
+import { AvatarCropDialog } from "@/components/avatar-crop-dialog";
 
 /* The approved Settings view (build/dashboard.html, #view-settings): four
    numbered cards. Profile, photo and security are backed by the account
    service and persist on the server; controls the application does not
    implement yet say so instead of saving to the browser as the prototype did. */
+
+// The API's own limits, checked here first so a wrong file is named before
+// anything is uploaded (the API checks again, from the bytes).
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PHOTO_MAX_BYTES = 10_000_000;
 
 export default function SettingsPage() {
   return <Suspense fallback={null}><SettingsView /></Suspense>;
@@ -50,6 +56,7 @@ function SettingsView() {
   const [form, setForm] = useState({ first_name: "", last_name: "", phone: "", postal_code: "" });
   const [dirty, setDirty] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cropping, setCropping] = useState<{ src: string; file?: File; initial?: PhotoCrop } | null>(null);
 
   useEffect(() => {
     getNotificationPreferences().then((result) => setPreferences(result.preferences)).catch(() => setPreferences({}));
@@ -110,21 +117,36 @@ function SettingsView() {
     } finally { setBusy(null); }
   }
 
-  async function choosePhoto(file: File | undefined) {
+  // A chosen file opens the circular crop editor first; nothing is uploaded
+  // until the person saves the square they want (owner request, 15 Nov 2026).
+  function choosePhoto(file: File | undefined) {
+    if (fileRef.current) fileRef.current.value = "";
     if (!file) return;
-    setBusy("photo");
     setProfileNote(null);
-    try {
-      await uploadPhoto(file);
-      await session.refresh();
-      setProfileNote({ tone: "ok", text: "Profile photo updated." });
-      toast.flash("Profile photo updated");
-    } catch (reason) {
-      setProfileNote({ tone: "error", text: reason instanceof Error ? reason.message : "The photo could not be saved." });
-    } finally {
-      setBusy(null);
-      if (fileRef.current) fileRef.current.value = "";
-    }
+    if (!PHOTO_TYPES.includes(file.type)) { setProfileNote({ tone: "error", text: "Please choose a JPG, PNG or WebP image." }); return; }
+    if (file.size > PHOTO_MAX_BYTES) { setProfileNote({ tone: "error", text: "The photo is too large. Please use an image under 10 MB." }); return; }
+    setCropping({ src: URL.createObjectURL(file), file });
+  }
+
+  function adjustPhoto() {
+    if (!account?.photo_version || !account.photo_crop) return;
+    const { x, y, size } = account.photo_crop;
+    setProfileNote(null);
+    setCropping({ src: myOriginalPhotoUrl(account.photo_version), initial: { x, y, size } });
+  }
+
+  function closeCropper() {
+    if (cropping?.file) URL.revokeObjectURL(cropping.src);
+    setCropping(null);
+  }
+
+  async function saveCrop(square: PhotoCrop) {
+    if (!cropping) return;
+    if (cropping.file) await uploadPhoto(cropping.file, square); else await recropPhoto(square);
+    await session.refresh();
+    closeCropper();
+    setProfileNote({ tone: "ok", text: "Profile photo updated." });
+    toast.flash("Profile photo updated");
   }
 
   async function dropPhoto() {
@@ -166,14 +188,17 @@ function SettingsView() {
             <div className="settings-photo-wrap">
               <MemberAvatar account={account} className="settings-photo" size="large" testId="settings-photo" />
               <input ref={fileRef} id="settingsPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden
-                     onChange={(event) => void choosePhoto(event.target.files?.[0])} data-testid="settings-photo-input" />
+                     onChange={(event) => choosePhoto(event.target.files?.[0])} data-testid="settings-photo-input" />
               <button className="settings-photo-btn" type="button" disabled={busy === "photo"} onClick={() => fileRef.current?.click()}>
                 {busy === "photo" ? "Saving…" : "Change photo"}
               </button>
+              {account.photo_version && account.photo_crop && (
+                <button className="settings-photo-remove" type="button" disabled={busy === "photo"} onClick={adjustPhoto} data-testid="settings-photo-adjust">Adjust photo</button>
+              )}
               {account.photo_version && (
                 <button className="settings-photo-remove" type="button" disabled={busy === "photo"} onClick={() => void dropPhoto()}>Remove photo</button>
               )}
-              <p className="settings-photo-hint">JPG, PNG or WebP<br />up to 2 MB</p>
+              <p className="settings-photo-hint">JPG, PNG or WebP<br />up to 10 MB</p>
             </div>
             <div className="settings-fields">
               <label>First name<input type="text" value={form.first_name} onChange={field("first_name")} autoComplete="given-name" required maxLength={120} data-testid="settings-first-name" /></label>
@@ -192,6 +217,11 @@ function SettingsView() {
               </button>
             </div>
           </form>
+          {cropping && (
+            <AvatarCropDialog src={cropping.src} initial={cropping.initial} primaryClass="btn-primary" secondaryClass="btn-ghost"
+                              title={cropping.file ? "Crop your new photo" : "Adjust your photo"} saveLabel="Save photo"
+                              onCancel={closeCropper} onSave={saveCrop} />
+          )}
           {profileNote && <p className={`settings-help settings-note${profileNote.tone === "error" ? " settings-note--error" : ""}`} role="status" data-testid="settings-profile-note">{profileNote.text}</p>}
           {!account.email_verified && (
             <div className="settings-profile-actions">
