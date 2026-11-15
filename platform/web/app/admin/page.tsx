@@ -52,7 +52,7 @@ export default function AdminHome() {
           <h2>{greeting}, {account?.first_name ?? ""}</h2>
           <p>
             {overview
-              ? `${overview.members_total} member${overview.members_total === 1 ? "" : "s"} on this local stack, ${overview.members_active_last_7_days} active in the last seven days, ${overview.members_new_last_7_days} new. ${companion && companion.conversations_needing_review > 0 ? `${companion.conversations_needing_review} Sprout conversation${companion.conversations_needing_review === 1 ? "" : "s"} waiting for review.` : "Nothing is waiting for review."}`
+              ? `${overview.members_total} member${overview.members_total === 1 ? "" : "s"}, ${overview.members_active_last_7_days} active in the last seven days, ${overview.members_new_last_7_days} new. ${companion && companion.conversations_needing_review > 0 ? `${companion.conversations_needing_review} Sprout conversation${companion.conversations_needing_review === 1 ? "" : "s"} waiting for review.` : "Nothing is waiting for review."}`
               : "Loading today's figures…"}
           </p>
         </div>

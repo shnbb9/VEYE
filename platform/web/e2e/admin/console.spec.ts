@@ -33,11 +33,17 @@ test.describe("Admin console", () => {
     await expect(page.getByRole("heading", { name: "Progress trackers" })).toBeVisible();
     await expect(page.locator(".bars .bar")).toHaveCount(5);
     await expect(page.getByRole("heading", { name: "What has been happening" })).toBeVisible();
+    // The summary counts members and says nothing about where it runs: the
+    // same words reach staging and production ("on this local stack" did not
+    // belong there, 15 Nov 2026).
+    await expect(page.getByText(/^\d+ members?, \d+ active in the last seven days, \d+ new\./)).toBeVisible();
+    await expect(page.locator("main")).not.toContainText("local stack");
   });
 
   test("Members: search, filter and open Member 360 with read-only results", async ({ page }) => {
     await page.getByRole("link", { name: "Members" }).first().click();
     await expect(page).toHaveURL(/\/admin\/members/);
+    await expect(page.getByText(/^Everyone using Veye — \d+ members?\.$/)).toBeVisible();
     const table = page.getByTestId("members-table");
     await expect(table).toBeVisible();
     // Seeded members are found by search: the unfiltered list pages at 25 and

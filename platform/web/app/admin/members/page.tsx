@@ -40,7 +40,7 @@ export default function MembersPage() {
 
   return (
     <div className="page">
-      <PageHead title="Members" desc={page ? `Everyone using Veye on this local stack — ${page.total} member${page.total === 1 ? "" : "s"}.` : "Everyone using Veye."} crumbs={[{ label: "Home", href: "/admin" }, { label: "Members" }]} />
+      <PageHead title="Members" desc={page ? `Everyone using Veye — ${page.total} member${page.total === 1 ? "" : "s"}.` : "Everyone using Veye."} crumbs={[{ label: "Home", href: "/admin" }, { label: "Members" }]} />
       <Subnav items={MEMBER_VIEWS} active="members" />
       {error && <p className="errorbar">{error}</p>}
       <div className="card">

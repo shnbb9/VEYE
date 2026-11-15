@@ -115,7 +115,7 @@ function render(outlet) {
       <div>
         <p class="hero__date">${esc(today)}</p>
         <h2>${greeting}, ${esc(me.firstName)}</h2>
-        <p>${o.members_total} member${o.members_total === 1 ? '' : 's'} on this local stack, ${o.members_active_last_7_days} active in the last seven days, ${o.members_new_last_7_days} new.
+        <p>${o.members_total} member${o.members_total === 1 ? '' : 's'}, ${o.members_active_last_7_days} active in the last seven days, ${o.members_new_last_7_days} new.
           ${c.conversations_needing_review > 0 ? `${c.conversations_needing_review} Sprout conversation${c.conversations_needing_review === 1 ? '' : 's'} waiting for review.` : 'Nothing is waiting for review.'}</p>
       </div>
       <div class="quick" style="min-width:230px">

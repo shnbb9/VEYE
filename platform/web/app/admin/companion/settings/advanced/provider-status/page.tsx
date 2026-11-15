@@ -12,7 +12,7 @@ const SECTIONS: { key: keyof ProviderStatus; title: string; note: string }[] = [
   { key: "object_store", title: "Object store", note: "The original source documents behind approved knowledge. Local files in development; Google Cloud Storage is the production target, in its own bucket rather than the one holding member photos. Not connected until that bucket exists." },
   { key: "telemetry", title: "Telemetry", note: "All records are masked before export. The database exporter feeds these screens." },
   { key: "langfuse", title: "Langfuse", note: "Optional development observability. Keys are never displayed; only whether they are present." },
-  { key: "database", title: "Database", note: "PostgreSQL with the pgvector extension in the local stack." },
+  { key: "database", title: "Database", note: "PostgreSQL with the pgvector extension." },
 ];
 
 export default function ProviderStatusPage() {

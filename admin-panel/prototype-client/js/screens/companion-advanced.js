@@ -243,7 +243,7 @@ const SECTIONS = [
     [['exporters', 'database'], ['capture content', 'no'], ['environment', 'local-docker']]],
   ['Langfuse', 'Optional development observability. Keys are never displayed; only whether they are present.',
     [['status', 'disabled'], ['enabled', 'no'], ['base url', '—'], ['keys present', 'no']]],
-  ['Database', 'PostgreSQL with the pgvector extension in the local stack.',
+  ['Database', 'PostgreSQL with the pgvector extension.',
     [['dialect', 'postgresql'], ['pgvector', '0.8.0']]],
 ];
 function providers(outlet) {

@@ -79,7 +79,7 @@ function render(outlet) {
   const total = S.get().members.length;
   outlet.innerHTML = `
   <div class="page">
-    ${H.pageHead({ title: 'Members', desc: `Everyone using Veye on this local stack — ${total} member${total === 1 ? '' : 's'}.`,
+    ${H.pageHead({ title: 'Members', desc: `Everyone using Veye — ${total} member${total === 1 ? '' : 's'}.`,
       crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members' }] })}
     ${H.subnav(MEMBER_VIEWS, 'members')}
     <div class="card">
