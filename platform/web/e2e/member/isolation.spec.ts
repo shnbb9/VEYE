@@ -109,6 +109,12 @@ test.describe("Multiple members stay isolated", () => {
     await expect(page.getByRole("heading", { name: "Welcome back Maya" })).toBeVisible();
     await open(page, "/app/settings");
     await expect(page.getByTestId("settings-email")).toHaveValue("maya.demo@demo.veye.test");
-    await expect(page.getByTestId("topbar-avatar")).toHaveText("M");
+    // Maya's avatar, whichever kind it is. The seeded account starts with her
+    // initial, but anyone testing this shared local stack may have given it a
+    // picture (an owner's manual test did, 15 Nov 2026) — what must hold is
+    // that the avatar is hers, never the previous member's.
+    const avatar = page.getByTestId("topbar-avatar");
+    await expect(avatar).toHaveAttribute("aria-label", /: Maya Demo$/);
+    if ((await avatar.getAttribute("data-has-photo")) === "false") await expect(avatar).toHaveText("M");
   });
 });
