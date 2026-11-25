@@ -201,7 +201,7 @@ export function PrivacyProspectsCard() {
       {settings && (
         <div className="card__foot">
           <button className="btn btn--primary" type="button" disabled={!changed || busy !== null || (choice?.mode === "forever" && !forever)}
-                  onClick={() => void publish()} data-testid="retention-publish">
+                  onClick={() => void publish()} data-testid="retention-publish" title={changed ? undefined : "Nothing to save yet: choose a different option first."}>
             {busy === "publish" ? "Publishing…" : "Publish retention policy"}
           </button>
           {!changed && <span className="t-support">Choose a different option to publish a new version.</span>}

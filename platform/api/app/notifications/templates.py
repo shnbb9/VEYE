@@ -169,6 +169,35 @@ def admin_invitation(first_name: str, link: str, hours: int, invited_by: str) ->
     )
 
 
+def member_invitation(first_name: str, link: str, hours: int, invited_by: str) -> Rendered:
+    """An invitation to become a Veye member. It creates nothing by itself and
+    says nothing about health sharing, because accepting it decides nothing
+    about that."""
+    hello = f"Hi {first_name}," if first_name else "Hello,"
+    inviter = escape(invited_by)
+    days = max(1, hours // 24)
+    return Rendered(
+        subject="You are invited to Veye",
+        text=(
+            f"{hello}\n\n{invited_by} has invited you to Veye. Use this link to choose a password and open your "
+            f"own dashboard:\n{link}\n\n"
+            "You can take the Health Number quiz then, or any time later. Nothing about your health is shared with "
+            f"anyone unless you choose to share it.\n\nThe link works once and expires in {days} days. If you were "
+            "not expecting this, ignore this message and nothing is created.\n"
+        ),
+        html=_wrap(
+            "You are invited to Veye",
+            [escape(hello),
+             f"{inviter} has invited you to Veye. Use the button below to choose a password and open your own dashboard.",
+             "You can take the Health Number quiz then, or any time later. Nothing about your health is shared with "
+             "anyone unless you choose to share it.",
+             f"The link works once and expires in {days} days. If you were not expecting this, ignore this message "
+             "and nothing is created."],
+            ("Open my invitation", link),
+        ),
+    )
+
+
 def email_change(first_name: str, link: str, hours: int, new_email: str) -> Rendered:
     """Sent to the NEW address: the change only takes effect when the person
     holding that mailbox uses the link."""

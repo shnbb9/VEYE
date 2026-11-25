@@ -155,6 +155,10 @@ class CompanionService:
         if decision.outcome == OUTCOME_ESCALATE:
             reply_text, outcome = self.settings.escalation_response, OUTCOME_ESCALATED
             conversation.flagged = True
+            # Handed over again, so it is waiting again, whatever was done
+            # about the time before.
+            conversation.reviewed_at = conversation.reviewed_by = None
+            conversation.resolved_at = conversation.resolved_by = None
             conversation.flag_reason = f"Handed to a person: {decision.reason} (rule '{decision.matched_rule}')."
             self._notify_admins(conversation, decision)
         elif decision.outcome == OUTCOME_PROHIBIT:

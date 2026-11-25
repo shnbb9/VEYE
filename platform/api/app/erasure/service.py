@@ -72,7 +72,10 @@ from app.guided_flows.models import MemberGuidedFlowSession
 from app.health_permission.models import MemberHealthPermission, MemberHealthPermissionEvent
 from app.meal_plans.models import MealPlanDay
 from app.food.photos import MealPhotoService
+from app.members.activity import MemberActivityDay
+from app.members.invitations import MemberInvitation
 from app.members.models import Member
+from app.progress.starts import AssessmentStart
 from app.members.service import clear_photo_crop
 from app.mood.models import MoodEntry
 from app.notifications import templates
@@ -85,8 +88,8 @@ from app.progress.health_assessment.models import HealthAssessmentAttempt
 from app.progress.simple_quiz.models import SimpleQuizAttempt
 from app.prospects.models import ProspectAssessment, ProspectEvent, ProspectToken
 from app.requests.models import MemberRequest, MemberRequestReply
-from app.storage.images import thumb_key
-from app.storage.object_storage import ObjectNotFound, ObjectStorage
+from app.storage.media_changes import sweep_prefix
+from app.storage.object_storage import ObjectStorage
 
 log = logging.getLogger("veye.erasure")
 
@@ -273,7 +276,8 @@ class ErasureService:
         out = {}
         for name, model in (("health_number", HealthNumberAttempt), ("body_composition", BodyCompositionAttempt),
                             ("blood_markers", BloodMarkerAttempt), ("health_assessment", HealthAssessmentAttempt),
-                            ("simple_quiz", SimpleQuizAttempt)):
+                            ("simple_quiz", SimpleQuizAttempt), ("assessment_starts", AssessmentStart),
+                            ("activity_days", MemberActivityDay)):
             out[name] = int(self.db.query(model).filter(model.member_id == m).delete(synchronize_session=False) or 0)
         return out
 
@@ -318,7 +322,21 @@ class ErasureService:
             self.db.query(ProspectEvent).filter(ProspectEvent.prospect_id.in_(ids)).delete(synchronize_session=False)
             self.db.query(ProspectToken).filter(ProspectToken.prospect_id.in_(ids)).delete(synchronize_session=False)
             self.db.query(ProspectAssessment).filter(ProspectAssessment.id.in_(ids)).delete(synchronize_session=False)
-        return {"saved_results": len(ids)}
+        # An invitation holds the address and name it was sent to.
+        invited = MemberInvitation.member_id == m
+        user = self.db.get(UserAccount, request.subject_user_id)
+        if user is not None and request.scope == SCOPE_ENTIRE_IDENTITY:
+            invited = or_(invited, MemberInvitation.email == user.email)
+        invitations = self.db.query(MemberInvitation).filter(invited).all()
+        outboxes = [i.outbox_id for i in invitations if i.outbox_id]
+        if outboxes:
+            notes = [nid for (nid,) in self.db.query(NotificationOutbox.notification_id).filter(NotificationOutbox.id.in_(outboxes))]
+            self.db.query(NotificationOutbox).filter(NotificationOutbox.notification_id.in_(notes)).delete(synchronize_session=False)
+            self.db.query(Notification).filter(Notification.id.in_(notes)).delete(synchronize_session=False)
+        for invitation in invitations:
+            self.db.delete(invitation)
+        self.db.flush()
+        return {"saved_results": len(ids), "member_invitations": len(invitations)}
 
     def _stage_notifications(self, request: ErasureRequest) -> dict:
         query = self.db.query(Notification.id).filter(Notification.user_id == request.subject_user_id)
@@ -338,23 +356,16 @@ class ErasureService:
         gone is success, so a retry after a partial failure finishes cleanly."""
         if request.scope != SCOPE_ENTIRE_IDENTITY:
             return {}
+        # By the account's prefix, not by the row's pointers: two uploads at
+        # once, or a write whose commit failed, leave pictures no row names —
+        # the uncropped original among them.
+        removed = sweep_prefix(self.media, f"profile-photos/{request.subject_user_id}/")
         user = self.db.get(UserAccount, request.subject_user_id)
-        if user is None or not (user.photo_object_key or user.photo_original_key):
-            return {}
-        removed = 0
-        # The avatar variants AND the kept original the crop is cut from.
-        keys = [key for key in (user.photo_object_key, user.photo_object_key and thumb_key(user.photo_object_key),
-                                user.photo_original_key) if key]
-        for key in keys:
-            try:
-                self.media.delete(key)
-                removed += 1
-            except ObjectNotFound:
-                pass
-        user.photo_object_key = None
-        user.photo_content_type = None
-        clear_photo_crop(user)
-        self.db.flush()
+        if user is not None:
+            user.photo_object_key = None
+            user.photo_content_type = None
+            clear_photo_crop(user)
+            self.db.flush()
         return {"photo_objects": removed}
 
     def _stage_identity(self, request: ErasureRequest) -> dict:

@@ -43,6 +43,10 @@ spec:
               cpu: "1"
               memory: 1Gi        # image decoding (profile pictures) needs headroom
           env:
+            # Cloud Run appends the real client address as the last entry. Two with
+            # an external load balancer in front.
+            - name: VEYE_TRUSTED_PROXY_HOPS
+              value: "1"
             - name: VEYE_ENVIRONMENT
               value: production   # "staging" builds still run production rules
             - name: VEYE_WEB_BASE_URL

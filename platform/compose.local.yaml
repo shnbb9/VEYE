@@ -111,6 +111,7 @@ services:
       io.veye.local: "true"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_ENVIRONMENT: local
     ports:
       - "127.0.0.1:${VEYE_WEB_HOST_PORT}:3000"
     volumes:

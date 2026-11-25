@@ -47,6 +47,10 @@ PUBLIC_ROUTES: set[tuple[str, str]] = {
     # An invited administrator has no session until they have a password.
     ("GET", "/api/v1/auth/admin-invitation"),
     ("POST", "/api/v1/auth/admin-invitation/accept"),
+    # Nor has an invited member: the single-use token is the credential, sent
+    # in the body, and both are rate limited by address.
+    ("POST", "/api/v1/auth/member-invitation/preview"),
+    ("POST", "/api/v1/auth/member-invitation/accept"),
     # Answers "who is signed in", for nobody as readily as for someone.
     ("GET", "/api/v1/auth/me"),
     # Published content the public Help page renders.

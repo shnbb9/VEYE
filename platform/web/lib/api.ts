@@ -109,11 +109,24 @@ export function csrfHeaders(): Record<string, string> {
   return token ? { "X-Veye-Csrf": token } : {};
 }
 
+export const UNREACHABLE = "Veye cannot be reached right now. Please check your connection and try again.";
+
+/** fetch, with the browser's own "Failed to fetch" / "Load failed" put into
+ *  words. A request the page itself cancelled stays a cancelled request. */
+export async function veyeFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (reason) {
+    if (reason instanceof DOMException && reason.name === "AbortError") throw reason;
+    throw new Error(UNREACHABLE);
+  }
+}
+
 export async function apiJson<T>(path: string, options?: RequestInit): Promise<T> {
   const method = (options?.method ?? "GET").toUpperCase();
   const token = method === "GET" || method === "HEAD" ? null : csrfToken();
   const headers = token ? { ...(options?.headers ?? {}), "X-Veye-Csrf": token } : options?.headers;
-  const response = await fetch(apiPath(path), { credentials: "include", ...options, headers });
+  const response = await veyeFetch(apiPath(path), { credentials: "include", ...options, headers });
   if (!response.ok) {
     const detail = await response.json().catch(() => null) as { detail?: unknown } | null;
     throw new ApiError(response.status, describeDetail(detail?.detail) ?? "This Veye result is not available right now.");
@@ -137,6 +150,11 @@ export function describeDetail(detail: unknown): string | null {
   }
   return null;
 }
+
+/* The scales, bands and goals the trackers draw, from where they are scored. */
+export type Scale = { low: number; high: number; step: number; bands: { upto: number; bucket: string; label: string }[] };
+export type ProgressScales = { health_number: Scale; health_assessment: Scale; blood_markers: { key: BloodCalculationKey; ideal: string; low: number | null; high: number }[] };
+export const getProgressScales = () => apiJson<ProgressScales>("/api/v1/progress-scales");
 
 export async function getHealthNumberHistory(): Promise<HealthNumberHistory> {
   return apiJson<HealthNumberHistory>(`/api/v1/members/${ME}/health-number`);

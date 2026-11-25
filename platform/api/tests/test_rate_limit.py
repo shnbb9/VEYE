@@ -204,7 +204,7 @@ def test_an_unknown_bucket_is_not_silently_unlimited():
         "meal_photo", "meal_photo_link",
         # Architecture V2: saved results, re-authentication, template tests.
         "prospect_capture", "prospect_token", "prospect_recover", "prospect_recover_address",
-        "reauthenticate", "template_test",
+        "reauthenticate", "template_test", "member_invitation", "member_invitation_token",
     }
     for name, limit in LIMITS.items():
         assert limit.bucket == name, f"{name} declares itself as {limit.bucket}"

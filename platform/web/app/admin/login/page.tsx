@@ -14,7 +14,6 @@ import { adminSignIn, forgotPassword, safeNext, sessionNotKept, type SessionNotK
    console — always — and only for accounts with administrator access.
    Members sign in at /login; there is no admin self-registration. */
 
-const ADMIN_CSS = ["tokens", "base", "layout", "components", "screens", "client", "motion", "responsive"];
 
 export default function AdminLoginPage() {
   return (
@@ -94,11 +93,6 @@ function AdminLogin() {
 
   return (
     <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@300;400;500;600;700&family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      {ADMIN_CSS.map((name) => <link key={name} rel="stylesheet" href={`/admin-css/${name}.css`} />)}
-      <link rel="stylesheet" href="/admin-css/admin-app.css" />
 
       <div className="auth" data-portal="admin">
         <section className="auth__media">

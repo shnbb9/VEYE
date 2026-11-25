@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Icon, PageHead, fmtDate } from "@/components/admin/admin-chrome";
+import { RetentionSection } from "@/components/admin/retention-section";
+import { isLocalBuild } from "@/lib/environment";
 import {
   REQUEST_KIND_LABELS, REQUEST_STATUS_LABELS, TRACKER_KEYS, TRACKER_LABELS, getInsights,
   type Insights, type MonthCount, type RequestKind, type RequestStatus,
@@ -34,6 +36,8 @@ export default function InsightsPage() {
             <div className="kpi"><span className="kpi__label"><Icon name="messages" size={16} /> Sprout conversations</span><span className="kpi__value">{data.companion_conversations}</span><span className="kpi__note">{data.companion_messages} messages · {data.companion_feedback_helpful} helpful / {data.companion_feedback_not_helpful} not helpful</span></div>
           </div>
 
+          <RetentionSection data={data} />
+
           <div className="grid grid--2" style={{ marginTop: "var(--s-6)" }}>
             <div className="card">
               <div className="card__head"><div><h2 className="card__title">New members by month</h2><p className="t-support">Member profiles created, last twelve months.</p></div></div>
@@ -42,7 +46,7 @@ export default function InsightsPage() {
             <div className="card">
               <div className="card__head"><div><h2 className="card__title">Tracker usage</h2><p className="t-support">Members with at least one saved result. The bar is their share of all {data.members_total} members.</p></div></div>
               <div className="card__body">
-                <div className="bars">
+                <div className="bars bars--wide">
                   {TRACKER_KEYS.map((key) => {
                     const members = data.members_completed[key];
                     const pct = data.members_total ? Math.round((members / data.members_total) * 100) : 0;
@@ -113,7 +117,7 @@ export default function InsightsPage() {
               </div>
             </div>
           </div>
-          <p className="t-support" style={{ marginTop: "var(--s-4)" }}>Generated {fmtDate(data.generated_at)} from the local database. Synthetic demonstration data.</p>
+          <p className="t-support" style={{ marginTop: "var(--s-4)" }}>Generated {fmtDate(data.generated_at)}.{isLocalBuild ? " Synthetic demonstration data." : ""}</p>
         </>
       )}
     </div>

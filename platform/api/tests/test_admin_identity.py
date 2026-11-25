@@ -190,7 +190,8 @@ def test_only_real_still_images_are_accepted(admin_client, name, data, mime, sta
 
 def test_a_dual_access_person_has_one_picture_in_both_portals(admin_client):
     """Created through the console's own invitation of an existing member."""
-    from tests.conftest import sign_up
+    from app.core.runtime import get_runtime
+    from tests.conftest import sign_in, sign_up
 
     member = TestClient(app)
     member.__enter__()
@@ -198,6 +199,10 @@ def test_a_dual_access_person_has_one_picture_in_both_portals(admin_client):
     invited = admin_client.post("/api/v1/admin/administrators/invite",
                                 json={"email": "dual.picture@demo.veye.test", "first_name": "Dual", "last_name": "Picture"})
     assert invited.status_code in (200, 201), invited.text
+    token = [m for m in get_runtime().email.sent if "accept-invitation?token=" in m.text][-1].text.split("accept-invitation?token=")[1].split()[0]
+    assert member.post("/api/v1/auth/admin-invitation/accept",
+                       json={"token": token, "password": "DualPicture!2026-local"}).status_code == 200
+    assert sign_in(member, "dual.picture@demo.veye.test", "DualPicture!2026-local").status_code == 200
     member.post("/api/v1/members/me/photo", files={"file": ("me.png", io.BytesIO(image(color=(250, 120, 0))), "image/png")})
     with SessionLocal() as db:
         user = db.query(UserAccount).filter(UserAccount.email == "dual.picture@demo.veye.test").one()

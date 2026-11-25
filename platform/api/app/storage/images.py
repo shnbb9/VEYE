@@ -20,6 +20,7 @@ is, and the picture can be re-cropped later without a new upload.
 from __future__ import annotations
 
 import io
+import threading
 from dataclasses import dataclass
 
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -35,6 +36,12 @@ Image.MAX_IMAGE_PIXELS = 12_500_000
 MAGIC = {"JPEG": (b"\xff\xd8\xff",), "PNG": (b"\x89PNG\r\n\x1a\n",), "WEBP": (b"RIFF",)}
 CONTENT_TYPES = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
 EXTENSIONS = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}
+
+
+# Decoding 25 megapixels takes real memory, so only a couple happen at once in
+# one process; the rest wait their turn on their own worker threads.
+_WORK = threading.BoundedSemaphore(2)
+MAX_ICC_BYTES = 64 * 1024
 
 
 class ImageRejected(Exception):
@@ -71,9 +78,11 @@ def _encode(image: Image.Image, fmt: str, *, keep: bool = False) -> bytes:
     if fmt == "JPEG":
         image.convert("RGB").save(out, format="JPEG", quality=92 if keep else 88, optimize=True)
     elif fmt == "PNG":
-        image.save(out, format="PNG", optimize=True)
+        # `optimize` searches every filter; on a large original that took
+        # twenty seconds for a few percent.
+        image.save(out, format="PNG", optimize=not keep, **({"compress_level": 6} if keep else {}))
     else:
-        image.save(out, format="WEBP", quality=92 if keep else 85, method=4)
+        image.save(out, format="WEBP", quality=92 if keep else 85, method=2 if keep else 4)
     return out.getvalue()
 
 
@@ -102,7 +111,13 @@ def _decode(data: bytes, *, max_bytes: int) -> tuple[Image.Image, str]:
             image = ImageOps.exif_transpose(source)
             if image.mode not in ("RGB", "RGBA", "L", "LA"):
                 image = image.convert("RGBA" if "A" in image.getbands() or image.mode == "P" else "RGB")
-            return image.copy(), fmt
+            # Pillow writes back what it read unless told otherwise: a JPEG
+            # comment, XMP, a PNG text chunk. Only the colour profile stays —
+            # without it a wide-gamut phone photo changes colour.
+            icc = image.info.get("icc_profile")
+            image = image.copy()
+            image.info = {"icc_profile": icc} if isinstance(icc, bytes) and len(icc) <= MAX_ICC_BYTES else {}
+            return image, fmt
     except ImageRejected:
         raise
     except Image.DecompressionBombError as exc:
@@ -112,14 +127,14 @@ def _decode(data: bytes, *, max_bytes: int) -> tuple[Image.Image, str]:
 
 
 def normalise_photo(data: bytes, *, max_bytes: int, full_side: int = FULL_SIDE, thumb_side: int = THUMB_SIDE) -> ProcessedPhoto:
-    image, fmt = _decode(data, max_bytes=max_bytes)
-    full = image.copy()
-    full.thumbnail((full_side, full_side), Image.Resampling.LANCZOS)
-    thumb = image.copy()
-    thumb.thumbnail((thumb_side, thumb_side), Image.Resampling.LANCZOS)
-    return ProcessedPhoto(full=_encode(full, fmt), thumb=_encode(thumb, fmt),
-                          content_type=CONTENT_TYPES[fmt], extension=EXTENSIONS[fmt],
-                          width=full.width, height=full.height)
+    with _WORK:
+        full, fmt = _decode(data, max_bytes=max_bytes)
+        full.thumbnail((full_side, full_side), Image.Resampling.LANCZOS)  # in place: one copy, not three
+        thumb = full.copy()
+        thumb.thumbnail((thumb_side, thumb_side), Image.Resampling.LANCZOS)
+        return ProcessedPhoto(full=_encode(full, fmt), thumb=_encode(thumb, fmt),
+                              content_type=CONTENT_TYPES[fmt], extension=EXTENSIONS[fmt],
+                              width=full.width, height=full.height)
 
 
 # ---- profile pictures: the original and the person's own square ----------------
@@ -169,21 +184,23 @@ def _cut(image: Image.Image, crop: Crop, side: int) -> Image.Image:
 
 
 def prepare_picture(data: bytes, *, max_bytes: int, crop: Crop | None) -> ProcessedPicture:
-    image, fmt = _decode(data, max_bytes=max_bytes)
-    chosen = validate_crop(crop, image.width, image.height) if crop else default_crop(image.width, image.height)
-    return ProcessedPicture(
-        original=_encode(image, fmt, keep=True),
-        full=_encode(_cut(image, chosen, FULL_SIDE), fmt), thumb=_encode(_cut(image, chosen, THUMB_SIDE), fmt),
-        content_type=CONTENT_TYPES[fmt], extension=EXTENSIONS[fmt], width=image.width, height=image.height, crop=chosen,
-    )
+    with _WORK:
+        image, fmt = _decode(data, max_bytes=max_bytes)
+        chosen = validate_crop(crop, image.width, image.height) if crop else default_crop(image.width, image.height)
+        return ProcessedPicture(
+            original=_encode(image, fmt, keep=True),
+            full=_encode(_cut(image, chosen, FULL_SIDE), fmt), thumb=_encode(_cut(image, chosen, THUMB_SIDE), fmt),
+            content_type=CONTENT_TYPES[fmt], extension=EXTENSIONS[fmt], width=image.width, height=image.height, crop=chosen,
+        )
 
 
 def recut_picture(original: bytes, crop: Crop) -> tuple[bytes, bytes]:
     """New avatar variants from a stored original (already upright and free
     of metadata). Returns (full, thumb)."""
-    image, fmt = _decode(original, max_bytes=len(original) + 1)
-    chosen = validate_crop(crop, image.width, image.height)
-    return _encode(_cut(image, chosen, FULL_SIDE), fmt), _encode(_cut(image, chosen, THUMB_SIDE), fmt)
+    with _WORK:
+        image, fmt = _decode(original, max_bytes=len(original) + 1)
+        chosen = validate_crop(crop, image.width, image.height)
+        return _encode(_cut(image, chosen, FULL_SIDE), fmt), _encode(_cut(image, chosen, THUMB_SIDE), fmt)
 
 
 def thumb_key(full_key: str) -> str:

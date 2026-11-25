@@ -13,7 +13,9 @@ untrusted input (server-side request forgery). The rules:
   lookup between the check and the connect, so DNS rebinding cannot swap it
   — and TLS is verified for the host name;
 * at most three redirects, each checked the same way;
-* a hard size cap read in chunks, a per-read timeout and an overall deadline;
+* a hard size cap read in chunks, and ONE deadline over everything — connect,
+  TLS, headers and body — held by a watchdog that closes the connection, so a
+  server that drips a byte at a time cannot keep a worker;
 * a web page is refused with words that say how to get the picture's own
   address. Whatever arrives is still decoded and rebuilt like an upload.
 
@@ -28,10 +30,11 @@ import http.client
 import ipaddress
 import socket
 import ssl
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable
-from urllib.parse import SplitResult, urljoin, urlsplit
+from urllib.parse import SplitResult, quote, urljoin, urlsplit
 
 MAX_URL_LENGTH = 2048
 MAX_REDIRECTS = 3
@@ -64,10 +67,20 @@ def open_connection(address: str, port: int, timeout: float) -> socket.socket:
     return socket.create_connection((address, port), timeout=timeout)
 
 
+# IPv6 space that carries an IPv4 address inside it (NAT64, 6to4, Teredo, the
+# IPv4-compatible and -translated forms) or is site-local. A picture's website
+# never needs one, and some networks would route it to the IPv4 inside.
+_EMBEDDED = tuple(ipaddress.ip_network(net) for net in (
+    "64:ff9b::/96", "64:ff9b:1::/48", "::/96", "::ffff:0:0:0/96", "2002::/16", "2001::/32", "fec0::/10"))
+
+
 def is_public(address: str) -> bool:
     ip = ipaddress.ip_address(address.split("%", 1)[0])
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        elif any(ip in net for net in _EMBEDDED):
+            return False
     return ip.is_global and not ip.is_multicast
 
 
@@ -98,7 +111,10 @@ class RemoteImageFetcher:
             if status in REDIRECTS:
                 if not location:
                     raise LinkRefused(422, "That link did not lead to a picture.")
-                current = urljoin(current, location)
+                try:
+                    current = urljoin(current, location)
+                except ValueError as exc:
+                    raise LinkRefused(422, "That link did not lead to a picture.") from exc
                 continue
             return body
         raise LinkRefused(422, "That link redirects too many times. Open the picture itself and copy its address.")
@@ -107,13 +123,18 @@ class RemoteImageFetcher:
     def _check(self, url: str) -> _Target:
         if not url or len(url) > MAX_URL_LENGTH or any(ch.isspace() for ch in url):
             raise LinkRefused(422, "Paste the address of a picture — it starts with https://.")
-        parts: SplitResult = urlsplit(url)
+        try:
+            parts: SplitResult = urlsplit(url)
+            host = (parts.hostname or "").lower().rstrip(".")
+            if host and not host.isascii():
+                host = host.encode("idna").decode("ascii")
+        except ValueError as exc:  # UnicodeError is one: a host no DNS could hold
+            raise LinkRefused(422, "That link's address is not valid.") from exc
         scheme = (parts.scheme or "").lower()
         if scheme not in DEFAULT_PORTS:
             raise LinkRefused(422, "Use a link that starts with https:// (or http://).")
         if parts.username is not None or parts.password is not None:
             raise LinkRefused(422, "Links with a user name or password in them are not accepted.")
-        host = (parts.hostname or "").lower().rstrip(".")
         if not host:
             raise LinkRefused(422, "That link has no website in it.")
         try:
@@ -125,7 +146,11 @@ class RemoteImageFetcher:
         trusted = host in self.trusted_hosts or f"{host}:{port}" in self.trusted_hosts
         if port != default_port and not trusted:
             raise LinkRefused(422, "Links to unusual ports are not accepted.")
-        path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+        # Accented letters are ordinary in a pasted address; the request line
+        # carries them percent-encoded, as a browser's would.
+        path = quote(parts.path or "/", safe="/%:@!$&'()*+,;=~-._")
+        if parts.query:
+            path += "?" + quote(parts.query, safe="/?%:@!$&'()*+,;=~-._")
         return _Target(scheme, host, port, default_port, path, trusted)
 
     def _addresses(self, target: _Target) -> list[str]:
@@ -153,10 +178,30 @@ class RemoteImageFetcher:
             raise LinkRefused(504, "That website took too long to answer.") from exc
         except OSError as exc:
             raise LinkRefused(422, "That website could not be reached.") from exc
+        # The per-read timeout restarts with every byte that arrives, so it
+        # bounds nothing on its own. This does: at the deadline the connection
+        # is shut, whatever it was in the middle of.
+        live, expired = [sock], threading.Event()
+
+        def out_of_time() -> None:
+            expired.set()
+            try:
+                live[0].shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            try:
+                live[0].close()
+            except OSError:
+                pass
+
+        watchdog = threading.Timer(max(0.1, deadline - time.monotonic()), out_of_time)
+        watchdog.daemon = True
+        watchdog.start()
         try:
             if target.scheme == "https":
                 context = self.tls or ssl.create_default_context()
                 sock = context.wrap_socket(sock, server_hostname=target.host)
+                live[0] = sock
             conn = http.client.HTTPConnection(target.host, target.port, timeout=timeout)
             conn.sock = sock  # already connected to the address that was checked
             host_header = f"[{target.host}]" if ":" in target.host else target.host
@@ -180,18 +225,29 @@ class RemoteImageFetcher:
             if kind.startswith("image/") and kind not in ACCEPTED_TYPES:
                 raise LinkRefused(415, "Please use a JPG, PNG or WebP picture.")
             length = response.getheader("Content-Length")
-            if length and length.isdigit() and int(length) > self.max_bytes:
+            if length and length.isascii() and length.isdigit() and int(length) > self.max_bytes:
                 raise LinkRefused(413, self._too_large())
-            return response.status, None, self._read(response, deadline)
+            body = self._read(response, deadline)
+            if expired.is_set():
+                raise LinkRefused(504, "That website took too long to send the picture.")
+            return response.status, None, body
         except LinkRefused:
+            if expired.is_set():
+                raise LinkRefused(504, "That website took too long to send the picture.") from None
             raise
         except (socket.timeout, TimeoutError) as exc:
             raise LinkRefused(504, "That website took too long to send the picture.") from exc
-        except (ssl.SSLError, ssl.CertificateError) as exc:
-            raise LinkRefused(422, "That website's secure connection could not be verified.") from exc
-        except (OSError, http.client.HTTPException) as exc:
+        except (OSError, ValueError, AttributeError, http.client.HTTPException) as exc:
+            # A socket closed under a read surfaces as any of these.
+            if expired.is_set():
+                raise LinkRefused(504, "That website took too long to send the picture.") from exc
+            if isinstance(exc, (ssl.SSLError, ssl.CertificateError)):
+                raise LinkRefused(422, "That website's secure connection could not be verified.") from exc
+            if isinstance(exc, AttributeError):
+                raise
             raise LinkRefused(422, "That website could not be reached.") from exc
         finally:
+            watchdog.cancel()
             try:
                 sock.close()
             except OSError:
@@ -203,7 +259,7 @@ class RemoteImageFetcher:
         while True:
             if time.monotonic() > deadline:
                 raise LinkRefused(504, "That website took too long to send the picture.")
-            chunk = response.read(CHUNK)
+            chunk = response.read1(CHUNK)  # what has arrived, not "until 64 KB"
             if not chunk:
                 break
             total += len(chunk)

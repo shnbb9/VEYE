@@ -20,6 +20,9 @@ from app.assessments.routes import history_item as health_number_item
 from app.assessments.schemas import HealthNumberHistoryItem
 from app.assessments.service import CALCULATION_VERSION as HEALTH_NUMBER_VERSION
 from app.admin.audit import AccountActivityRow, account_activity, record_audit
+from app.admin.attention_routes import items as attention_items, WAITING as ATTENTION_WAITING
+from app.admin.retention import RetentionOut, retention
+from app.admin.trends import NOT_SHARED, TREND_STATES, Trend, trends_for
 from app.auth.dependencies import get_auth_service
 from app.auth.models import AuthSession, UserAccount
 from app.auth.principal import PORTAL_MEMBER, CurrentPrincipal, require_admin
@@ -63,6 +66,11 @@ from app.progress.simple_quiz.models import SimpleQuizAttempt
 from app.progress.simple_quiz.routes import history_item as simple_quiz_item
 from app.progress.simple_quiz.schemas import SimpleQuizHistoryItem
 from app.progress.simple_quiz.service import SIMPLE_QUIZ_CALCULATION_VERSION
+from app.food_choices.models import MemberFoodSelection
+from app.members.invitations import PENDING as INVITE_PENDING, MemberInvitation
+from app.progress.starts import unfinished
+from app.prospects.models import ACTIVE_STATUSES, ProspectAssessment
+from app.requests.service import RequestService
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin-console"], dependencies=[Depends(require_admin)])
 
@@ -126,6 +134,8 @@ class OverviewOut(BaseModel):
     requests_open: int
     requests_new: int
     requests_in_progress: int
+    questions_awaiting_reply: int
+    attention_waiting: int
     mood_entries_total: int
     food_diary_entries_total: int
     recent_members: list[RecentMember]
@@ -152,11 +162,29 @@ class MemberRow(BaseModel):
     sharing_state: str = STATE_NOT_REQUESTED
     sharing_label: str = ""
     shares_health_data: bool = False
-    trackers_completed: int
+    # How many of the five a member has finished is itself a fact about their
+    # health records, so it is withheld with them.
+    trackers_completed: int | None
+    trend: Trend = NOT_SHARED
     last_active_at: datetime | None
     onboarding: str  # Complete | Not started
     has_photo: bool = False
     photo_version: str | None = None
+    archived_at: datetime | None = None
+    archived_by: str | None = None
+    archive_reason: str | None = None
+
+
+class MemberSegments(BaseModel):
+    """People who have started and not finished, kept apart because they are
+    different people: a prospect has no account, an unverified registration has
+    not proved its address, and a member who has not done the quiz is a member."""
+
+    prospects: int
+    unverified: int
+    onboarding_incomplete: int
+    invitations_pending: int
+    archived: int
 
 
 class MembersPage(BaseModel):
@@ -164,6 +192,10 @@ class MembersPage(BaseModel):
     total: int
     page: int
     page_size: int
+    segments: MemberSegments
+    # How many of the members matching the other filters are in each trend
+    # state; "not_shared" is everyone whose trend the console may not see.
+    trends: dict[str, int]
 
 
 class GuidedSessionOut(BaseModel):
@@ -238,6 +270,9 @@ class InstrumentOut(BaseModel):
     attempts_total: int
     members_scored: int
     last_completed_at: datetime | None
+    # Begun in the member app (recorded from the first start on), and never finished.
+    starts: int = 0
+    starts_unfinished: int = 0
 
 
 class AttemptRow(BaseModel):
@@ -292,7 +327,22 @@ class InsightsOut(BaseModel):
     mood_members: int
     food_diary_entries: int
     food_diary_members: int
+    retention: RetentionOut
+    getting_started: "GettingStarted"
     generated_at: datetime
+
+
+class GettingStarted(BaseModel):
+    """How far members get after joining. Health Number completion is counted
+    for everyone, as the directory's Onboarding column already shows it."""
+
+    joined: int
+    verified: int
+    onboarding_complete: int
+    food_choices_started: int
+
+
+InsightsOut.model_rebuild()
 
 
 # ---------------------------------------------------------------- helpers
@@ -319,7 +369,9 @@ def sharing_member_ids(db: Session) -> set[UUID]:
     a client and legal decision, not something to assume.
     """
     rows = (db.query(MemberHealthPermission.member_id)
-            .filter(MemberHealthPermission.state == STATE_GRANTED).all())
+            .join(Member, Member.id == MemberHealthPermission.member_id)
+            .filter(MemberHealthPermission.state == STATE_GRANTED, Member.archived_at.is_(None),
+                    Member.erasure_requested_at.is_(None)).all())
     return {row[0] for row in rows}
 
 
@@ -386,8 +438,28 @@ def _member_rows(db: Session) -> list[MemberRow]:
             last_active_at=max(candidates) if candidates else None,
             onboarding="Complete" if hn else "Not started",
             has_photo=bool(user.photo_object_key), photo_version=photo_version(user),
+            archived_at=_aware(member.archived_at), archived_by=member.archived_by, archive_reason=member.archive_reason,
         ))
     return rows
+
+
+def _active_rows(db: Session) -> list[MemberRow]:
+    """Members as every total and list means it unless it says otherwise."""
+    return [row for row in _member_rows(db) if row.archived_at is None]
+
+
+def _segments(db: Session, rows: list[MemberRow]) -> MemberSegments:
+    active = [r for r in rows if r.archived_at is None]
+    now = _now()
+    return MemberSegments(
+        prospects=db.query(func.count(ProspectAssessment.id)).filter(
+            ProspectAssessment.status.in_(ACTIVE_STATUSES),
+            (ProspectAssessment.expires_at.is_(None)) | (ProspectAssessment.expires_at > now)).scalar() or 0,
+        unverified=sum(1 for r in active if not r.email_verified),
+        onboarding_incomplete=sum(1 for r in active if r.email_verified and r.onboarding != "Complete"),
+        invitations_pending=sum(1 for i in db.query(MemberInvitation).filter(
+            MemberInvitation.accepted_at.is_(None), MemberInvitation.revoked_at.is_(None)).all() if i.status(now) == INVITE_PENDING),
+        archived=len(rows) - len(active))
 
 
 def _account_out(db: Session, user: UserAccount, runtime: Runtime) -> MemberAccountOut:
@@ -455,8 +527,8 @@ def overview(db: Session = Depends(get_db)) -> OverviewOut:
     now = _now()
     week = now - timedelta(days=7)
     month = now - timedelta(days=30)
-    rows = _member_rows(db)
-    names = {row.member_id: row.name for row in rows}
+    rows = _active_rows(db)
+    names = {row.member_id: row.name for row in _member_rows(db)}
     # A row here is a member's name beside their health result, which is the
     # plainest disclosure in the console. Nothing enters this feed, or the
     # totals below it, for a member who has not shared.
@@ -502,12 +574,20 @@ def overview(db: Session = Depends(get_db)) -> OverviewOut:
         requests_open=db.query(func.count(MemberRequest.id)).filter(MemberRequest.status.in_((STATUS_NEW, STATUS_IN_PROGRESS))).scalar() or 0,
         requests_new=db.query(func.count(MemberRequest.id)).filter(MemberRequest.status == STATUS_NEW).scalar() or 0,
         requests_in_progress=db.query(func.count(MemberRequest.id)).filter(MemberRequest.status == STATUS_IN_PROGRESS).scalar() or 0,
+        questions_awaiting_reply=RequestService(db).questions_awaiting(),
+        attention_waiting=sum(1 for item in attention_items(db) if item.state in ATTENTION_WAITING),
         mood_entries_total=_count(db, MoodEntry, allowed),
-        food_diary_entries_total=_count(db, FoodDiaryEntry, allowed),
+        # The diary is not part of the sharing choice (Cara, 25 Nov 2026).
+        food_diary_entries_total=_count(db, FoodDiaryEntry),
         recent_members=[RecentMember(member_id=r.member_id, name=r.name, email=r.email, joined_at=r.joined_at,
                                      email_verified=r.email_verified, is_synthetic=r.is_synthetic) for r in rows[:6]],
         recent_activity=activity[:15], generated_at=now,
     )
+
+
+# The five words the directory uses, agreed with Cara (25 Nov 2026).
+SHARING_LABELS = {**PERMISSION_LABELS, "not_requested": "Not requested", "requested": "Requested", "granted": "Shared",
+                  "declined": "Declined", "revoked": "Revoked"}
 
 
 def _apply_sharing(db: Session, rows: list[MemberRow]) -> dict[UUID, str]:
@@ -520,14 +600,18 @@ def _apply_sharing(db: Session, rows: list[MemberRow]) -> dict[UUID, str]:
     why there is one function rather than two copies of the rule.
     """
     sharing = HealthPermissionService(db).states_for([r.member_id for r in rows])
+    allowed = sharing_member_ids(db)
+    trends = trends_for(db, allowed & {r.member_id for r in rows})
     for row in rows:
         row.sharing_state = sharing.get(row.member_id, STATE_NOT_REQUESTED)
-        row.sharing_label = PERMISSION_LABELS.get(row.sharing_state, row.sharing_state)
-        row.shares_health_data = row.sharing_state == STATE_GRANTED
+        row.sharing_label = SHARING_LABELS.get(row.sharing_state, row.sharing_state)
+        row.shares_health_data = row.member_id in allowed
+        row.trend = trends.get(row.member_id, NOT_SHARED)
         if not row.shares_health_data:
             row.health_number = None
             row.health_number_status = None
             row.health_number_at = None
+            row.trackers_completed = None
     return sharing
 
 
@@ -537,12 +621,19 @@ def members(
     status: Literal["any", "active", "inactive", "unverified"] = Query(default="any"),
     onboarding: Literal["any", "complete", "not_started"] = Query(default="any"),
     active: Literal["any", "week", "month", "longer", "never"] = Query(default="any"),
-    sort: Literal["name", "joined", "health_number", "last_active"] = Query(default="name"),
+    sharing: Literal["any", "not_requested", "requested", "granted", "declined", "revoked"] = Query(default="any"),
+    trend: Literal["any", "improved", "worsened", "unchanged", "first", "not_comparable", "none", "not_shared"] = Query(default="any"),
+    result_within: int | None = Query(default=None, ge=1, le=3650),
+    archived: Literal["exclude", "include", "only"] = Query(default="exclude"),
+    sort: Literal["name", "joined", "health_number", "last_active", "sharing", "trend"] = Query(default="name"),
     direction: Literal["asc", "desc"] = Query(default="asc"),
     page: int = Query(default=1, ge=1), page_size: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> MembersPage:
     rows = _member_rows(db)
+    segments = _segments(db, rows)
+    if archived != "include":
+        rows = [r for r in rows if (r.archived_at is not None) == (archived == "only")]
     # Done before filtering and sorting, so neither can be used to infer a
     # number the console is not entitled to see.
     _apply_sharing(db, rows)
@@ -557,6 +648,10 @@ def members(
         rows = [r for r in rows if not r.is_active]
     elif status == "unverified":
         rows = [r for r in rows if not r.email_verified]
+    if sharing != "any":
+        rows = [r for r in rows if r.sharing_state == sharing]
+    if result_within:
+        rows = [r for r in rows if r.trend.current_at and r.trend.current_at >= now - timedelta(days=result_within)]
     if onboarding == "complete":
         rows = [r for r in rows if r.onboarding == "Complete"]
     elif onboarding == "not_started":
@@ -570,17 +665,28 @@ def members(
     elif active == "never":
         rows = [r for r in rows if r.last_active_at is None]
 
-    far_past = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    counts = {state: sum(1 for r in rows if r.trend.state == state) for state in TREND_STATES}
+    if trend != "any":
+        rows = [r for r in rows if r.trend.state == trend]
+
     keys = {
         "name": lambda r: r.name.lower(),
         "joined": lambda r: r.joined_at,
-        "health_number": lambda r: (r.health_number is None, r.health_number or 0.0),
-        "last_active": lambda r: r.last_active_at or far_past,
+        "health_number": lambda r: r.health_number,
+        "last_active": lambda r: r.last_active_at,
+        "sharing": lambda r: r.sharing_label,
+        "trend": lambda r: r.trend.delta,
     }
-    rows.sort(key=keys[sort], reverse=(direction == "desc"))
+    # A member with nothing to sort by goes last whichever way the column runs,
+    # and the id settles ties, so a row is on exactly one page.
+    key = keys[sort]
+    rows.sort(key=lambda r: str(r.member_id))
+    present = sorted((r for r in rows if key(r) is not None), key=key, reverse=(direction == "desc"))
+    rows = present + [r for r in rows if key(r) is None]
     total = len(rows)
     start = (page - 1) * page_size
-    return MembersPage(rows=rows[start:start + page_size], total=total, page=page, page_size=page_size)
+    return MembersPage(rows=rows[start:start + page_size], total=total, page=page, page_size=page_size,
+                       segments=segments, trends=counts)
 
 
 @router.get("/members/{member_id}", response_model=Member360Out)
@@ -601,7 +707,7 @@ def member_360(member_id: UUID, principal: CurrentPrincipal = Depends(require_ad
     # The member's decision, read now rather than remembered: withdrawing has
     # to take effect on the very next request, not when a cache expires.
     permission = HealthPermissionService(db).for_member(member_id)
-    shares = permission.shares_health_data
+    shares = HealthPermissionService(db).shares_health_data(member_id)
 
     def history(model, item):
         if not shares:
@@ -611,17 +717,21 @@ def member_360(member_id: UUID, principal: CurrentPrincipal = Depends(require_ad
 
     moods = (db.query(MoodEntry).filter(MoodEntry.member_id == member_id)
              .order_by(MoodEntry.entry_date.desc()).all()) if shares else []
+    # The food diary is not part of the sharing choice (Cara, 25 Nov 2026; the
+    # terms members read say so) — but nothing is read about a member who has
+    # asked to be deleted.
+    diary = member.erasure_requested_at is None
     meals = (db.query(FoodDiaryEntry).filter(FoodDiaryEntry.member_id == member_id)
-             .order_by(FoodDiaryEntry.entry_date.desc(), FoodDiaryEntry.meal_time.desc()).limit(60).all()) if shares else []
+             .order_by(FoodDiaryEntry.entry_date.desc(), FoodDiaryEntry.meal_time.desc()).limit(60).all()) if diary else []
     diary_days = (db.query(func.count(func.distinct(FoodDiaryEntry.entry_date)))
-                  .filter(FoodDiaryEntry.member_id == member_id).scalar() or 0) if shares else 0
+                  .filter(FoodDiaryEntry.member_id == member_id).scalar() or 0) if diary else 0
     requests = db.query(MemberRequest).filter(MemberRequest.member_id == member_id).order_by(MemberRequest.created_at.desc()).all()
 
     # Who looked at whose records, when, and whether they were entitled to.
     # The health values themselves are deliberately not in the entry: an audit
     # log that copies the data it is auditing has doubled the problem.
     record_audit(db, principal, "health.viewed" if shares else "health.withheld", "member", str(member_id),
-                 {"permission": permission.state, "policy_version": permission.policy_version or ""})
+                 {"permission": permission.state, "policy_version": permission.policy_version or "", "food_diary_entries": len(meals)})
     db.commit()
 
     return Member360Out(
@@ -641,7 +751,7 @@ def member_360(member_id: UUID, principal: CurrentPrincipal = Depends(require_ad
         requests=[request_out(r) for r in requests],
         not_connected=["Mindfulness", "Activity Tracker (Exercise, Meditation)"],
         sharing_state=permission.state,
-        sharing_label=PERMISSION_LABELS.get(permission.state, permission.state),
+        sharing_label=SHARING_LABELS.get(permission.state, permission.state),
         shares_health_data=shares,
         account=_account_out(db, user, runtime),
         account_activity=account_activity(db, user_id=user.id, limit=10),
@@ -651,12 +761,11 @@ def member_360(member_id: UUID, principal: CurrentPrincipal = Depends(require_ad
 @router.get("/members/{member_id}/food-diary/{meal_id}/photo")
 def member_meal_photo(member_id: UUID, meal_id: UUID, size: Literal["full", "thumb"] = "thumb", db: Session = Depends(get_db),
                       runtime: Runtime = Depends(get_runtime)) -> Response:
-    """A meal photo is the member's health record like the diary text: served
-    only while they share their records, read now (a withdrawal takes effect
-    on the very next request), and indistinguishable from "no photo" when not."""
-    _member_or_404(db, member_id)
+    """A meal photo goes with the diary entry it belongs to, and is served only
+    under its own member."""
+    member, _ = _member_or_404(db, member_id)
     row = db.get(FoodDiaryEntry, meal_id)
-    if row is None or row.member_id != member_id or not HealthPermissionService(db).shares_health_data(member_id):
+    if row is None or row.member_id != member_id or member.erasure_requested_at is not None:
         raise HTTPException(status_code=404, detail="No photo.")
     try:
         data, content_type = MealPhotoService(db, runtime.media_store, max_bytes=0).read(row, size)
@@ -682,9 +791,11 @@ def _instrument_out(db: Session, key: str, allowed: set[UUID] | None = None) -> 
     allowed = sharing_member_ids(db) if allowed is None else allowed
     last_query = db.query(func.max(model.completed_at))
     last = (last_query.filter(model.member_id.in_(allowed)).scalar() if allowed else None)
+    starts, abandoned = unfinished(db, key, model, allowed)
     return InstrumentOut(key=key, name=name, description=description, calculation_version=version,
                          calculation_owner="System managed", attempts_total=_count(db, model, allowed),
-                         members_scored=_distinct_members(db, model, allowed), last_completed_at=_aware(last))
+                         members_scored=_distinct_members(db, model, allowed), last_completed_at=_aware(last),
+                         starts=starts, starts_unfinished=abandoned)
 
 
 @router.get("/assessments", response_model=list[InstrumentOut])
@@ -732,7 +843,8 @@ def insights(db: Session = Depends(get_db)) -> InsightsOut:
     # console two different totals for the word "Members" on two screens an
     # administrator reads one after the other.
     members = (db.query(Member.created_at)
-               .join(UserAccount, UserAccount.member_id == Member.id).all())
+               .join(UserAccount, UserAccount.member_id == Member.id).filter(Member.archived_at.is_(None)).all())
+    rows = _active_rows(db)
     # Sign-ups, requests and Companion usage carry no health content and stay.
     # Everything derived from a health, mood or food record is counted only for
     # members who have shared.
@@ -764,8 +876,13 @@ def insights(db: Session = Depends(get_db)) -> InsightsOut:
         requests_by_status={status: count for status, count in db.query(MemberRequest.status, func.count(MemberRequest.id)).group_by(MemberRequest.status).all()},
         requests_by_month=_by_month([at for (at,) in db.query(MemberRequest.created_at).all()]),
         mood_entries=_count(db, MoodEntry, allowed), mood_members=_distinct_members(db, MoodEntry, allowed),
-        food_diary_entries=_count(db, FoodDiaryEntry, allowed),
-        food_diary_members=_distinct_members(db, FoodDiaryEntry, allowed),
+        food_diary_entries=_count(db, FoodDiaryEntry),
+        food_diary_members=_distinct_members(db, FoodDiaryEntry),
+        retention=retention(db),
+        getting_started=GettingStarted(
+            joined=len(rows), verified=sum(1 for r in rows if r.email_verified),
+            onboarding_complete=sum(1 for r in rows if r.onboarding == "Complete"),
+            food_choices_started=_distinct_members(db, MemberFoodSelection, {r.member_id for r in rows})),
         generated_at=_now(),
     )
 

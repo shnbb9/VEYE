@@ -7,7 +7,7 @@ import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-
 import { Drawer, Field } from "@/components/admin/drawer";
 import { PrivacyProspectsCard } from "@/components/admin/privacy-prospects-card";
 import { HealthSharingCard } from "@/components/admin/health-sharing-card";
-import { AvatarCropDialog } from "@/components/avatar-crop-dialog";
+import dynamic from "next/dynamic";
 import { useSession } from "@/components/session";
 import { forgotPassword } from "@/lib/auth-api";
 import {
@@ -54,6 +54,8 @@ const MODES = [
 ] as const;
 
 const STATE_TONE: Record<FeatureState["state"], string> = { available: "live", holding: "draft", client_input: "attention", phase_2: "archived" };
+
+const AvatarCropDialog = dynamic(() => import("@/components/avatar-crop-dialog").then((m) => m.AvatarCropDialog), { ssr: false });
 
 export default function SettingsPage() {
   return <Suspense fallback={null}><Settings /></Suspense>;

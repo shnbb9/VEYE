@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { ADMIN, freshMember } from "../fixtures/accounts";
-import { adminSignIn, apiContext, csrfHeaders, expectAdminHome, open, signUpMember } from "../fixtures/helpers";
+import { adminSignIn, apiContext, csrfHeaders, expectAdminHome, expectNoHorizontalOverflow, open, signUpMember } from "../fixtures/helpers";
 
 /* The Fitness library (owner request, 15 Nov 2026): the console fills the
    member Fitness screen's four goals with YouTube or Vimeo links and picks
@@ -121,5 +121,24 @@ test("the console fills a goal, picks its main video, and members see it: main f
   await expect(player.locator("iframe")).toHaveAttribute("src", new RegExp(`/embed/${videoId(5)}\\?autoplay=1$`));
   await expect(fifth).toHaveAttribute("aria-pressed", "true");
   await expect(fifth.locator(".fit-thumb__playing")).toHaveText("Now Playing");
+
+  // A full page of cards on a tablet and on a phone: three a row at 768, one
+  // at 390; the player and every card inside the library frame, and nothing
+  // wider than the screen. (The responsive sweep only ever sees the library
+  // empty, because this test removes its videos again.)
+  for (const [width, columns] of [[768, 3], [390, 1]] as const) {
+    await member.setViewportSize({ width, height: 900 });
+    await expect.poll(() => member.evaluate(() =>
+      new Set([...document.querySelectorAll('[data-testid="fitness-video"]')].map((card) => Math.round(card.getBoundingClientRect().left))).size,
+    ), `cards per row at ${width}px`).toBe(columns);
+    const outside = await member.evaluate(() => {
+      const frame = document.querySelector('[data-testid="fitness-library"]')!.getBoundingClientRect();
+      return [...document.querySelectorAll('[data-testid="fitness-player"], [data-testid="fitness-video"], [data-testid="fitness-pages"]')]
+        .map((el) => el.getBoundingClientRect())
+        .filter((box) => box.left < frame.left - 0.5 || box.right > frame.right + 0.5).length;
+    });
+    expect(outside, `elements outside the library frame at ${width}px`).toBe(0);
+    await expectNoHorizontalOverflow(member);
+  }
   await member.context().close();
 });

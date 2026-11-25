@@ -1,6 +1,6 @@
 import { expect, request, test, type Browser, type Page } from "@playwright/test";
 import { ADITYA, ADMIN, API_URL, freshMember } from "./fixtures/accounts";
-import { adminSignIn, csrfHeaders, expectAdminHome, expectMemberDashboard, memberSignIn, open, signUpMember } from "./fixtures/helpers";
+import { adminSignIn, cancelledPrefetch, csrfHeaders, expectAdminHome, expectMemberDashboard, memberSignIn, open, signUpMember } from "./fixtures/helpers";
 
 /* Runtime and navigation acceptance (22 Sep 2026). The journey specs prove
    SPA navigation; this file proves what a person does by hand on the durable
@@ -27,6 +27,7 @@ const ADMIN_NAV = [
   { label: "Requests & Inbox", path: "/admin/requests" },
   { label: "Content", path: "/admin/content" },
   { label: "Insights", path: "/admin/insights" },
+  { label: "Finance", path: "/admin/finance" },
   { label: "Settings", path: "/admin/settings" },
 ];
 const COMPANION_NAV = [
@@ -67,6 +68,7 @@ const ADMIN_DEEP = [
   "/admin/requests?view=all", "/admin/requests?view=resolved", "/admin/care?kind=supplement", "/admin/content?group=member_copy",
   "/admin/settings?section=product", "/admin/settings?section=features",
   // Architecture V2: the Members area's two new views.
+  "/admin/members/trends", "/admin/members/invitations", "/admin/finance?tab=plans", "/admin/requests?view=awaiting_reply",
   "/admin/members/prospects", "/admin/members/deletions",
   // 15 Nov 2026: Care Studio's Fitness library.
   "/admin/care/fitness-library",
@@ -94,7 +96,7 @@ function watch(page: Page, expected?: RegExp): Watch {
     if (expected && expected.test(message.text())) return;
     errors.push(`${message.text()} @ ${page.url()}`);
   });
-  page.on("pageerror", (error) => errors.push(`pageerror: ${error.message} @ ${page.url()}`));
+  page.on("pageerror", (error) => { if (!cancelledPrefetch(page, error.message)) errors.push(`pageerror: ${error.message} @ ${page.url()}`); });
   // Top-level documents only: embedded third-party iframes (video embeds) are not navigation.
   const topLevel = (req: { resourceType(): string; frame(): unknown }) => req.resourceType() === "document" && req.frame() === page.mainFrame();
   page.on("requestfailed", (req) => { if (topLevel(req)) failedDocs.push(`${req.url()} → ${req.failure()?.errorText ?? "failed"}`); });

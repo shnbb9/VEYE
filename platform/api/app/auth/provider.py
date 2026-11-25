@@ -99,7 +99,7 @@ class DevelopmentSessionAuthProvider:
         # Access can be withdrawn after the session was issued.
         if portal == "admin" and not user.admin_access:
             return None
-        if portal == "member" and user.member_id is None:
+        if portal == "member" and (user.member_id is None or user.member_archived):
             return None
         session.last_seen_at = now
         return session

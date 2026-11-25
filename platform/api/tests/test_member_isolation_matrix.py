@@ -59,6 +59,11 @@ COVERED_ELSEWHERE = {
     # test_phase1_beta.py::test_mood_and_diary_are_isolated_between_members
     ("PUT", "/api/v1/members/me/food-diary/{meal_id}"),
     ("DELETE", "/api/v1/members/me/food-diary/{meal_id}"),
+    # test_meal_photos.py::test_another_member_can_neither_see_nor_change_my_meal_photo
+    ("GET", "/api/v1/members/me/food-diary/{meal_id}/photo"),
+    ("PUT", "/api/v1/members/me/food-diary/{meal_id}/photo"),
+    ("DELETE", "/api/v1/members/me/food-diary/{meal_id}/photo"),
+    ("POST", "/api/v1/members/me/food-diary/{meal_id}/photo/link"),
 }
 
 MEMBER_PASSWORD = "IsolationProbe!2026-local"

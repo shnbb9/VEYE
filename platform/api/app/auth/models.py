@@ -78,6 +78,10 @@ class UserAccount(Base):
     def member_access(self) -> bool:
         return self.member_id is not None
 
+    @property
+    def member_archived(self) -> bool:
+        return self.member is not None and self.member.archived_at is not None
+
 
 class AuthSession(Base):
     """Opaque server-side session for ONE portal. Only the SHA-256 of the

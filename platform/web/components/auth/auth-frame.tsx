@@ -1,22 +1,19 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { ScreenStyles } from "@/components/screen-styles";
 
 /* The approved sign-in / sign-up screens (build/login.html, build/signup.html,
    styles/auth.css, Figma "Desk Onboard A"): photo panel with the white logo
    and the vertical "Nutrition Reimagined" tagline, and the cream form panel.
    The stylesheet is the prototype's own file served from /auth-css. */
 
+const AUTH_FONTS = "https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap";
+const AUTH_SHEETS = ["/onboarding-css/tokens.css", "/onboarding-css/base.css", "/auth-css/auth.css", "/auth-css/auth-app.css"];
+
 export function AuthFrame({ photo, children }: { photo: "login" | "signup"; children: ReactNode }) {
   return (
-    <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      <link rel="stylesheet" href="/onboarding-css/tokens.css" />
-      <link rel="stylesheet" href="/onboarding-css/base.css" />
-      <link rel="stylesheet" href="/auth-css/auth.css" />
-      <link rel="stylesheet" href="/auth-css/auth-app.css" />
+    <ScreenStyles sheets={AUTH_SHEETS} fonts={AUTH_FONTS}>
       <main className="auth">
         <section className="auth__media">
           <img className="auth__photo" src={photo === "login" ? "/auth/login-people.jpg" : "/auth/signup-bowl.jpg"} alt="" />
@@ -25,7 +22,7 @@ export function AuthFrame({ photo, children }: { photo: "login" | "signup"; chil
         </section>
         <section className="auth__panel">{children}</section>
       </main>
-    </>
+    </ScreenStyles>
   );
 }
 

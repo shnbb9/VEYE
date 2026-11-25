@@ -108,6 +108,14 @@ export async function memberApi<T>(page: Page, path: string): Promise<T> {
   }, { api: API_URL, path }) as Promise<T>;
 }
 
+/** WebKit reports a route prefetch it cancelled because the page moved on as a
+ *  page error "due to access control checks". Only Next's own same-origin
+ *  prefetches, and only in WebKit, are excused; documents are checked elsewhere. */
+export function cancelledPrefetch(page: Page, text: string): boolean {
+  return page.context().browser()?.browserType().name() === "webkit"
+    && /^\/?(?:localhost|127\.0\.0\.1):\d+\/[^ ]*[?&]_rsc=[^ ]* due to access control checks\.?$/.test(text.trim());
+}
+
 /** No horizontal page overflow at the current viewport (the acceptance rule for every width). */
 export async function expectNoHorizontalOverflow(page: Page) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);

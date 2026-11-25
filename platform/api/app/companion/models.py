@@ -51,6 +51,11 @@ class CompanionConversation(Base):
     flag_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Reviewed means somebody read it; resolved means nothing is left to do.
+    # They are different facts, and reading it has answered nobody.
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    priority: Mapped[str | None] = mapped_column(String(16), nullable=True)  # set by a person (requests.PRIORITIES)
     message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     messages = relationship("CompanionMessage", back_populates="conversation", cascade="all, delete-orphan",

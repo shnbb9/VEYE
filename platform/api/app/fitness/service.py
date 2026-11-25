@@ -20,6 +20,7 @@ from typing import Callable
 from uuid import UUID
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.fitness.links import VideoLink, VideoLinkError, parse_video_link
@@ -40,7 +41,7 @@ def vimeo_thumbnail(link: VideoLink) -> str | None:
     when the video is added. Best effort: no thumbnail is not an error."""
     query = urllib.parse.urlencode({"url": link.canonical, "width": 640})
     try:
-        with urllib.request.urlopen(f"https://vimeo.com/api/oembed.json?{query}", timeout=4) as response:  # noqa: S310 - fixed https host
+        with urllib.request.urlopen(f"https://vimeo.com/api/oembed.json?{query}", timeout=4) as response:  # a fixed https host  # noqa: S310  # nosec B310
             data = json.loads(response.read(64_000).decode("utf-8"))
         thumbnail = data.get("thumbnail_url")
         return thumbnail if isinstance(thumbnail, str) and thumbnail.startswith("https://i.vimeocdn.com/") else None
@@ -107,13 +108,12 @@ class FitnessLibraryService:
         if exists:
             raise FitnessError(409, f"That video is already in {GOALS[goal]}.")
         last = self.db.query(func.max(FitnessVideo.position)).filter(FitnessVideo.goal == goal).scalar()
-        has_main = self.db.query(FitnessVideo.id).filter(FitnessVideo.goal == goal, FitnessVideo.is_main.is_(True)).first()
+        first = last is None  # only a goal's FIRST video becomes main by itself
         video = FitnessVideo(goal=goal, provider=link.provider, video_id=link.video_id, video_hash=link.video_hash,
                              url=link.canonical, title=title, subtitle=subtitle,
                              thumbnail_url=link.thumbnail_url or self.thumbnailer(link),
-                             position=(last + 1) if last is not None else 0, is_main=not has_main, published=True, updated_by=by)
-        self.db.add(video)
-        self.db.flush()
+                             position=(last + 1) if last is not None else 0, is_main=first, published=True, updated_by=by)
+        self._keep(video, f"That video is already in {GOALS[goal]}.")
         return video
 
     def update(self, video: FitnessVideo, *, title: str | None, subtitle: str | None, published: bool | None, by: str) -> FitnessVideo:
@@ -144,8 +144,19 @@ class FitnessLibraryService:
         self.db.flush()  # the one-main-per-goal index sees the old main cleared first
         video.is_main = True
         video.updated_by = by
-        self.db.flush()
+        self._keep(video, "Another administrator just changed the main video. Reload and try again.")
         return video
+
+    def _keep(self, video: FitnessVideo, conflict: str) -> None:
+        """Flush, and let the database's own rules decide a race: the loser is
+        told what happened instead of seeing a server error."""
+        try:
+            with self.db.begin_nested():
+                self.db.add(video)
+                self.db.flush()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise FitnessError(409, conflict) from exc
 
     def reorder(self, goal: str, ids: list[UUID], *, by: str) -> list[FitnessVideo]:
         videos = {v.id: v for v in self.db.query(FitnessVideo).filter(FitnessVideo.goal == _goal(goal)).all()}

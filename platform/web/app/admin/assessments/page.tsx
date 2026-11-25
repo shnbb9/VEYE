@@ -54,7 +54,7 @@ export default function AssessmentsPage() {
       {instruments && (
         <div className="instruments" data-testid="instruments">
           {instruments.map((instrument) => (
-            <Link className="instr" href={`/admin/assessments/${instrument.key}`} key={instrument.key} style={{ textDecoration: "none", color: "inherit" }}>
+            <Link className="instr instr--three" href={`/admin/assessments/${instrument.key}`} key={instrument.key} style={{ textDecoration: "none", color: "inherit" }}>
               <span className="instr__name">
                 <span className="instr__icon"><Icon name={ICONS[instrument.key] ?? "clipboard"} size={20} /></span>
                 <span style={{ minWidth: 0 }}>
@@ -62,7 +62,7 @@ export default function AssessmentsPage() {
                   <span className="instr__desc">{instrument.description}</span>
                 </span>
               </span>
-              <span className="instr__versions">
+              <span className="instr__versions instr__versions--three">
                 <span className="vslot vslot--live">
                   <span className="vslot__label">Calculation</span>
                   <span className="vslot__v">{instrument.calculation_version}</span>
@@ -72,6 +72,11 @@ export default function AssessmentsPage() {
                   <span className="vslot__label">Members scored</span>
                   <span className="vslot__v">{instrument.members_scored}</span>
                   <span className="vslot__meta">{instrument.attempts_total} result{instrument.attempts_total === 1 ? "" : "s"}{instrument.last_completed_at ? ` · last ${fmtDate(instrument.last_completed_at)}` : ""}</span>
+                </span>
+                <span className="vslot" data-testid={`unfinished-${instrument.key}`}>
+                  <span className="vslot__label">Started, not finished</span>
+                  <span className="vslot__v">{instrument.starts_unfinished}</span>
+                  <span className="vslot__meta">{instrument.starts ? `of ${instrument.starts} started` : "No starts recorded yet"}</span>
                 </span>
               </span>
               <span className="btn btn--secondary btn--sm">Open</span>

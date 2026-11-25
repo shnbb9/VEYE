@@ -483,3 +483,49 @@ def test_account_actions_are_readable_beside_the_controls_that_caused_them(admin
     # It is a read: nothing here writes, and a member session cannot see it.
     assert len(admin_client.get("/api/v1/admin/administrators/activity").json()) == len(rows)
     assert member_client.get("/api/v1/admin/administrators/activity").status_code == 401
+
+
+# ---------------------------------------------------------------- an invitation grants nothing until it is accepted
+def test_inviting_an_address_someone_already_registered_opens_no_door(client, admin_client, mailbox):
+    """Anyone can register an address they do not own (sign-up needs no proof
+    of it). Inviting that address must not hand the console to whoever did:
+    access starts when the person holding the mailbox accepts, and accepting
+    puts everyone else out."""
+    squatter = client
+    assert sign_up(squatter, email=NEW_ADMIN).status_code == 201
+    assert _invite(admin_client).status_code == 201
+
+    assert admin_sign_in(squatter, NEW_ADMIN, MEMBER_PASSWORD).status_code == 403
+    assert me(squatter)["admin"] is None
+    assert squatter.get("/api/v1/admin/members").status_code == 401
+    row = _rows(admin_client)[NEW_ADMIN]
+    assert row["invitation_status"] == "pending" and row["also_member"] is True
+
+    token = _link_token(mailbox, NEW_ADMIN, "accept-invitation?token=")
+    owner = TestClient(app)
+    assert owner.post("/api/v1/auth/admin-invitation/accept",
+                      json={"token": token, "password": NEW_PASSWORD}).status_code == 200
+    assert admin_sign_in(owner, NEW_ADMIN, NEW_PASSWORD).status_code == 200
+    assert sign_in(squatter, NEW_ADMIN, MEMBER_PASSWORD).status_code == 401
+    assert squatter.get("/api/v1/members/me/requests").status_code == 401, "their old session ended"
+
+
+def test_an_unaccepted_invitation_does_not_count_as_another_way_in(admin_client):
+    """The last-administrator guard counts people who can sign in now."""
+    from app.auth.models import UserAccount
+    from app.db.session import SessionLocal
+    from app.admin.administrators_routes import _other_active_admins
+
+    assert _invite(admin_client).status_code == 201
+    with SessionLocal() as db:
+        cara = db.query(UserAccount).filter(UserAccount.email == "cara.hogue@demo.veye.test").one()
+        assert _other_active_admins(db, cara) == 0
+
+
+def test_a_member_keeps_their_member_account_when_an_invitation_is_withdrawn(client, admin_client):
+    assert sign_up(client, email=NEW_ADMIN).status_code == 201
+    assert _invite(admin_client).status_code == 201
+    user_id = _rows(admin_client)[NEW_ADMIN]["user_id"]
+    assert admin_client.post(f"/api/v1/admin/administrators/{user_id}/revoke-invitation").status_code == 200
+    assert sign_in(client, NEW_ADMIN).status_code == 200, "withdrawing an invitation is not a deactivation"
+    assert NEW_ADMIN not in _rows(admin_client)

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -25,10 +25,12 @@ from app.auth.schemas import (
     SessionsOut,
 )
 from app.auth.service import AuthError, AuthService
+from app.core.rate_limit import RateLimiter, client_address
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.members.photo_crop import CropIn, form_crop
 from app.members.service import MemberProfileService, ProfileError
+from app.storage.media_changes import committed_with
 
 router = APIRouter(prefix="/api/v1/members/me", tags=["member-account"])
 
@@ -62,34 +64,42 @@ def update_profile(payload: ProfileUpdate, principal: CurrentPrincipal = Depends
 
 
 @router.post("/photo", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
-async def upload_photo(file: UploadFile = File(...), crop_x: int | None = Form(None), crop_y: int | None = Form(None),
-                       crop_size: int | None = Form(None), principal: CurrentPrincipal = Depends(require_member),
-                       db: Session = Depends(get_db), service: MemberProfileService = Depends(_service)) -> AccountOut:
+def upload_photo(request: Request, file: UploadFile = File(...), crop_x: int | None = Form(None), crop_y: int | None = Form(None),
+                 crop_size: int | None = Form(None), principal: CurrentPrincipal = Depends(require_member),
+                 db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime),
+                 service: MemberProfileService = Depends(_service)) -> AccountOut:
     """A new picture, and optionally the square chosen in the crop frame
     (pixels of the upright original). The original is kept for re-cropping."""
+    # A plain `def`: decoding and storing a picture is blocking work, and in an
+    # `async def` every other request on this instance would wait for it.
     crop = form_crop(crop_x, crop_y, crop_size)
+    RateLimiter(db, runtime.settings).enforce("photo_upload", subject=str(principal.user_id), address=client_address(request))
+    db.commit()  # the hit stands whatever happens to the picture
     user = _user(db, principal)
     # Read at most one byte over the limit so an oversized upload is refused
     # without buffering an arbitrarily large body.
-    data = await file.read(service.photo_max_bytes + 1)
+    data = file.file.read(service.photo_max_bytes + 1)
     try:
-        service.set_photo(user, data, file.content_type, crop)
+        with committed_with(db, service.changes):
+            service.set_photo(user, data, file.content_type, crop)
     except ProfileError as exc:
         _raise(exc)
-    db.commit()
     return account_out(user, PORTAL_MEMBER)
 
 
 @router.put("/photo/crop", response_model=AccountOut)
-def recrop_photo(payload: CropIn, principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+def recrop_photo(payload: CropIn, request: Request, principal: CurrentPrincipal = Depends(require_member),
+                 db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime),
                  service: MemberProfileService = Depends(_service)) -> AccountOut:
     """Cut the avatar again from the picture already kept — no new upload."""
+    RateLimiter(db, runtime.settings).enforce("photo_upload", subject=str(principal.user_id), address=client_address(request))
+    db.commit()
     user = _user(db, principal)
     try:
-        service.recrop_photo(user, payload.crop())
+        with committed_with(db, service.changes):
+            service.recrop_photo(user, payload.crop())
     except ProfileError as exc:
         _raise(exc)
-    db.commit()
     return account_out(user, PORTAL_MEMBER)
 
 
@@ -97,8 +107,8 @@ def recrop_photo(payload: CropIn, principal: CurrentPrincipal = Depends(require_
 def remove_photo(principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
                  service: MemberProfileService = Depends(_service)) -> AccountOut:
     user = _user(db, principal)
-    service.remove_photo(user)
-    db.commit()
+    with committed_with(db, service.changes):
+        service.remove_photo(user)
     return account_out(user, PORTAL_MEMBER)
 
 

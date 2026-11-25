@@ -8,6 +8,9 @@ from app.auth.schemas import EmailAddress
 
 Kind = Literal["contact_us", "help_question", "join_beta"]
 Status = Literal["new", "in_progress", "resolved"]
+Priority = Literal["high", "medium", "low"]
+# Has a person answered? Separate from Status: "in progress" says nothing about it.
+ReplyState = Literal["waiting", "failed", "replied", "resolved"]
 
 
 class PublicRequestIn(BaseModel):
@@ -91,6 +94,8 @@ class RequestOut(BaseModel):
     handled_by: str | None
     handled_at: datetime | None
     resolution_note: str
+    priority: Priority | None = None
+    reply_state: ReplyState = "waiting"
     replies: list[RequestReplyOut] = []
 
 
@@ -105,6 +110,11 @@ class RequestsPage(BaseModel):
 class RequestStatusIn(BaseModel):
     status: Status
     resolution_note: str = Field(default="", max_length=4000)
+
+
+class PriorityIn(BaseModel):
+    """null takes the label off again."""
+    priority: Priority | None
 
 
 class SubmittedOut(BaseModel):

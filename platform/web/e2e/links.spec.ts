@@ -42,6 +42,9 @@ async function sweep(page: Page, paths: string[]) {
   const unlabelled: string[] = [];
   for (const path of paths) {
     await open(page, path);
+    // Read the page, not its placeholder: what is still loading has no links yet.
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator(".skel, .loading-row, .screen-waiting"), path).toHaveCount(0);
     for (const href of await collectInternalLinks(page)) seen.add(href.split("#")[0]);
     unlabelled.push(...await inertControlsAreLabelled(page));
   }

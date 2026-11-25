@@ -2,14 +2,18 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Chip, EmptyState, Icon, PageHead, fmtDate } from "@/components/admin/admin-chrome";
+import { PRIORITY_OPTIONS, PriorityChip, PrioritySelect } from "@/components/admin/member-cells";
 import {
   REQUEST_KIND_LABELS,
+  getRequest,
   listRequests,
   replyToRequest,
+  setRequestPriority,
   setRequestStatus,
   type ConsoleRequest,
+  type Priority,
   type RequestKind,
   type RequestStatus,
   type RequestsPage,
@@ -24,7 +28,7 @@ import {
    address on the request and kept against it, so the next person to open it
    can see what was already said. */
 
-const VIEWS: { key: RequestsView; label: string }[] = [{ key: "open", label: "Open" }, { key: "all", label: "All" }, { key: "resolved", label: "Resolved" }];
+const VIEWS: { key: RequestsView; label: string }[] = [{ key: "open", label: "Open" }, { key: "awaiting_reply", label: "Awaiting a reply" }, { key: "all", label: "All" }, { key: "resolved", label: "Resolved" }];
 const KINDS = Object.keys(REQUEST_KIND_LABELS) as RequestKind[];
 const STATUS_TONE: Record<RequestStatus, string> = { new: "attention", in_progress: "info", resolved: "live" };
 
@@ -37,6 +41,8 @@ function Requests() {
   const initial = search.get("id");
   const [view, setView] = useState<RequestsView>(() => VIEWS.find((v) => v.key === search.get("view"))?.key ?? "open");
   const [kind, setKind] = useState<RequestKind | "">("");
+  const [source, setSource] = useState<"member" | "public" | "">("");
+  const [priority, setPriority] = useState<Priority | "unassigned" | "">("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState<RequestsPage | null>(null);
   const [pageNo, setPageNo] = useState(1);
@@ -47,14 +53,25 @@ function Requests() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const turn = useRef(0);
+  const wanted = useRef(initial);
   const load = useCallback(() => {
-    listRequests({ view, kind, q, page: pageNo, page_size: 25 })
-      .then((data) => {
+    const mine = ++turn.current;
+    listRequests({ view, kind, source, priority, q, page: pageNo, page_size: 25 })
+      .then(async (data) => {
+        // A link to one request opens it even when it is not on this page.
+        const id = wanted.current;
+        if (id && !data.rows.some((r) => r.id === id)) {
+          const row = await getRequest(id).catch(() => null);
+          if (row) data = { ...data, rows: [row, ...data.rows] };
+        }
+        if (mine !== turn.current) return;   // a newer search has been asked since
+        wanted.current = null;
         setPage(data);
         setSelected((current) => (current && data.rows.some((r) => r.id === current) ? current : data.rows[0]?.id ?? null));
       })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Requests could not be loaded."));
-  }, [view, kind, q, pageNo]);
+      .catch((reason) => { if (mine === turn.current) setError(reason instanceof Error ? reason.message : "Requests could not be loaded."); });
+  }, [view, kind, source, priority, q, pageNo]);
   useEffect(() => { load(); }, [load]);
 
   const item = page?.rows.find((r) => r.id === selected) ?? null;
@@ -66,7 +83,7 @@ function Requests() {
   /* Keep the request just handled on screen even when the current filter no
      longer includes it, and refresh the counts around it. */
   async function refreshAround(updated: ConsoleRequest) {
-    const fresh = await listRequests({ view, kind, q, page: pageNo, page_size: 25 });
+    const fresh = await listRequests({ view, kind, source, priority, q, page: pageNo, page_size: 25 });
     const rows = fresh.rows.some((r) => r.id === updated.id)
       ? fresh.rows.map((r) => (r.id === updated.id ? updated : r))
       : [updated, ...fresh.rows];
@@ -81,6 +98,16 @@ function Requests() {
       await refreshAround(await setRequestStatus(item.id, status, note));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That change could not be saved.");
+    } finally { setBusy(false); }
+  }
+
+  async function label(next: Priority | null) {
+    if (!item) return;
+    setBusy(true); setError(""); setSent("");
+    try {
+      await refreshAround(await setRequestPriority(item.id, next));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The importance could not be saved.");
     } finally { setBusy(false); }
   }
 
@@ -121,16 +148,26 @@ function Requests() {
 
       <div className="review2">
         <div className="card">
-          <div className="findbar" style={{ padding: "var(--s-4)", flexWrap: "wrap", gap: 10 }}>
+          <div className="findbar findbar--stack">
             <div className="modeswitch" role="tablist" aria-label="Which requests">
               {VIEWS.map((v) => (
                 <button key={v.key} className="modeswitch__btn" type="button" role="tab" aria-selected={view === v.key} onClick={() => { setView(v.key); setPageNo(1); }}>{v.label}</button>
               ))}
             </div>
             <label className="sr-only" htmlFor="rqKind">Kind</label>
-            <select className="select" id="rqKind" value={kind} onChange={(e) => { setKind(e.target.value as RequestKind | ""); setPageNo(1); }} style={{ maxWidth: 170 }}>
+            <select className="select" id="rqKind" value={kind} onChange={(e) => { setKind(e.target.value as RequestKind | ""); setPageNo(1); }}>
               <option value="">All kinds</option>
               {KINDS.map((k) => <option key={k} value={k}>{REQUEST_KIND_LABELS[k]}</option>)}
+            </select>
+            <label className="sr-only" htmlFor="rqSource">From</label>
+            <select className="select" id="rqSource" value={source} onChange={(e) => { setSource(e.target.value as typeof source); setPageNo(1); }}>
+              <option value="">From anyone</option><option value="member">From members</option><option value="public">From visitors</option>
+            </select>
+            <label className="sr-only" htmlFor="rqPriority">Importance</label>
+            <select className="select" id="rqPriority" value={priority} onChange={(e) => { setPriority(e.target.value as typeof priority); setPageNo(1); }}>
+              <option value="">Any importance</option>
+              {PRIORITY_OPTIONS.filter((p) => p.value).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              <option value="unassigned">Not set</option>
             </select>
             <div className="search" style={{ flex: "1 1 160px", position: "relative" }}>
               <span className="search__icon"><Icon name="search" size={18} /></span>
@@ -149,7 +186,9 @@ function Requests() {
                   {/* Answering does not move the status, so the row has to say
                       it — otherwise a New request that was already answered
                       looks untouched and gets answered twice. */}
-                  {r.replies.length > 0 && <span className="chip chip--live chip--sm">Answered</span>}
+                  {r.reply_state === "replied" && <span className="chip chip--live chip--sm">Answered</span>}
+                  {r.reply_state === "failed" && <span className="chip chip--error chip--sm">Reply not delivered</span>}
+                  <PriorityChip priority={r.priority} />
                 </span>
                 <span className="flag__why">{r.subject || r.message.slice(0, 80)}</span>
                 <span className="t-support">{r.kind_label} · {fmtDate(r.created_at)}</span>
@@ -174,6 +213,7 @@ function Requests() {
                 <Chip label={item.status_label} tone={STATUS_TONE[item.status]} />
               </div>
               <div className="card__body stack gap-5">
+                <PrioritySelect id="rqImportance" value={item.priority} disabled={busy} onChange={(next) => void label(next)} />
                 <div><div className="t-eyebrow">Source</div><p>{item.kind_label} · {item.source === "member" ? "signed-in member" : "public website"}{item.page ? ` · ${item.page}` : ""}</p></div>
                 <div><div className="t-eyebrow">Message</div><p style={{ whiteSpace: "pre-wrap" }}>{item.message || <span className="t-support">No message — a Join Beta request carries only the member&rsquo;s identity.</span>}</p></div>
                 {item.member_id && <div><div className="t-eyebrow">Member</div><p><Link href={`/admin/members/${item.member_id}`}>Open Member 360</Link></p></div>}

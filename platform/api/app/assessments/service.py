@@ -68,15 +68,15 @@ def classify_category(points: dict[str, float]) -> tuple[str, str]:
     return "mixed", f"tied high answers ({life_count} each) -> Mixed"
 
 
+# (upper bound inclusive, bucket, status): the four client bands, once.
+BANDS: tuple[tuple[float, str, str], ...] = (
+    (1.0, "good", "Good Health"), (3.5, "relative", "Relatively Good Health"),
+    (6.0, "moderate", "Moderately Good Health"), (10.0, "high", "Insulin Resistance Risk"))
+
+
 def interpret_score(displayed: float, category: str) -> tuple[str, str, str]:
-    if displayed <= 1:
-        bucket, status, copy_key = "good", "Good Health", "good"
-    elif displayed <= 3.5:
-        bucket, status, copy_key = "relative", "Relatively Good Health", f"rel_{category}"
-    elif displayed <= 6:
-        bucket, status, copy_key = "moderate", "Moderately Good Health", f"mod_{category}"
-    else:
-        bucket, status, copy_key = "high", "Insulin Resistance Risk", "high"
+    bucket, status = next(((b, s) for upper, b, s in BANDS if displayed <= upper), BANDS[-1][1:])
+    copy_key = {"relative": f"rel_{category}", "moderate": f"mod_{category}"}.get(bucket, bucket)
     return bucket, status, TEXT[copy_key]
 
 

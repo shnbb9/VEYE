@@ -8,8 +8,6 @@ client."""
 
 from __future__ import annotations
 
-import logging
-
 import hashlib
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -24,6 +22,8 @@ from app.companion.models import CompanionConversation, CompanionFeedback, Compa
 from app.food.models import FoodDiaryDay, FoodDiaryEntry
 from app.guided_flows.models import MemberGuidedFlowSession
 from app.meal_plans.models import MealPlanDay
+from app.members.activity import MemberActivityDay
+from app.members.invitations import MemberInvitation
 from app.members.models import Member
 from app.mood.models import MoodEntry
 from app.notifications.models import Notification, NotificationPreference
@@ -31,11 +31,11 @@ from app.progress.blood_markers.models import BloodMarkerAttempt
 from app.progress.body_composition.models import BodyCompositionAttempt
 from app.progress.health_assessment.models import HealthAssessmentAttempt
 from app.progress.simple_quiz.models import SimpleQuizAttempt
+from app.progress.starts import AssessmentStart
 from app.requests.models import MemberRequest
 from app.storage.images import Crop, ImageRejected, original_key, prepare_picture, recut_picture, thumb_key
+from app.storage.media_changes import MediaChanges, sweep_prefix
 from app.storage.object_storage import ObjectNotFound, ObjectStorage
-
-log = logging.getLogger("veye.members")
 
 # Accepted photo types, checked by magic bytes — the browser's declared type is
 # never trusted on its own.
@@ -92,6 +92,7 @@ class MemberProfileService:
     def __init__(self, db: Session, media: ObjectStorage, *, photo_max_bytes: int = 10_000_000) -> None:
         self.db = db
         self.media = media
+        self.changes = MediaChanges(media)  # settled by the route, after its commit
         self.photo_max_bytes = photo_max_bytes
 
     # ---- profile -----------------------------------------------------------------
@@ -130,9 +131,9 @@ class MemberProfileService:
         old_key, old_original = user.photo_object_key, user.photo_original_key
         # Bytes first, the pointer last: a failure mid-way leaves the old
         # photo in place rather than a pointer to bytes that were never written.
-        self.media.put(original_key(key), picture.original, picture.content_type)
-        self.media.put(thumb_key(key), picture.thumb, picture.content_type)
-        self.media.put(key, picture.full, picture.content_type)
+        self.changes.put(original_key(key), picture.original, picture.content_type)
+        self.changes.put(thumb_key(key), picture.thumb, picture.content_type)
+        self.changes.put(key, picture.full, picture.content_type)
         user.photo_object_key = key
         user.photo_content_type = picture.content_type
         user.photo_updated_at = now
@@ -141,9 +142,9 @@ class MemberProfileService:
         user.photo_crop_x, user.photo_crop_y, user.photo_crop_size = picture.crop.x, picture.crop.y, picture.crop.size
         self.db.flush()
         if old_key and old_key != key:
-            self._delete_quietly(old_key)
+            self.changes.retire(old_key, thumb_key(old_key))
         if old_original and old_original != user.photo_original_key:
-            self._delete_quietly(old_original, variants=False)
+            self.changes.retire(old_original)
         return user
 
     def recrop_photo(self, user: UserAccount, crop: Crop) -> UserAccount:
@@ -163,34 +164,20 @@ class MemberProfileService:
         extension = user.photo_object_key.rpartition(".")[2]
         key = f"profile-photos/{user.id}/{now.strftime('%Y%m%dT%H%M%S%f')}.{extension}"
         old_key = user.photo_object_key
-        self.media.put(thumb_key(key), thumb, user.photo_content_type)
-        self.media.put(key, full, user.photo_content_type)
+        self.changes.put(thumb_key(key), thumb, user.photo_content_type)
+        self.changes.put(key, full, user.photo_content_type)
         user.photo_object_key = key
         user.photo_updated_at = now
         user.photo_crop_x, user.photo_crop_y, user.photo_crop_size = crop.x, crop.y, crop.size
         self.db.flush()
         if old_key != key:
-            self._delete_quietly(old_key)
+            self.changes.retire(old_key, thumb_key(old_key))
         return user
-
-    def _delete_quietly(self, key: str, *, variants: bool = True) -> None:
-        for target in ((key, thumb_key(key)) if variants else (key,)):
-            try:
-                self.media.delete(target)
-            except ObjectNotFound:
-                pass
-            except Exception as exc:
-                # The new photo is already in place, so a stale file is not an
-                # error worth failing on — but it is worth saying, or an object
-                # store quietly refusing every delete looks like nothing at all.
-                log.warning("could not remove a previous profile photo object: %s: %s",
-                            type(exc).__name__, str(exc)[:200])
 
     def remove_photo(self, user: UserAccount) -> UserAccount:
         if user.photo_object_key:
-            self._delete_quietly(user.photo_object_key)
-        if user.photo_original_key:
-            self._delete_quietly(user.photo_original_key, variants=False)
+            self.changes.retire(user.photo_object_key, thumb_key(user.photo_object_key))
+        self.changes.retire(user.photo_original_key)
         user.photo_object_key = None
         user.photo_content_type = None
         user.photo_updated_at = datetime.now(timezone.utc)
@@ -300,12 +287,9 @@ class MemberProfileService:
         requests are detached rather than deleted so the inbox history stays
         readable. The photo bytes go too."""
         member_id = user.member_id
-        if user.photo_object_key:
-            try:
-                self.media.delete(user.photo_object_key)
-            except Exception:
-                pass
+        sweep_prefix(self.media, f"profile-photos/{user.id}/")
         if member_id is not None:
+            sweep_prefix(self.media, f"meal-photos/{member_id}/")
             conversation_ids = [cid for (cid,) in self.db.query(CompanionConversation.id).filter(CompanionConversation.member_id == member_id).all()]
             if conversation_ids:
                 message_ids = [mid for (mid,) in self.db.query(CompanionMessage.id).filter(CompanionMessage.conversation_id.in_(conversation_ids)).all()]
@@ -315,8 +299,10 @@ class MemberProfileService:
                 self.db.query(CompanionMessage).filter(CompanionMessage.conversation_id.in_(conversation_ids)).delete(synchronize_session=False)
                 self.db.query(CompanionConversation).filter(CompanionConversation.id.in_(conversation_ids)).delete(synchronize_session=False)
             for model in (HealthNumberAttempt, BodyCompositionAttempt, BloodMarkerAttempt, HealthAssessmentAttempt, SimpleQuizAttempt,
-                          MoodEntry, FoodDiaryEntry, FoodDiaryDay, MealPlanDay, MemberGuidedFlowSession):
+                          MoodEntry, FoodDiaryEntry, FoodDiaryDay, MealPlanDay, MemberGuidedFlowSession, MemberActivityDay,
+                          AssessmentStart):
                 self.db.query(model).filter(model.member_id == member_id).delete(synchronize_session=False)
+            self.db.query(MemberInvitation).filter(MemberInvitation.member_id == member_id).delete(synchronize_session=False)
             self.db.query(MemberRequest).filter(MemberRequest.member_id == member_id).update({"member_id": None}, synchronize_session=False)
         for model in (AuthSession, AuthToken, Notification, NotificationPreference):
             self.db.query(model).filter(model.user_id == user.id).delete(synchronize_session=False)

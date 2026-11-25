@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,6 +34,9 @@ class ConversationSummaryOut(BaseModel):
     flag_reason: str | None
     reviewed_at: datetime | None
     reviewed_by: str | None
+    resolved_at: datetime | None = None
+    resolved_by: str | None = None
+    priority: str | None = None
     first_message: str
     feedback_rating: str | None
     outcomes: list[str]
@@ -73,6 +77,11 @@ class ConversationDetailOut(BaseModel):
     summary: ConversationSummaryOut
     member: MemberContextCardOut
     messages: list[AdminMessageOut]
+
+
+class ConversationPriorityIn(BaseModel):
+    """null takes the label off again."""
+    priority: Literal["high", "medium", "low"] | None
 
 
 class ReviewRequest(BaseModel):

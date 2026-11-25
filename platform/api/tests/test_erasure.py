@@ -179,7 +179,9 @@ def test_a_dual_access_person_keeps_console_access_and_loses_only_member_data(ad
     assert invited.status_code == 201, invited.text
     with SessionLocal() as db:
         user = db.get(UserAccount, user_id)
+        # Accepted: access starts here, never at the invitation.
         user.invitation_accepted_at = user.invited_at
+        user.admin_access = True
         db.commit()
     console = TestClient(app)
     console.__enter__()

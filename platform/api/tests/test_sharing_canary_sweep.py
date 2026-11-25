@@ -32,6 +32,9 @@ MOOD_CANARY = "zzqqx-mood-canary"
 TG_CANARY = 137.137          # triglycerides, a value nobody would type twice
 WEIGHT_CANARY = 177.177      # lb
 CANARIES = (DIARY_CANARY, MOOD_CANARY, "137.137", "177.177")
+# The diary is outside the sharing choice (Cara, 25 Nov 2026), and the terms a
+# member reads say so. It may appear in exactly one place: that member's own page.
+DIARY_ROUTES = {"/api/v1/admin/members/{member_id} (200)"}
 
 ADMIN_READS = [r for r in routes() if ADMIN_GUARD in r["guards"] and r["method"] in SAFE_METHODS]
 
@@ -121,6 +124,7 @@ def test_no_console_route_returns_the_records_of_a_member_who_has_not_shared(adm
         assert state["state"] == "not_requested", state
         leaked, answered = _sweep(admin_client, member_id)
         assert answered > 20, f"only {answered} console routes answered — the sweep is not reading enough to mean anything"
+        assert set(leaked.pop(DIARY_CANARY, [])) == DIARY_ROUTES, "the diary shows on the member's own page and nowhere else"
         assert leaked == {}, (
             "console routes returned the records of a member whose Health Data Sharing Permission "
             "has never been granted:" + "".join(

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useAssessmentStart } from "@/components/member/use-assessment-start";
 import { useEffect, useState } from "react";
 import {
   calculateSimpleQuiz,
@@ -32,6 +33,7 @@ export default function SimpleQuizPage() {
   const [answers, setAnswers] = useState<Record<string, YesNo>>({});
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  useAssessmentStart("simple_quiz", mode === "form" && Object.keys(answers).length > 0);
 
   useEffect(() => {
     Promise.all([getSimpleQuizDefinition(), getSimpleQuizHistory()])

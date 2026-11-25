@@ -27,7 +27,7 @@ import {
   type HealthPermissionEvent,
 } from "@/lib/member-api";
 import { exportUrl, myOriginalPhotoUrl, recropPhoto, removePhoto, updateProfile, uploadPhoto, type PhotoCrop } from "@/lib/member-api";
-import { AvatarCropDialog } from "@/components/avatar-crop-dialog";
+import dynamic from "next/dynamic";
 
 /* The approved Settings view (build/dashboard.html, #view-settings): four
    numbered cards. Profile, photo and security are backed by the account
@@ -38,6 +38,8 @@ import { AvatarCropDialog } from "@/components/avatar-crop-dialog";
 // anything is uploaded (the API checks again, from the bytes).
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const PHOTO_MAX_BYTES = 10_000_000;
+
+const AvatarCropDialog = dynamic(() => import("@/components/avatar-crop-dialog").then((m) => m.AvatarCropDialog), { ssr: false });
 
 export default function SettingsPage() {
   return <Suspense fallback={null}><SettingsView /></Suspense>;
@@ -135,8 +137,9 @@ function SettingsView() {
     setCropping({ src: myOriginalPhotoUrl(account.photo_version), initial: { x, y, size } });
   }
 
+  useEffect(() => () => { if (cropping?.file) URL.revokeObjectURL(cropping.src); }, [cropping]);
+
   function closeCropper() {
-    if (cropping?.file) URL.revokeObjectURL(cropping.src);
     setCropping(null);
   }
 

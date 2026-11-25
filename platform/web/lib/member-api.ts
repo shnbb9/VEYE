@@ -67,7 +67,7 @@ export type Meal = { id: string; entry_date: string; meal_time: string; descript
   /** Changes when the meal's photo does; null = no photo. */
   photo_version?: string | null } & Macros;
 export type DiaryHistoryDay = { entry_date: string; meals: number; kcal: number; saved: boolean; last_updated: string | null };
-export type DiaryDay = { entry_date: string; meals: Meal[]; totals: Macros; saved_at: string | null; history: DiaryHistoryDay[]; feelings: string[]; days_logged: number };
+export type DiaryDay = { entry_date: string; meals: Meal[]; totals: Macros; saved_at: string | null; history: DiaryHistoryDay[]; feelings: string[]; days_logged: number; created_id?: string | null };
 export type MealInput = { entry_date: string; meal_time: string; description: string; feelings: string[]; notes: string };
 
 export const getDiaryDay = (date: string) => apiJson<DiaryDay>(`/api/v1/members/${ME}/food-diary?date=${date}`);
@@ -303,3 +303,11 @@ export type FitnessLibrary = {
 
 export const getFitnessLibrary = (goal?: FitnessGoalKey, page = 1) =>
   apiJson<FitnessLibrary>(`/api/v1/fitness/library?${goal ? `goal=${goal}&` : ""}page=${page}`);
+
+/* One row a day saying the app was opened — nothing about what was done. Best
+   effort: a member never waits for it or sees it fail. */
+export const recordActivity = () => apiJson<void>("/api/v1/members/me/activity", { method: "POST" }).catch(() => undefined);
+/* A form was begun. Which one and when; never an answer. */
+export type InstrumentKey = "health_number" | "body_composition" | "blood_markers" | "health_assessment" | "simple_quiz";
+export const recordAssessmentStart = (instrument: InstrumentKey) =>
+  postJson<void>("/api/v1/members/me/assessment-starts", { instrument }).catch(() => undefined);

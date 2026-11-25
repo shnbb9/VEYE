@@ -50,7 +50,11 @@ test.describe("a request to share health records", () => {
     expect(before.state).toBe("requested");
 
     const screen = page.getByTestId("sharing-request");
-    await expect(screen.getByTestId("sharing-request-categories").getByRole("listitem")).toHaveCount(6);
+    // The food diary is not one of them, and the screen says who sees it (Cara, 25 Nov 2026).
+    const categories = screen.getByTestId("sharing-request-categories");
+    await expect(categories.getByRole("listitem")).toHaveCount(5);
+    await expect(categories).not.toContainText(/diary/i);
+    await expect(screen).toContainText("your food diary with its photos are not covered by this choice");
     await expect(screen).toContainText("For how long");
     await expect(screen).toContainText("What is not covered");
     await expect(screen).toContainText("If you don’t allow it");
@@ -67,11 +71,12 @@ test.describe("a request to share health records", () => {
     await expect(page.getByTestId("sharing-request-decided")).toContainText("Shared with the Veye team");
 
     await admin.reload();
-    await expect(admin.getByTestId("sharing-banner")).toContainText("Shared with the Veye team");
+    await expect(admin.getByTestId("sharing-banner")).toContainText("Shared. This member has chosen to share their saved results with the Veye team.");
     const evidence = await memberApi<{ events: { to_state: string; terms_hash: string | null; scope: string[] | null }[] }>(page, "/api/v1/members/me/health-permission");
     const decision = evidence.events.find((e) => e.to_state === "granted");
     expect(decision?.terms_hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(decision?.scope?.length).toBe(6);
+    expect(decision?.scope?.length).toBe(5);
+    expect(JSON.stringify(decision?.scope)).not.toMatch(/diary/i);
   });
 
   test("the link does nothing for another member", async ({ browser }) => {

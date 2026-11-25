@@ -30,6 +30,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.core.config import Settings
 from app.db.base import Base
+from app.core.rate_limit import client_address  # noqa: F401 - the one place an address is read
 
 
 class SignInAttempt(Base):
@@ -121,17 +122,3 @@ class SignInThrottle:
         (self.db.query(SignInAttempt)
          .filter(SignInAttempt.email == email.strip().lower(), SignInAttempt.succeeded.is_(False))
          .delete(synchronize_session=False))
-
-
-def client_address(request) -> str:
-    """The caller's address as this deployment can see it.
-
-    Behind the reference Nginx the real address arrives in `X-Forwarded-For`;
-    locally there is no proxy and `request.client` is the truth. Only the
-    first hop is used, and it is never echoed back to anyone.
-    """
-    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    if forwarded:
-        return forwarded[:64]
-    client = getattr(request, "client", None)
-    return (client.host if client else "")[:64]

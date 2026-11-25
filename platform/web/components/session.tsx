@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { adminSignOut as apiAdminSignOut, me, signOut as apiSignOut, type Account, type Portal, type PortalSessions } from "@/lib/auth-api";
 
 /* The browser never decides who is signed in: it asks the API (`/auth/me`)
@@ -12,7 +12,9 @@ import { adminSignOut as apiAdminSignOut, me, signOut as apiSignOut, type Accoun
    current page tree and re-asks when the route changes. */
 
 type SessionState = {
-  status: "loading" | "ready";
+  /** "unreachable": the API could not be asked. That is not an answer — nobody
+   *  is signed out, and nobody is let in, on the strength of it. */
+  status: "loading" | "ready" | "unreachable";
   member: Account | null;
   admin: Account | null;
   refresh: () => Promise<PortalSessions>;
@@ -21,6 +23,8 @@ type SessionState = {
    *  in-page state change that a route guard could race against. */
   signOut: (portal: Portal, redirectTo?: string) => Promise<void>;
 };
+
+const RETRY_AFTER = [400, 1200];
 
 const SessionContext = createContext<SessionState | null>(null);
 
@@ -32,26 +36,43 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionState["status"]>("loading");
   const [sessions, setSessions] = useState<PortalSessions>({ member: null, admin: null });
 
+  const latest = useRef<PortalSessions>({ member: null, admin: null });
+  const known = useRef(false);
+
   const refresh = useCallback(async () => {
-    try {
-      const current = await me();
-      setSessions(current);
-      setStatus("ready");
-      return current;
-    } catch {
-      const none = { member: null, admin: null };
-      setSessions(none);
-      setStatus("ready");
-      return none;
+    // A dropped connection or a restarting server is asked again before it
+    // means anything: one failed check once sent signed-in people to the
+    // sign-in screen.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const current = await me();
+        latest.current = current;
+        known.current = true;
+        setSessions(current);
+        setStatus("ready");
+        return current;
+      } catch {
+        if (attempt < RETRY_AFTER.length) { await new Promise((again) => setTimeout(again, RETRY_AFTER[attempt])); continue; }
+        // Still nothing. Someone already in stays where they are; someone not
+        // yet known waits, with words and a way to try again.
+        setStatus(known.current ? "ready" : "unreachable");
+        return latest.current;
+      }
     }
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (status !== "unreachable") return;
+    const timer = setInterval(() => void refresh(), 10_000);
+    return () => clearInterval(timer);
+  }, [status, refresh]);
 
   const signOut = useCallback(async (portal: Portal, redirectTo?: string) => {
     try { await (portal === "admin" ? apiAdminSignOut() : apiSignOut()); } catch { /* the cookie is gone either way */ }
     if (redirectTo) { leaving = true; window.location.assign(redirectTo); return; }
-    setSessions((current) => ({ ...current, [portal]: null }));
+    latest.current = { ...latest.current, [portal]: null };
+    setSessions(latest.current);
   }, []);
 
   return <SessionContext.Provider value={{ status, member: sessions.member, admin: sessions.admin, refresh, signOut }}>{children}</SessionContext.Provider>;
@@ -77,7 +98,7 @@ const SIGN_IN: Record<Portal, string> = { member: "/login", admin: "/admin/login
  *  account's flags — the portal the person chose is the portal they get. */
 export function RequirePortal({ portal, children, fallback }: { portal: Portal; children: ReactNode; fallback?: ReactNode }) {
   const account = usePortalAccount(portal);
-  const { status } = useSession();
+  const { status, refresh } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -86,6 +107,14 @@ export function RequirePortal({ portal, children, fallback }: { portal: Portal; 
     if (status === "ready" && !account) router.replace(`${SIGN_IN[portal]}?next=${encodeURIComponent(pathname || "/")}`);
   }, [status, account, portal, router, pathname]);
 
+  if (status === "unreachable") {
+    return (
+      <div className="quiet-wait" role="alert">
+        <p>Veye cannot be reached right now. You have not been signed out.</p>
+        <button type="button" onClick={() => void refresh()}>Try again</button>
+      </div>
+    );
+  }
   if (status !== "ready" || !account) return <>{fallback ?? null}</>;
   return <>{children}</>;
 }

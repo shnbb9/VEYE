@@ -94,7 +94,7 @@ function ModeSection({ settings, onSaved }: { settings: SharingSettings; onSaved
         </div>
       </div>
       <div className="row gap-3 wrap" style={{ alignItems: "center" }}>
-        <button className="btn btn--primary btn--sm" type="button" disabled={!changed || busy || !form.sender_name.trim()} onClick={() => void publish()} data-testid="sharing-mode-publish">{busy ? "Publishing…" : "Publish"}</button>
+        <button className="btn btn--primary btn--sm" type="button" disabled={!changed || busy || !form.sender_name.trim()} onClick={() => void publish()} data-testid="sharing-mode-publish" title={!changed ? "Nothing to save yet: change the mode, the interval or the sender first" : !form.sender_name.trim() ? "Not yet: the sender needs a name" : undefined}>{busy ? "Publishing…" : "Publish"}</button>
         <span className="t-support">{current.version ? `Version ${current.version}, ${fmtDate(current.published_at)} by ${current.published_by}.` : "Built-in default: Manual, nothing published yet."}</span>
       </div>
       {note && <p className={note.tone === "error" ? "errorbar" : "t-support"} role="status">{note.text}</p>}
@@ -137,7 +137,7 @@ function TemplateSection({ settings, onSaved }: { settings: SharingSettings; onS
                 onClick={() => void run("test", async () => { const r = await sendTemplateTest(value); setNote(r.status === "sent" ? { tone: "ok", text: `A test was sent to ${r.to}.` } : { tone: "error", text: `The test could not be sent: ${r.error ?? r.status}.` }); })}>
           {busy === "test" ? "Sending…" : "Send me a test"}</button>
         <button className="btn btn--primary btn--sm" type="button" disabled={busy !== null || dirty || !t.draft} data-testid="sharing-template-publish"
-                title={dirty ? "Save the draft first" : !t.draft ? "Nothing to publish" : undefined}
+                title={dirty ? "Save the draft first" : !t.draft ? "Nothing to publish: save a draft first" : undefined}
                 onClick={() => void run("publish", async () => { const s = await publishTemplate(); onSaved(s); setValue(s.template.value); setNote({ tone: "ok", text: `Published as version ${s.template.version}.` }); })}>
           {busy === "publish" ? "Publishing…" : "Publish"}</button>
         {t.draft && <button className="btn btn--ghost btn--sm" type="button" disabled={busy !== null}
@@ -202,6 +202,7 @@ function TermsSection({ settings, onSaved }: { settings: SharingSettings; onSave
         <button className="btn btn--ghost btn--sm" type="button" disabled={busy !== null} data-testid="terms-preview"
                 onClick={() => void run("preview", async () => setPreview(await previewTerms(value)))}>{busy === "preview" ? "Rendering…" : "Preview"}</button>
         <button className="btn btn--primary btn--sm" type="button" disabled={busy !== null || dirty || !t.draft} data-testid="terms-publish"
+                title={dirty ? "Save the draft first" : !t.draft ? "Nothing to publish: save a draft first" : undefined}
                 onClick={() => void run("publish", async () => {
                   if (preview?.material_change && !window.confirm("This changes who receives the records or why. Members who already decided agreed to the earlier wording; they will see that a newer version exists. Publish?")) return;
                   const s = await publishTerms(); onSaved(s); setValue(s.terms.value); setNote({ tone: "ok", text: `Published as version ${s.terms.version}. New decisions are recorded against it.` });

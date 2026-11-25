@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import case, exists, func
 from sqlalchemy.orm import Session
 
 from app.auth.models import UserAccount
@@ -15,6 +15,9 @@ from app.notifications.email import EmailMessage
 from app.requests.models import (
     KIND_BETA,
     KIND_LABELS,
+    PRIORITIES,
+    PRIORITY_HIGH,
+    PRIORITY_LOW,
     KINDS,
     SOURCE_MEMBER,
     SOURCE_PUBLIC,
@@ -36,6 +39,12 @@ from app.requests.schemas import (
 )
 
 
+def priority_rank(column):
+    """High, medium, not set, low — then the oldest first. The order is stated
+    on the screens that use it; nothing is ranked by a guess."""
+    return case((column == PRIORITY_HIGH, 0), (column == PRIORITY_LOW, 3), (column.is_(None), 2), else_=1)
+
+
 class RequestError(Exception):
     def __init__(self, status_code: int, detail: str) -> None:
         super().__init__(detail)
@@ -49,13 +58,30 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
+DELIVERED = exists().where(MemberRequestReply.request_id == MemberRequest.id, MemberRequestReply.delivery_status == "sent")
+UNANSWERED = (MemberRequest.status != STATUS_RESOLVED) & ~DELIVERED
+# "Questions awaiting a reply": what people asked. A Join Beta request is an
+# application, not a question, and has its own place in the inbox.
+QUESTIONS_AWAITING = UNANSWERED & (MemberRequest.kind != KIND_BETA)
+
+
+def reply_state(row: MemberRequest) -> str:
+    """Whether a person has answered, which the status does not say. A reply
+    that never left the building is not an answer."""
+    if row.status == STATUS_RESOLVED:
+        return "resolved"
+    if any(r.delivery_status == "sent" for r in row.replies):
+        return "replied"
+    return "failed" if row.replies else "waiting"
+
+
 def request_out(row: MemberRequest) -> RequestOut:
     return RequestOut(
         id=row.id, kind=row.kind, kind_label=KIND_LABELS.get(row.kind, row.kind), status=row.status,
         status_label=STATUS_LABELS.get(row.status, row.status), source=row.source, member_id=row.member_id,
         name=row.name, email=row.email, subject=row.subject, message=row.message, page=row.page,
         created_at=row.created_at, updated_at=row.updated_at, handled_by=row.handled_by, handled_at=row.handled_at,
-        resolution_note=row.resolution_note or "",
+        resolution_note=row.resolution_note or "", priority=row.priority, reply_state=reply_state(row),
         replies=[reply_out(r) for r in sorted(row.replies, key=lambda r: _aware(r.created_at))],
     )
 
@@ -136,17 +162,29 @@ class RequestService:
             counts[status] = count
         counts["total"] = sum(counts[status] for status in STATUSES)
         counts["open"] = counts[STATUS_NEW] + counts[STATUS_IN_PROGRESS]
+        counts["awaiting_reply"] = self.questions_awaiting()
         return counts
 
-    def list_for_console(self, *, view: str = "open", kind: str | None = None, q: str = "",
-                         page: int = 1, page_size: int = 25) -> tuple[list[MemberRequest], int]:
+    def questions_awaiting(self) -> int:
+        return self.db.query(func.count(MemberRequest.id)).filter(QUESTIONS_AWAITING).scalar() or 0
+
+    def list_for_console(self, *, view: str = "open", kind: str | None = None, q: str = "", source: str | None = None,
+                         priority: str | None = None, page: int = 1, page_size: int = 25) -> tuple[list[MemberRequest], int]:
         query = self.db.query(MemberRequest)
         if view == "open":
             query = query.filter(MemberRequest.status != STATUS_RESOLVED)
         elif view == "resolved":
             query = query.filter(MemberRequest.status == STATUS_RESOLVED)
+        elif view == "awaiting_reply":
+            query = query.filter(QUESTIONS_AWAITING)
         elif view in STATUSES:
             query = query.filter(MemberRequest.status == view)
+        if source in (SOURCE_MEMBER, SOURCE_PUBLIC):
+            query = query.filter(MemberRequest.source == source)
+        if priority == "unassigned":
+            query = query.filter(MemberRequest.priority.is_(None))
+        elif priority in PRIORITIES:
+            query = query.filter(MemberRequest.priority == priority)
         if kind:
             if kind not in KINDS:
                 raise RequestError(422, "Unknown request kind.")
@@ -163,7 +201,9 @@ class RequestService:
         # can appear on both pages, or on neither. The audit log had the same
         # shape and did exactly that. Requests collide readily: the seed stamps
         # them with `_days_ago(days, hour=10)`, which zeroes the minute.
-        rows = (query.order_by(MemberRequest.created_at.desc(), MemberRequest.id.desc())
+        order = ((priority_rank(MemberRequest.priority), MemberRequest.created_at.asc(), MemberRequest.id.asc())
+                 if view == "awaiting_reply" else (MemberRequest.created_at.desc(), MemberRequest.id.desc()))
+        rows = (query.order_by(*order)
                 .offset((page - 1) * page_size).limit(page_size).all())
         return rows, total
 
@@ -188,6 +228,16 @@ class RequestService:
             row.handled_at = None
         self.db.flush()
         return row
+
+    def set_priority(self, request_id: UUID, priority: str | None) -> tuple[MemberRequest, str | None]:
+        """Returns (request, what it was)."""
+        if priority is not None and priority not in PRIORITIES:
+            raise RequestError(422, "Unknown importance.")
+        row = self.get(request_id)
+        before = row.priority
+        row.priority = priority
+        self.db.flush()
+        return row, before
 
     # ---- replying ------------------------------------------------------------
     def reply(self, request_id: UUID, body: str, *, sender: UserAccount, email, support_email: str) -> MemberRequestReply:

@@ -26,7 +26,7 @@ from app.notifications.models import Notification, NotificationOutbox, Notificat
 
 NOTIFICATION_KINDS = ("welcome", "email_verification", "password_reset", "companion_escalation",
                       "admin_invitation", "email_change", "email_changed", "account_deactivated",
-                      "prospect_confirmation", "health_sharing_request", "erasure_receipt")
+                      "prospect_confirmation", "health_sharing_request", "erasure_receipt", "member_invitation")
 # Security messages are always delivered regardless of preference: nobody may
 # switch off the message that activates their console account, confirms a new
 # address, tells the old address that the account moved, or tells them their
@@ -36,7 +36,7 @@ NOTIFICATION_KINDS = ("welcome", "email_verification", "password_reset", "compan
 # saved result, a request to share, a deletion — not updates anyone opted into.
 TRANSACTIONAL_KINDS = frozenset({"email_verification", "password_reset",
                                  "admin_invitation", "email_change", "email_changed", "account_deactivated",
-                                 "prospect_confirmation", "health_sharing_request", "erasure_receipt"})
+                                 "prospect_confirmation", "health_sharing_request", "erasure_receipt", "member_invitation"})
 
 # Outbox states for the commit-first path.
 QUEUED, SENDING, RETRY, SENT, FAILED, SKIPPED = "queued", "sending", "retry", "sent", "failed", "skipped"

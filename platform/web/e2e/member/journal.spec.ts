@@ -81,14 +81,15 @@ test.describe.serial("Mood Tracker and Food Diary", () => {
 
   test("food diary: the approved prototype screen — estimate, add, edit, remove, Save, feedback, history — all from the server", async ({ page }) => {
     await open(page, "/app/food-diary");
+    await expect(page.getByTestId("diary-visible"), "the member is told who sees the diary").toContainText("The Veye team can see your food diary");
     await expect(page.getByText("No entries for the day")).toBeVisible();
     // the prototype's one-time panel reveal, and its Teachers type (no 700 face: bold renders as 600)
     await expect(page.locator(".fdx-left")).toHaveClass(/reveal-in/);
     await expect(page.locator(".fdx-right")).toHaveClass(/reveal-in/);
     await expect(page.locator("#fdxAdd")).toHaveCSS("font-weight", "600");
-    // the photo row is the prototype's "In Development" state
-    await expect(page.locator(".fdx-photo-btn")).toBeDisabled();
-    await expect(page.locator(".fdx-photo")).toContainText("In Development");
+    // the photo row works (food-diary-photo.spec.ts): a snapshot, a link or a file
+    await expect(page.locator(".fdx-photo-btn")).toBeEnabled();
+    await expect(page.locator(".fdx-photo")).not.toContainText("In Development");
 
     // Typing shows the prototype estimate (yoghurt + nut rows of its fixed table).
     await page.locator("#fdxWhat").fill("Greek yoghurt with walnuts");
@@ -135,6 +136,8 @@ test.describe.serial("Mood Tracker and Food Diary", () => {
     await expect(page.locator("#fdxFeedbackText")).toContainText("You logged 2 meals — roughly 47g protein, 72g carbs and 27g fat (719 kcal).");
     // Save marks the day; History says so.
     await page.getByRole("button", { name: "Save", exact: true }).click();
+    // visible, not only present: the words are in the page before the server has answered
+    await expect(page.locator("#fdxSavedNote")).toBeVisible();
     await expect(page.locator("#fdxSavedNote")).toHaveText("Day saved.");
 
     // Reload: the day comes back from the server, history lists it.

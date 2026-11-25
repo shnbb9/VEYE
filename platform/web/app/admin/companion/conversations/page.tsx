@@ -1,13 +1,14 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Chip, EmptyState, Icon, fmtDate } from "@/components/admin/admin-chrome";
 import { CompanionPage } from "@/components/admin/companion-page";
-import { getConversation, listConversations, reviewConversation, type ConversationDetail, type ConversationSummary } from "@/lib/admin-api";
+import { PriorityChip, PrioritySelect } from "@/components/admin/member-cells";
+import { getConversation, listConversations, reopenConversation, resolveConversation, reviewConversation, setConversationPriority, type ConversationDetail, type ConversationSummary } from "@/lib/admin-api";
 
-type Filter = "needs_review" | "reviewed" | "all";
-const FILTERS: { key: Filter; label: string }[] = [{ key: "needs_review", label: "Needs review" }, { key: "reviewed", label: "Reviewed" }, { key: "all", label: "All" }];
+type Filter = "needs_review" | "unresolved" | "reviewed" | "all";
+const FILTERS: { key: Filter; label: string }[] = [{ key: "needs_review", label: "Needs review" }, { key: "unresolved", label: "Not resolved" }, { key: "reviewed", label: "Reviewed" }, { key: "all", label: "All" }];
 
 export default function ConversationsPage() {
   return (
@@ -28,8 +29,11 @@ function Conversations() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const turn = useRef(0);
   const load = useCallback(() => {
+    const mine = ++turn.current;
     listConversations(filter, q).then((list) => {
+      if (mine !== turn.current) return;   // a newer search has been asked since
       setRows(list);
       setSelected((current) => (current && list.some((row) => row.id === current) ? current : list[0]?.id ?? null));
     }).catch((reason) => setError(reason instanceof Error ? reason.message : "Conversations could not be loaded."));
@@ -38,20 +42,27 @@ function Conversations() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (!selected) { setDetail(null); return; }
-    getConversation(selected).then(setDetail).catch(() => setDetail(null));
+    let live = true;
+    getConversation(selected).then((next) => { if (live) setDetail(next); }).catch(() => { if (live) setDetail(null); });
+    return () => { live = false; };
   }, [selected]);
 
-  async function markReviewed() {
+  async function change(action: (id: string) => Promise<unknown>) {
     if (!detail) return;
-    setBusy(true);
+    const id = detail.summary.id;
+    setBusy(true); setError("");
     try {
-      await reviewConversation(detail.summary.id);
-      load();
-      setDetail(await getConversation(detail.summary.id));
+      await action(id);
+      // Keep it on screen even when this filter no longer lists it.
+      setDetail(await getConversation(id));
+      const list = await listConversations(filter, q);
+      turn.current++;
+      setRows(list);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The conversation could not be marked reviewed.");
+      setError(reason instanceof Error ? reason.message : "That change could not be saved.");
     } finally { setBusy(false); }
   }
+  const markReviewed = () => change((id) => reviewConversation(id));
 
   const needsReview = rows?.filter((row) => row.flagged && !row.reviewed_at).length;
 
@@ -92,7 +103,10 @@ function Conversations() {
               <button key={row.id} className={`flag${row.id === selected ? " is-active" : ""}`} type="button" onClick={() => setSelected(row.id)}>
                 <span className="flag__top">
                   <span className="flag__who">{row.member_name}</span>
+                  <PriorityChip priority={row.priority} />
                   {row.flagged && !row.reviewed_at ? <span className="chip chip--attention chip--sm">Needs review</span>
+                    : row.resolved_at ? <span className="chip chip--live chip--sm">Resolved</span>
+                    : row.flagged ? <span className="chip chip--info chip--sm">Reviewed, not resolved</span>
                     : row.reviewed_at ? <span className="chip chip--live chip--sm">Reviewed</span> : <span className="chip chip--sm">Normal</span>}
                 </span>
                 <span className="flag__why">{row.first_message || "(no member message)"}</span>
@@ -111,7 +125,8 @@ function Conversations() {
               <div className="card__head">
                 <div><h2 className="card__title">{detail.summary.member_name}</h2><p className="t-support">{detail.summary.member_email} · started {fmtDate(detail.summary.started_at)}</p></div>
                 <div className="row gap-2">
-                  {detail.summary.reviewed_at && <span className="chip chip--live">Reviewed</span>}
+                  {detail.summary.resolved_at ? <span className="chip chip--live">Resolved</span>
+                    : detail.summary.reviewed_at && <span className={`chip chip--${detail.summary.flagged ? "info" : "live"}`}>{detail.summary.flagged ? "Reviewed, not resolved" : "Reviewed"}</span>}
                   {detail.member.is_synthetic && <span className="chip chip--lime">Synthetic</span>}
                 </div>
               </div>
@@ -141,6 +156,15 @@ function Conversations() {
                   </div>
                 ))}
               </div>
+              {detail.summary.flagged && (
+                <div className="card__body conv-actions" data-testid="conversation-actions">
+                  <PrioritySelect id="cvImportance" value={detail.summary.priority} disabled={busy} onChange={(next) => void change((id) => setConversationPriority(id, next))} />
+                  {detail.summary.resolved_at
+                    ? <button className="btn btn--ghost btn--sm" type="button" disabled={busy} onClick={() => void change(reopenConversation)} data-testid="conversation-reopen">Reopen</button>
+                    : <button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => void change(resolveConversation)} data-testid="conversation-resolve">Mark resolved</button>}
+                  <span className="t-support" style={{ flex: "1 1 220px" }}>Reviewed means somebody read it. It does not answer the member: the team replies outside Sprout, and resolving says nothing is left to do.</span>
+                </div>
+              )}
               {detail.summary.flagged && !detail.summary.reviewed_at ? (
                 <div className="held held--pinned">
                   <span className="held__label"><Icon name="lock" size={14} /> Handed to a person</span>

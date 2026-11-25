@@ -19,5 +19,11 @@ class Member(Base):
     # no longer points here), not the console, not Sprout — while the purge
     # removes it.
     erasure_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Archived (V4 §1.6): out of the active directory and out of the member
+    # application, reversible, nothing deleted. Not a deactivated account (the
+    # sign-in and any console access are untouched) and not an erasure.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    archive_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     health_number_attempts = relationship("HealthNumberAttempt", back_populates="member", cascade="all, delete-orphan")
 

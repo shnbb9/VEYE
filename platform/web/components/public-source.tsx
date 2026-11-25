@@ -1,3 +1,4 @@
+import { ScreenStyles } from "@/components/screen-styles";
 import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
@@ -101,16 +102,11 @@ function PublicFooter() {
 export async function PublicSourcePage({ page }: { page: PublicPage }) {
   const markup = await sourceMarkup(page);
   // `site` is the prototype's own body class; its scoped rules (.site a.btn--…) must still apply.
-  return <div className="public-site site">
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@100;200&family=Kumbh+Sans:wght@100;200;300;400;500;600;700&family=Teachers:wght@400;500;600&family=Outfit:wght@500&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/marketing-css/website.css" />
-    {page !== "home" && <link rel="stylesheet" href="/marketing-css/pages.css" />}
-    {page === "why" && <link rel="stylesheet" href="/marketing-css/why.css" />}
+  const sheets = ["/marketing-css/website.css", ...(page !== "home" ? ["/marketing-css/pages.css"] : []), ...(page === "why" ? ["/marketing-css/why.css"] : [])];
+  return <ScreenStyles sheets={sheets} fonts="https://fonts.googleapis.com/css2?family=Jost:wght@100;200&family=Kumbh+Sans:wght@100;200;300;400;500;600;700&family=Teachers:wght@400;500;600&family=Outfit:wght@500&display=swap"><div className="public-site site">
     <PublicHeader active={page} />
     <div dangerouslySetInnerHTML={{ __html: markup }} />
     <PublicFooter />
     <PublicInteractions />
-  </div>;
+  </div></ScreenStyles>;
 }

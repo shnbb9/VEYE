@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CameraCapture } from "@/components/member/camera-capture";
+import dynamic from "next/dynamic";
 import { useModalDialog } from "@/components/use-modal-dialog";
 import dialog from "@/components/avatar-crop-dialog.module.css";
 import {
@@ -26,6 +26,8 @@ import "../prototype-type.css";
    link the API fetches once and keeps its own copy of — the browser never
    loads the link itself. The meal is saved first and its photo after, so a
    refused photo never loses the meal. */
+
+const CameraCapture = dynamic(() => import("@/components/member/camera-capture").then((m) => m.CameraCapture), { ssr: false });
 
 const FEELINGS = ["Hungry", "Very hungry", "Not hungry", "Stressed", "Relaxed", "Tired", "Energized", "Rushed", "Bored"];
 const EMPTY = { what: "", time: "", notes: "" };
@@ -88,6 +90,7 @@ export default function FoodDiaryPage() {
   const [link, setLink] = useState("");
   const [dropPhoto, setDropPhoto] = useState(false);
   const [camera, setCamera] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [viewing, setViewing] = useState<Meal | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const captureInput = useRef<HTMLInputElement>(null);
@@ -127,7 +130,7 @@ export default function FoodDiaryPage() {
   }
 
   function goTo(next: string) {
-    setEditing(null);          // the form keeps what was typed, as in the prototype
+    stopEditing();             // the form keeps what was typed, as in the prototype
     setDate(next);
   }
 
@@ -169,6 +172,13 @@ export default function FoodDiaryPage() {
     if (value.trim()) { clearPending(); setDropPhoto(false); }
   }
 
+  /* A photo chosen while editing belongs to that meal: leaving the edit must
+     not carry it, or "remove photo", onto the next meal written. */
+  function stopEditing() {
+    if (editing) resetPhoto();
+    setEditing(null);
+  }
+
   const editingMeal = editing ? (day?.meals.find((meal) => meal.id === editing) ?? null) : null;
 
   function startEdit(meal: Meal) {
@@ -186,12 +196,14 @@ export default function FoodDiaryPage() {
     if (!form.time) { setError("The time you ate is required."); document.getElementById("fdxTime")?.focus(); return; }
     if (busy.current) return;
     busy.current = true;
+    setSaving(true);
     setError("");
     try {
       const input = { entry_date: date, meal_time: form.time, description: what, feelings, notes: form.notes.trim() };
-      const before = new Set((day?.meals ?? []).map((meal) => meal.id));
       let next = editing ? await updateMeal(editing, input) : await addMeal(input);
-      const id = editing ?? next.meals.find((meal) => !before.has(meal.id))?.id ?? null;
+      // The API says which entry it made. Guessing it from the list once put a
+      // photo on a meal logged from another device.
+      const id = editing ?? next.created_id ?? null;
       // The meal is saved; now its photo. A refused photo keeps the meal and
       // leaves the form on it, so the link or file can be fixed and updated.
       try {
@@ -201,7 +213,8 @@ export default function FoodDiaryPage() {
       } catch (reason) {
         show(next);
         setEditing(id);
-        setError(`Your meal is saved, but the photo was not added: ${reason instanceof Error ? reason.message : "please try again."}`);
+        const removing = !pending && !link.trim();
+        setError(`Your meal is saved, but the photo was not ${removing ? "removed" : "added"}: ${reason instanceof Error ? reason.message : "please try again."}`);
         return;
       }
       show(next);
@@ -213,13 +226,13 @@ export default function FoodDiaryPage() {
       setMacros(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The entry could not be saved.");
-    } finally { busy.current = false; }
+    } finally { busy.current = false; setSaving(false); }
   }
 
   async function remove(meal: Meal) {
     try {
       show(await removeMeal(meal.id));
-      if (editing === meal.id) setEditing(null);
+      if (editing === meal.id) stopEditing();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The entry could not be removed.");
     }
@@ -252,10 +265,12 @@ export default function FoodDiaryPage() {
     <>
       <h1 className="fd-title">Food Diary</h1>
       <p className="fdx-blurb">Note the time, macronutrient content, and how you felt before you ate on the left, and your day summary will update on the right.</p>
+      <p className="fdx-blurb fdx-visible" data-testid="diary-visible">The Veye team can see your food diary and its photos, so they can help you.</p>
 
       <div className="fdx-layout">
         {/* ================= left: log a meal ================= */}
-        <section ref={leftRef} className={`fdx-panel fdx-left${leftReveal}`} aria-labelledby="fdxLeftTitle">
+        {/* inert while saving: what is typed during a slow photo fetch would be cleared with the form */}
+        <section ref={leftRef} className={`fdx-panel fdx-left${leftReveal}`} aria-labelledby="fdxLeftTitle" inert={saving}>
           <h2 className="fdx-panel-title" id="fdxLeftTitle">Log a meal</h2>
 
           <div className="fdx-photo">
@@ -336,7 +351,7 @@ export default function FoodDiaryPage() {
           <textarea className="fdx-input fdx-textarea" id="fdxNotes" rows={2} placeholder="Anything worth remembering about this meal" maxLength={2000}
                     value={form.notes} onChange={(event) => { const value = event.target.value; setForm((current) => ({ ...current, notes: value })); }} />
 
-          <button className="btn-primary fdx-add" id="fdxAdd" type="button" onClick={() => void submit()}>{editing ? "Update Entry" : "Add Entry"}</button>
+          <button className="btn-primary fdx-add" id="fdxAdd" type="button" disabled={saving} aria-busy={saving} onClick={() => void submit()}>{saving ? "Saving…" : editing ? "Update Entry" : "Add Entry"}</button>
           <p className="fdx-err" id="fdxErr" role="alert" hidden={!error}>{error}</p>
         </section>
 
@@ -404,7 +419,7 @@ export default function FoodDiaryPage() {
             <div id="fdxHistoryDays">
               {day && day.history.length > 0 ? day.history.map((row) => (
                 <button className="fdx-hist-row" key={row.entry_date} data-fdx-day={row.entry_date} type="button"
-                        onClick={() => { setDate(row.entry_date); setHistoryOpen(false); }}>
+                        onClick={() => { goTo(row.entry_date); setHistoryOpen(false); }}>
                   <b>{row.entry_date}</b><span>{`${row.meals} meal${row.meals === 1 ? "" : "s"} · ~${row.kcal} kcal${row.saved ? " · saved" : ""}`}</span>
                 </button>
               )) : <p className="fdx-macro-note">No saved days yet.</p>}

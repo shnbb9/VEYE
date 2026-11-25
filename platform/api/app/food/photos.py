@@ -7,15 +7,14 @@ treated exactly like an upload, so the photo survives the link dying. Every
 picture is decoded and rebuilt (`normalise_photo`): EXIF — GPS, the camera,
 the time — never survives, and only still JPEG, PNG and WebP are kept.
 
-Who sees a meal photo: the member; the console only while the member shares
-their records (the rule the diary text already follows); Sprout never — its
-summaries carry counts, not entries.
+Who sees a meal photo: the member, and the Veye team in the console, like the
+diary it belongs to (Cara, 25 Nov 2026 — the sharing terms say so); Sprout
+never — its summaries carry counts, not entries.
 """
 
 from __future__ import annotations
 
 import hashlib
-import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -23,10 +22,9 @@ from sqlalchemy.orm import Session
 
 from app.food.models import FoodDiaryEntry
 from app.storage.images import ImageRejected, normalise_photo, thumb_key
+from app.storage.media_changes import MediaChanges, sweep_prefix
 from app.storage.object_storage import ObjectNotFound, ObjectStorage
 from app.storage.remote_image import LinkRefused, RemoteImageFetcher
-
-log = logging.getLogger("veye.food")
 
 FULL_SIDE = 1600   # plenty for a phone screen or the console's lightbox
 THUMB_SIDE = 400   # the diary row and the console list
@@ -56,6 +54,7 @@ class MealPhotoService:
     def __init__(self, db: Session, media: ObjectStorage, *, max_bytes: int, fetcher: RemoteImageFetcher | None = None) -> None:
         self.db = db
         self.media = media
+        self.changes = MediaChanges(media)  # settled by the route, after its commit
         self.max_bytes = max_bytes
         self.fetcher = fetcher
 
@@ -71,23 +70,27 @@ class MealPhotoService:
         old = row.photo_object_key
         # Bytes first, the pointer last: a failure part-way leaves the old
         # photo in place rather than a pointer to bytes never written.
-        self.media.put(thumb_key(key), photo.thumb, photo.content_type)
-        self.media.put(key, photo.full, photo.content_type)
+        self.changes.put(thumb_key(key), photo.thumb, photo.content_type)
+        self.changes.put(key, photo.full, photo.content_type)
         row.photo_object_key = key
         row.photo_content_type = photo.content_type
         row.photo_updated_at = now
         self.db.flush()
         if old and old != key:
-            self._delete_quietly(old)
+            self.changes.retire(old, thumb_key(old))
         return row
 
-    def attach_from_link(self, row: FoodDiaryEntry, url: str) -> FoodDiaryEntry:
+    def fetch(self, url: str) -> bytes:
+        """The link's bytes. Called with no transaction open: another website
+        decides how long this takes."""
         if self.fetcher is None:
             raise MealPhotoError(503, "Adding a photo from a link is not available right now.")
         try:
-            data = self.fetcher.fetch(url)
+            return self.fetcher.fetch(url)
         except LinkRefused as exc:
             raise MealPhotoError(exc.status_code, exc.detail) from exc
+
+    def attach_fetched(self, row: FoodDiaryEntry, data: bytes) -> FoodDiaryEntry:
         try:
             return self.attach(row, data, None)
         except MealPhotoError as exc:
@@ -97,7 +100,7 @@ class MealPhotoService:
 
     def remove(self, row: FoodDiaryEntry) -> FoodDiaryEntry:
         if row.photo_object_key:
-            self._delete_quietly(row.photo_object_key)
+            self.changes.retire(row.photo_object_key, thumb_key(row.photo_object_key))
         row.photo_object_key = None
         row.photo_content_type = None
         row.photo_updated_at = datetime.now(timezone.utc)
@@ -116,25 +119,9 @@ class MealPhotoService:
     def forget(self, row: FoodDiaryEntry) -> None:
         """The entry itself is being deleted: its photo goes with it."""
         if row.photo_object_key:
-            self._delete_quietly(row.photo_object_key)
+            self.changes.retire(row.photo_object_key, thumb_key(row.photo_object_key))
 
     def purge_member(self, member_id: UUID) -> int:
         """Every meal photo a member ever kept (erasure). Idempotent: an
         object already gone is success, so a retried purge finishes."""
-        removed = 0
-        for key in self.media.list_keys(member_prefix(member_id)):
-            try:
-                self.media.delete(key)
-                removed += 1
-            except ObjectNotFound:
-                pass
-        return removed
-
-    def _delete_quietly(self, key: str) -> None:
-        for target in (key, thumb_key(key)):
-            try:
-                self.media.delete(target)
-            except ObjectNotFound:
-                pass
-            except Exception as exc:  # the new state is already in place; say so, do not fail
-                log.warning("could not remove a meal photo object: %s: %s", type(exc).__name__, str(exc)[:200])
+        return sweep_prefix(self.media, member_prefix(member_id))

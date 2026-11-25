@@ -61,9 +61,9 @@ def test_the_console_is_sent_no_health_records_until_the_member_shares(member_cl
     assert withheld["shares_health_data"] is False
     assert withheld["sharing_state"] == "not_requested"
     for slice_name in ("health_number", "body_composition", "blood_markers",
-                       "health_assessment", "simple_quiz", "mood_entries", "food_diary"):
+                       "health_assessment", "simple_quiz", "mood_entries"):
         assert withheld[slice_name] == [], f"{slice_name} was sent without permission"
-    assert withheld["food_diary_days"] == 0
+    assert withheld["profile"]["trackers_completed"] is None and withheld["profile"]["trend"]["state"] == "not_shared"
     # The summary figure on the profile row is the same record as the history,
     # and was once withheld in the list but not here. One rule, both screens.
     assert withheld["profile"]["health_number"] is None
@@ -337,7 +337,8 @@ def test_a_member_who_has_not_shared_is_absent_from_every_admin_health_surface(m
     assert overview["completions"]["health_number"] == 0
     assert overview["members_completed"]["health_number"] == 0
     assert overview["mood_entries_total"] == 0
-    assert overview["food_diary_entries_total"] == 0
+    # The diary is outside the choice (Cara, 25 Nov 2026).
+    assert overview["food_diary_entries_total"] == 1
 
     insights = _insights(admin_client)
     assert insights["attempts"]["health_number"] == 0
@@ -346,7 +347,7 @@ def test_a_member_who_has_not_shared_is_absent_from_every_admin_health_surface(m
     # claim is that every bucket is empty, not that the series is.
     assert all(bucket["count"] == 0 for bucket in insights["attempts_by_month"]["health_number"])
     assert insights["mood_entries"] == 0 and insights["mood_members"] == 0
-    assert insights["food_diary_entries"] == 0 and insights["food_diary_members"] == 0
+    assert insights["food_diary_entries"] == 1 and insights["food_diary_members"] == 1
 
     # 3. Not counted on the Assessments index.
     instruments = {i["key"]: i for i in admin_client.get("/api/v1/admin/assessments").json()}

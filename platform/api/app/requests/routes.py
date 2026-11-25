@@ -26,6 +26,7 @@ from app.requests.models import KINDS
 from app.requests.schemas import (
     MemberRequestIn,
     MemberRequestOut,
+    PriorityIn,
     PublicRequestIn,
     RequestOut,
     RequestReplyIn,
@@ -76,8 +77,10 @@ def my_requests(principal: CurrentPrincipal = Depends(require_member),
 
 @admin_router.get("", response_model=RequestsPage)
 def list_requests(
-    view: Literal["open", "all", "resolved", "new", "in_progress"] = Query(default="open"),
+    view: Literal["open", "all", "resolved", "new", "in_progress", "awaiting_reply"] = Query(default="open"),
     kind: str | None = Query(default=None), q: str = Query(default="", max_length=120),
+    source: Literal["member", "public"] | None = Query(default=None),
+    priority: Literal["high", "medium", "low", "unassigned"] | None = Query(default=None),
     page: int = Query(default=1, ge=1), page_size: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> RequestsPage:
@@ -85,7 +88,8 @@ def list_requests(
         raise HTTPException(status_code=422, detail="Unknown request kind.")
     service = RequestService(db)
     try:
-        rows, total = service.list_for_console(view=view, kind=kind, q=q, page=page, page_size=page_size)
+        rows, total = service.list_for_console(view=view, kind=kind, q=q, source=source, priority=priority,
+                                               page=page, page_size=page_size)
     except RequestError as exc:
         _raise(exc)
     return RequestsPage(rows=[request_out(r) for r in rows], total=total, page=page, page_size=page_size, counts=service.counts())
@@ -107,6 +111,21 @@ def set_status(request_id: UUID, payload: RequestStatusIn, principal: CurrentPri
     except RequestError as exc:
         _raise(exc)
     record_audit(db, principal, f"requests.{payload.status}", "member_request", str(row.id), {"kind": row.kind, "status": row.status})
+    db.commit()
+    return request_out(row)
+
+
+@admin_router.put("/{request_id}/priority", response_model=RequestOut)
+def set_priority(request_id: UUID, payload: PriorityIn, principal: CurrentPrincipal = Depends(require_admin),
+                 db: Session = Depends(get_db)) -> RequestOut:
+    """How important the team says this is. A label a person puts on, recorded
+    with who and what it was before."""
+    try:
+        row, before = RequestService(db).set_priority(request_id, payload.priority)
+    except RequestError as exc:
+        _raise(exc)
+    record_audit(db, principal, "requests.priority_set", "member_request", str(row.id),
+                 {"from": before or "", "to": row.priority or ""})
     db.commit()
     return request_out(row)
 

@@ -163,6 +163,17 @@ export async function previewAdminInvitation(token: string) {
   return apiJson<InvitationPreview>(`/api/v1/auth/admin-invitation?token=${encodeURIComponent(token)}`);
 }
 
+/* Becoming a member by invitation: the token travels in the body, never in an
+   address, and what accepting does depends on what already exists there. */
+export type MemberInvitationPreview = {
+  email: string; first_name: string; last_name: string; invited_by: string;
+  mode: "new_account" | "add_profile" | "confirm_existing" | "already_member"; expires_at: string;
+};
+export const previewMemberInvitation = (token: string) =>
+  postJson<MemberInvitationPreview>("/api/v1/auth/member-invitation/preview", { token });
+export const acceptMemberInvitation = (input: { token: string; first_name: string; last_name: string; password: string; remember: boolean }) =>
+  postJson<{ mode: string; account: Account | null; message: string }>("/api/v1/auth/member-invitation/accept", input);
+
 export async function acceptAdminInvitation(token: string, password: string) {
   return postJson<{ ok: boolean; message: string | null }>("/api/v1/auth/admin-invitation/accept", { token, password });
 }

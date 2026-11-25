@@ -16,9 +16,9 @@ from urllib.parse import parse_qs, urlsplit
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be",
                  "youtube-nocookie.com", "www.youtube-nocookie.com"}
 VIMEO_HOSTS = {"vimeo.com", "www.vimeo.com", "player.vimeo.com"}
-YOUTUBE_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
-VIMEO_ID = re.compile(r"^\d{4,12}$")
-VIMEO_HASH = re.compile(r"^[A-Za-z0-9]{6,32}$")
+YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}", re.ASCII)
+VIMEO_ID = re.compile(r"[0-9]{4,12}")
+VIMEO_HASH = re.compile(r"[A-Za-z0-9]{6,32}", re.ASCII)
 
 
 class VideoLinkError(ValueError):
@@ -59,10 +59,13 @@ def parse_video_link(raw: str) -> VideoLink:
         raise VideoLinkError("Paste a YouTube or Vimeo link.")
     if "://" not in text:
         text = "https://" + text
-    parts = urlsplit(text)
+    try:
+        parts = urlsplit(text)
+        host = (parts.hostname or "").lower()
+    except ValueError as exc:
+        raise VideoLinkError("Paste a YouTube or Vimeo link.") from exc
     if parts.scheme.lower() not in ("http", "https") or parts.username or parts.password:
         raise VideoLinkError("Paste a YouTube or Vimeo link.")
-    host = (parts.hostname or "").lower()
     segments = [s for s in parts.path.split("/") if s]
     query = parse_qs(parts.query)
 
@@ -74,18 +77,22 @@ def parse_video_link(raw: str) -> VideoLink:
             candidate = (query.get("v") or [None])[0]
         elif len(segments) >= 2 and segments[0] in ("embed", "shorts", "live", "v"):
             candidate = segments[1]
-        if candidate and YOUTUBE_ID.match(candidate):
+        if candidate and YOUTUBE_ID.fullmatch(candidate):
             return VideoLink("youtube", candidate)
         raise VideoLinkError("That YouTube link does not point to one video. Open the video and copy its address.")
 
     if host in VIMEO_HOSTS:
-        numeric = [i for i, s in enumerate(segments) if VIMEO_ID.match(s)]
+        # The first numeric part is the video. A private link's hash follows it
+        # and may happen to be all digits (vimeo.com/123456789/987654321).
+        numeric = [i for i, s in enumerate(segments) if VIMEO_ID.fullmatch(s)]
+        if numeric and segments[0] == "groups" and len(numeric) > 1:
+            numeric = numeric[1:]  # /groups/<group>/videos/<video>
         if numeric:
-            index = numeric[-1] if host != "player.vimeo.com" else numeric[0]
+            index = numeric[0]
             video_id = segments[index]
             follow = segments[index + 1] if index + 1 < len(segments) else None
-            video_hash = (query.get("h") or [None])[0] or (follow if follow and VIMEO_HASH.match(follow) else None)
-            if video_hash and not VIMEO_HASH.match(video_hash):
+            video_hash = (query.get("h") or [None])[0] or (follow if follow and VIMEO_HASH.fullmatch(follow) else None)
+            if video_hash and not VIMEO_HASH.fullmatch(video_hash):
                 video_hash = None
             return VideoLink("vimeo", video_id, video_hash)
         raise VideoLinkError("That Vimeo link does not point to one video. Open the video and copy its address.")

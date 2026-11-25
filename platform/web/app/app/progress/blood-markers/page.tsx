@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useAssessmentStart } from "@/components/member/use-assessment-start";
 import { useEffect, useRef, useState } from "react";
 import {
   calculateBloodMarkers,
@@ -60,6 +61,7 @@ export default function BloodMarkersPage() {
   const [preview, setPreview] = useState<BloodMarkersPreview | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  useAssessmentStart("blood_markers", Object.values(form).some((value) => value.trim() !== ""));
   const [info, setInfo] = useState<{ key: string; x: number; y: number } | null>(null);
   const infoTrigger = useRef<HTMLButtonElement | null>(null);
 

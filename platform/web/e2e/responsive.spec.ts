@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { ADITYA, ADMIN } from "./fixtures/accounts";
-import { adminSignIn, expectAdminHome, expectMemberDashboard, expectNoHorizontalOverflow, memberSignIn, open } from "./fixtures/helpers";
+import { adminSignIn, cancelledPrefetch, expectAdminHome, expectMemberDashboard, expectNoHorizontalOverflow, memberSignIn, open } from "./fixtures/helpers";
 
 /* Responsive acceptance at the four agreed widths: no console errors and no
    horizontal page overflow on the public, member and admin screens a beta
@@ -20,7 +20,7 @@ const PUBLIC = ["/", "/why-veye", "/about", "/help", "/pricing", "/login", "/sig
 const MARKETING = ["/", "/why-veye", "/about", "/help", "/pricing"];
 const MEMBER = ["/app", "/app/progress", "/app/progress/health-assessment", "/app/progress/simple-quiz", "/app/mood", "/app/food-diary", "/app/food-choices", "/app/companion", "/app/fitness", "/app/supplements", "/app/resources", "/app/settings",
   "/app/sharing-request", "/app/saved-result"];
-const ADMIN_PAGES = ["/admin", "/admin/members", "/admin/assessments", "/admin/care", "/admin/requests", "/admin/content", "/admin/insights", "/admin/settings", "/admin/companion/conversations", "/admin/companion/settings/guided-experiences",
+const ADMIN_PAGES = ["/admin", "/admin/members", "/admin/members/trends", "/admin/members/invitations", "/admin/finance", "/admin/finance?tab=plans", "/admin/assessments", "/admin/care", "/admin/requests", "/admin/content", "/admin/insights", "/admin/settings", "/admin/companion/conversations", "/admin/companion/settings/guided-experiences",
   "/admin/members/prospects", "/admin/members/deletions", "/admin/care/fitness-library",
   // Added 15 Nov 2026: Knowledge Sources ran 55px past a 390px screen and the
   // settings sections squeezed their row controls, and this list never
@@ -54,6 +54,14 @@ async function expectEveryControlIsNamed(page: Page, path: string) {
       const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 30);
       return `${el.tagName.toLowerCase()}${cls}${text ? ` (text: ${text})` : ""}`;
     };
+    // The text a person can see, node by node. `innerText` is empty in WebKit for
+    // unselectable text, which is perfectly visible; hidden text still counts as none.
+    const shown = (node: Element): string => {
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      let text = "";
+      while (walker.nextNode()) if (walker.currentNode.parentElement?.checkVisibility({ visibilityProperty: true })) text += walker.currentNode.nodeValue ?? "";
+      return text.trim();
+    };
     for (const el of document.querySelectorAll('button, a[href], input:not([type="hidden"]), select, textarea, [role="button"]')) {
       if (el.closest('[aria-hidden="true"]')) continue;
       const style = getComputedStyle(el);
@@ -66,7 +74,7 @@ async function expectEveryControlIsNamed(page: Page, path: string) {
       const by = el.getAttribute("aria-labelledby");
       const name = (el.getAttribute("aria-label") ?? "").trim()
         || (el.getAttribute("title") ?? "").trim()
-        || (el as HTMLElement).innerText.trim()
+        || shown(el)
         || labelled.trim()
         || (by ? (document.getElementById(by)?.innerText ?? "").trim() : "")
         || (el.getAttribute("placeholder") ?? "").trim()
@@ -97,7 +105,7 @@ async function expectHeadingOrder(page: Page, path: string) {
 function watchConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (message) => { if (message.type() === "error" && !/hmr|favicon|ERR_CONNECTION_REFUSED.*ws/i.test(message.text())) errors.push(message.text()); });
-  page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
+  page.on("pageerror", (error) => { if (!cancelledPrefetch(page, error.message)) errors.push(`pageerror: ${error.message}`); });
   return errors;
 }
 

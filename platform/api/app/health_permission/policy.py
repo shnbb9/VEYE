@@ -53,16 +53,18 @@ CATEGORIES = (
     "Blood marker results",
     "Your Health Assessment and Simple Quiz answers and results",
     "Mood entries and their notes",
-    "Food diary entries",
 )
-COMPANION_USE = ("Veye Companion (Sprout) may use summaries of the same records to answer you about your own "
-                 "progress. It never receives your notes or meal descriptions word for word.")
+# Bumped whenever one of these locked elements changes, so a decision recorded
+# under earlier words can never be mistaken for one made under these.
+LOCKED_REVISION = 2
+COMPANION_USE = ("Veye Companion (Sprout) may use summaries of these records and of your food diary to answer you "
+                 "about your own progress. It never receives your notes or meal descriptions word for word.")
 EXPIRY_RULE = "Until you withdraw it."
 WITHDRAWAL = ("You can withdraw at any time in Settings, and it stops at once: from that moment the team and "
               "Sprout no longer see your records. Withdrawing cannot undo what was already seen while sharing "
               "was on.")
-NOT_COVERED = ("Your name, email address and the messages you send to Veye are not covered by this choice and "
-               "stay visible to the team so they can answer you.")
+NOT_COVERED = ("Your name, email address, the messages you send to Veye, and your food diary with its photos are "
+               "not covered by this choice and stay visible to the team so they can help you.")
 DECLINE_EFFECT = "If you don't allow sharing, nobody at Veye can open your saved results, and Sprout answers without them."
 
 
@@ -172,7 +174,7 @@ class Terms:
         """The version string a decision is recorded against. v0 keeps the
         label decisions were recorded under before the terms became
         editable, so earlier evidence still reads correctly."""
-        return POLICY_VERSION if self.version == 0 else f"health-sharing-terms-v{self.version}"
+        return POLICY_VERSION if self.version == 0 else f"health-sharing-terms-v{self.version}-r{LOCKED_REVISION}"
 
     def snapshot(self) -> dict:
         return {"categories": list(CATEGORIES), "companion_use": COMPANION_USE, "purpose": self.value.purpose,

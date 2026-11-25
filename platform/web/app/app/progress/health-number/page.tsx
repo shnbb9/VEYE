@@ -1,5 +1,6 @@
 "use client";
 
+import { useAssessmentStart } from "@/components/member/use-assessment-start";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/member/member-chrome";
@@ -49,6 +50,7 @@ function HealthNumberView() {
   const [other, setOther] = useState<string[]>(blankOther);
   const [busy, setBusy] = useState(false);
   const numericInput = useRef<HTMLInputElement>(null);
+  useAssessmentStart("health_number", mode === "wizard" && answers.some((item) => (Array.isArray(item) ? item.length > 0 : item !== null && item !== undefined && item !== "")));
 
   const start = useCallback(() => {
     setAnswers(blankAnswers());

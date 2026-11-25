@@ -32,6 +32,7 @@ from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.members.models import Member
 from app.members.photo_crop import CropIn, form_crop
+from app.storage.media_changes import committed_with
 from app.members.service import MemberProfileService, ProfileError
 
 router = APIRouter(prefix="/api/v1/admin/account", tags=["admin-account"], dependencies=[Depends(require_admin)])
@@ -118,40 +119,43 @@ def my_photo(size: Literal["full", "thumb", "original"] = "full", principal: Cur
 
 
 @router.post("/photo", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
-async def upload_my_photo(request: Request, file: UploadFile = File(...), crop_x: int | None = Form(None),
-                          crop_y: int | None = Form(None), crop_size: int | None = Form(None),
-                          principal: CurrentPrincipal = Depends(require_admin),
-                          db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)) -> AccountOut:
+def upload_my_photo(request: Request, file: UploadFile = File(...), crop_x: int | None = Form(None),
+                    crop_y: int | None = Form(None), crop_size: int | None = Form(None),
+                    principal: CurrentPrincipal = Depends(require_admin),
+                    db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)) -> AccountOut:
     from app.auth.routes import account_out
 
     crop = form_crop(crop_x, crop_y, crop_size)
     RateLimiter(db, runtime.settings).enforce("photo_upload", subject=str(principal.user_id), address=client_address(request))
+    db.commit()  # the hit stands whatever happens to the picture
     user = _user(db, principal)
     service = _photos(db, runtime)
-    data = await file.read(service.photo_max_bytes + 1)
+    data = file.file.read(service.photo_max_bytes + 1)
     try:
-        service.set_photo(user, data, file.content_type, crop)
+        with committed_with(db, service.changes):
+            service.set_photo(user, data, file.content_type, crop)
+            record_audit(db, principal, "account.photo_changed", "user_account", str(user.id), {})
     except ProfileError as exc:
-        db.commit()  # keep the rate-limit hit
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    record_audit(db, principal, "account.photo_changed", "user_account", str(user.id), {})
-    db.commit()
     return account_out(user, PORTAL_ADMIN)
 
 
 @router.put("/photo/crop", response_model=AccountOut)
-def recrop_my_photo(payload: CropIn, principal: CurrentPrincipal = Depends(require_admin), db: Session = Depends(get_db),
+def recrop_my_photo(payload: CropIn, request: Request, principal: CurrentPrincipal = Depends(require_admin), db: Session = Depends(get_db),
                     runtime: Runtime = Depends(get_runtime)) -> AccountOut:
     """Cut the avatar again from the picture already kept — no new upload."""
     from app.auth.routes import account_out
 
+    RateLimiter(db, runtime.settings).enforce("photo_upload", subject=str(principal.user_id), address=client_address(request))
+    db.commit()
     user = _user(db, principal)
+    service = _photos(db, runtime)
     try:
-        _photos(db, runtime).recrop_photo(user, payload.crop())
+        with committed_with(db, service.changes):
+            service.recrop_photo(user, payload.crop())
+            record_audit(db, principal, "account.photo_cropped", "user_account", str(user.id), {})
     except ProfileError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    record_audit(db, principal, "account.photo_cropped", "user_account", str(user.id), {})
-    db.commit()
     return account_out(user, PORTAL_ADMIN)
 
 
@@ -161,9 +165,10 @@ def remove_my_photo(principal: CurrentPrincipal = Depends(require_admin), db: Se
     from app.auth.routes import account_out
 
     user = _user(db, principal)
-    _photos(db, runtime).remove_photo(user)
-    record_audit(db, principal, "account.photo_removed", "user_account", str(user.id), {})
-    db.commit()
+    service = _photos(db, runtime)
+    with committed_with(db, service.changes):
+        service.remove_photo(user)
+        record_audit(db, principal, "account.photo_removed", "user_account", str(user.id), {})
     return account_out(user, PORTAL_ADMIN)
 
 

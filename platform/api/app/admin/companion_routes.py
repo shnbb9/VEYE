@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.admin.audit import record_audit
 from app.admin.schemas import (
     AdminMessageOut,
+    ConversationPriorityIn,
     ConversationDetailOut,
     ConversationSummaryOut,
     FeedbackRowOut,
@@ -57,6 +58,7 @@ def summary_out(db: Session, conversation: CompanionConversation) -> Conversatio
         member_email=(user.email if user else member.email if member else ""), started_at=conversation.started_at,
         last_message_at=conversation.last_message_at, message_count=conversation.message_count, flagged=conversation.flagged,
         flag_reason=conversation.flag_reason, reviewed_at=conversation.reviewed_at, reviewed_by=conversation.reviewed_by,
+        resolved_at=conversation.resolved_at, resolved_by=conversation.resolved_by, priority=conversation.priority,
         first_message=first[:160], feedback_rating=feedback, outcomes=outcomes,
     )
 
@@ -80,7 +82,7 @@ def overview(db: Session = Depends(get_db), runtime: Runtime = Depends(get_runti
 
 
 @router.get("/conversations", response_model=list[ConversationSummaryOut])
-def conversations(filter: str = Query(default="needs_review", pattern="^(needs_review|reviewed|all)$"), q: str = "",
+def conversations(filter: str = Query(default="needs_review", pattern="^(needs_review|reviewed|unresolved|all)$"), q: str = "",
                   db: Session = Depends(get_db)) -> list[ConversationSummaryOut]:
     query = (db.query(CompanionConversation).options(selectinload(CompanionConversation.messages))
              .filter(CompanionConversation.message_count > 0))
@@ -88,6 +90,9 @@ def conversations(filter: str = Query(default="needs_review", pattern="^(needs_r
         query = query.filter(CompanionConversation.flagged.is_(True), CompanionConversation.reviewed_at.is_(None))
     elif filter == "reviewed":
         query = query.filter(CompanionConversation.reviewed_at.is_not(None))
+    elif filter == "unresolved":
+        query = query.filter(CompanionConversation.flagged.is_(True), CompanionConversation.reviewed_at.is_not(None),
+                             CompanionConversation.resolved_at.is_(None))
     # The search runs in the query, not over the page the query returned.
     #
     # It used to filter the Python list AFTER `.limit(200)`, over `member_name`
@@ -168,6 +173,55 @@ def review_conversation(conversation_id: UUID, payload: ReviewRequest, principal
     conversation.reviewed_at = datetime.now(timezone.utc)
     conversation.reviewed_by = principal.display_name
     record_audit(db, principal, "conversation.reviewed", "companion_conversation", str(conversation.id), {"note": payload.note})
+    db.commit()
+    db.refresh(conversation)
+    return summary_out(db, conversation)
+
+
+def _flagged(db: Session, conversation_id: UUID) -> CompanionConversation:
+    conversation = db.get(CompanionConversation, conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    if not conversation.flagged:
+        raise HTTPException(status_code=409, detail="Sprout did not hand this conversation to a person.")
+    return conversation
+
+
+@router.post("/conversations/{conversation_id}/resolve", response_model=ConversationSummaryOut)
+def resolve_conversation(conversation_id: UUID, principal: CurrentPrincipal = Depends(require_admin),
+                         db: Session = Depends(get_db)) -> ConversationSummaryOut:
+    """Nothing is left to do about it. Resolving it also means it was read."""
+    conversation = _flagged(db, conversation_id)
+    now = datetime.now(timezone.utc)
+    conversation.resolved_at, conversation.resolved_by = now, principal.display_name
+    if conversation.reviewed_at is None:
+        conversation.reviewed_at, conversation.reviewed_by = now, principal.display_name
+    record_audit(db, principal, "conversation.resolved", "companion_conversation", str(conversation.id), {})
+    db.commit()
+    db.refresh(conversation)
+    return summary_out(db, conversation)
+
+
+@router.post("/conversations/{conversation_id}/reopen", response_model=ConversationSummaryOut)
+def reopen_conversation(conversation_id: UUID, principal: CurrentPrincipal = Depends(require_admin),
+                        db: Session = Depends(get_db)) -> ConversationSummaryOut:
+    conversation = _flagged(db, conversation_id)
+    conversation.resolved_at = conversation.resolved_by = None
+    record_audit(db, principal, "conversation.reopened", "companion_conversation", str(conversation.id), {})
+    db.commit()
+    db.refresh(conversation)
+    return summary_out(db, conversation)
+
+
+@router.put("/conversations/{conversation_id}/priority", response_model=ConversationSummaryOut)
+def set_conversation_priority(conversation_id: UUID, payload: ConversationPriorityIn,
+                              principal: CurrentPrincipal = Depends(require_admin),
+                              db: Session = Depends(get_db)) -> ConversationSummaryOut:
+    conversation = _flagged(db, conversation_id)
+    before = conversation.priority
+    conversation.priority = payload.priority
+    record_audit(db, principal, "conversation.priority_set", "companion_conversation", str(conversation.id),
+                 {"from": before or "", "to": payload.priority or ""})
     db.commit()
     db.refresh(conversation)
     return summary_out(db, conversation)

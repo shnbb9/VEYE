@@ -83,7 +83,7 @@ class AuthService:
         email = normalise_email(data.email)
         if self.find_by_email(email) is not None:
             raise AuthError(409, "An account with this email address already exists. Try signing in instead.")
-        self._check_password(data.password)
+        self.check_password(data.password)
         member = Member(email=email, display_name=f"{data.first_name.strip()} {data.last_name.strip()}".strip())
         self.db.add(member)
         self.db.flush()
@@ -103,7 +103,7 @@ class AuthService:
         email = normalise_email(email)
         if self.find_by_email(email) is not None:
             raise AuthError(409, "An account with this email address already exists.")
-        self._check_password(password)
+        self.check_password(password)
         user = UserAccount(
             email=email, password_hash=hash_password(password), role=ROLE_ADMIN, admin_access=True,
             first_name=first_name, last_name=last_name, member_id=None, is_synthetic=synthetic,
@@ -140,6 +140,8 @@ class AuthService:
         # The password is right; now the portal's own access requirement.
         if portal == PORTAL_MEMBER and not user.member_access:
             raise AuthError(403, "This account does not have a Veye member profile. Administrators sign in through the admin console.")
+        if portal == PORTAL_MEMBER and user.member_archived:
+            raise AuthError(403, "This member account is archived. Write to the Veye team to have it restored.")
         if portal == PORTAL_ADMIN and not user.admin_access:
             raise AuthError(403, "This account does not have administrator access to the Veye console.")
         issued = self.provider.issue(self.db, user, portal=portal, remember=remember)
@@ -187,6 +189,8 @@ class AuthService:
         # Exactly the checks a password sign-in makes, in the same order.
         if portal == PORTAL_MEMBER and not user.member_access:
             raise AuthError(403, "This account does not have a Veye member profile. Administrators sign in through the admin console.")
+        if portal == PORTAL_MEMBER and user.member_archived:
+            raise AuthError(403, "This member account is archived. Write to the Veye team to have it restored.")
         if portal == PORTAL_ADMIN and not user.admin_access:
             raise AuthError(403, "This account does not have administrator access to the Veye console.")
 
@@ -261,7 +265,7 @@ class AuthService:
         return self._notify(user, "password_reset", rendered)
 
     def reset_password(self, raw_token: str, new_password: str) -> UserAccount:
-        self._check_password(new_password)
+        self.check_password(new_password)
         token = self._consume_token(raw_token, PURPOSE_RESET)
         user = token.user
         user.password_hash = hash_password(new_password)
@@ -279,7 +283,12 @@ class AuthService:
         An existing member can be invited: the same person then holds a member
         profile and administrator access, and the portal they sign in through
         still decides where they land. Nothing here grants a level of access —
-        every administrator has exactly the same one."""
+        every administrator has exactly the same one.
+
+        The invitation itself grants nothing. Anyone can register an address
+        they do not own, so access that started at the invitation would hand
+        the console to whoever registered it first; it starts when the link
+        sent to that mailbox is used (`accept_admin_invitation`)."""
         email = normalise_email(email)
         first_name, last_name = first_name.strip(), last_name.strip()
         if not first_name:
@@ -290,18 +299,17 @@ class AuthService:
             # No usable password until the invitation is accepted: the account
             # cannot be signed into, only activated through the link.
             user = UserAccount(
-                email=email, password_hash=hash_password(new_token()), role=ROLE_ADMIN, admin_access=True,
+                email=email, password_hash=hash_password(new_token()), role=ROLE_ADMIN, admin_access=False,
                 first_name=first_name, last_name=last_name, member_id=None,
             )
             self.db.add(user)
             created = True
         else:
             user = existing
-            if user.admin_access and user.invitation_accepted_at is not None:
+            if user.admin_access:
                 raise AuthError(409, "That person already has administrator access.")
             if not user.is_active:
                 raise AuthError(409, "That account is deactivated. Reactivate it before inviting them again.")
-            user.admin_access = True
         user.invited_at = datetime.now(timezone.utc)
         user.invited_by_user_id = invited_by.id
         user.invitation_accepted_at = None
@@ -330,7 +338,7 @@ class AuthService:
         if user.member_id is None:
             user.is_active = False
             user.deactivated_at = datetime.now(timezone.utc)
-        self.provider.revoke_all(self.db, user.id)
+            self.provider.revoke_all(self.db, user.id)
         self.db.flush()
 
     def invitation_for(self, raw_token: str) -> UserAccount:
@@ -340,7 +348,7 @@ class AuthService:
         return token.user
 
     def accept_admin_invitation(self, raw_token: str, password: str) -> UserAccount:
-        self._check_password(password)
+        self.check_password(password)
         token = self._consume_token(raw_token, PURPOSE_ADMIN_INVITE)
         user = token.user
         if not user.is_active:
@@ -387,7 +395,7 @@ class AuthService:
         signed in where they are; every other session ends."""
         if not verify_password(user.password_hash, current_password):
             raise AuthError(403, "That current password is not right.")
-        self._check_password(new_password)
+        self.check_password(new_password)
         if verify_password(user.password_hash, new_password):
             raise AuthError(422, "Choose a password you have not used here before.")
         user.password_hash = hash_password(new_password)
@@ -484,7 +492,7 @@ class AuthService:
             raise AuthError(400, "This link has expired. Request a new one.")
         return token
 
-    def _check_password(self, password: str) -> None:
+    def check_password(self, password: str) -> None:
         if len(password) < self.settings.password_min_length:
             raise AuthError(422, f"Choose a password of at least {self.settings.password_min_length} characters.")
         if len(password) > 256:

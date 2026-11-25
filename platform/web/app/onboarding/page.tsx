@@ -1,5 +1,6 @@
 "use client";
 
+import { ScreenStyles } from "@/components/screen-styles";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -8,7 +9,7 @@ import {
   initialAnswers, isAnswered, questionReached, toApiAnswers,
 } from "@/lib/health-number";
 import { apiPath } from "@/lib/api-base";
-import { ApiError, csrfHeaders, describeDetail } from "@/lib/api";
+import { ApiError, csrfHeaders, describeDetail, veyeFetch } from "@/lib/api";
 import { PENDING_ANSWERS_KEY, PREFILL_EMAIL_KEY } from "@/lib/auth-keys";
 import {
   SAVED_RESULT_TOKEN_KEY, captureAssessment, eraseSavedResult, formatSavedUntil, getSavingPolicy, newIdempotencyKey,
@@ -40,6 +41,9 @@ type ResultView = {
   confirmation?: string;
   saveFailed?: string;
 };
+
+const QUIZ_FONTS = "https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap";
+const QUIZ_SHEETS = ["tokens", "base", "quiz", "onboarding-app"].map((name) => `/onboarding-css/${name}.css`);
 
 export default function Onboarding() {
   const router = useRouter();
@@ -90,7 +94,7 @@ export default function Onboarding() {
   async function calculate(store: boolean, extra?: Partial<ResultView>) {
     setBusy(true); setError("");
     try {
-      const response = await fetch(apiPath(store ? "/api/v1/health-number/calculate" : "/api/v1/health-number/preview"), {
+      const response = await veyeFetch(apiPath(store ? "/api/v1/health-number/calculate" : "/api/v1/health-number/preview"), {
         // A signed-in member storing a result carries their session, so this
         // hand-rolled call needs the same CSRF token apiJson adds.
         method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...csrfHeaders() },
@@ -153,14 +157,7 @@ export default function Onboarding() {
   }
 
   return (
-    <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=Teachers:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      <link rel="stylesheet" href="/onboarding-css/tokens.css" />
-      <link rel="stylesheet" href="/onboarding-css/base.css" />
-      <link rel="stylesheet" href="/onboarding-css/quiz.css" />
-      <link rel="stylesheet" href="/onboarding-css/onboarding-app.css" />
+    <ScreenStyles sheets={QUIZ_SHEETS} fonts={QUIZ_FONTS}>
 
       <div className="quiz">
         <div className="quiz__topbar" />
@@ -201,7 +198,7 @@ export default function Onboarding() {
       </div>
       {gateOpen && <EmailGate onClose={() => { if (!busy) setGateOpen(false); }} onDone={(email, agreed) => void gateDone(email, agreed)}
                               policy={policy} busy={busy} note={gateNote} />}
-    </>
+    </ScreenStyles>
   );
 }
 

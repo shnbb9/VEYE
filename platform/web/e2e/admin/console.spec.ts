@@ -141,7 +141,7 @@ test.describe("Admin console", () => {
     await expect(page.getByRole("heading", { name: "New members by month" })).toBeVisible();
     await expect(page.locator(".kpis--quad .kpi__value").first()).toHaveText(/^\d+$/);
     await expect(page.getByRole("heading", { name: "Guided experiences" })).toBeVisible();
-    await expect(page.getByText(/Generated .* from the local database/)).toBeVisible();
+    await expect(page.getByText(/^Generated .*\d{4}/)).toBeVisible();
   });
 
   test("Companion → Settings → Guided Experiences lists both flows with preview", async ({ page }) => {

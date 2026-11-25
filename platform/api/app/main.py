@@ -1,8 +1,10 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import InterfaceError, OperationalError, TimeoutError as PoolTimeout
 
 from app.admin.account_routes import peers_router as admin_peer_photos_router, router as admin_account_router
 from app.admin.administrators_routes import router as admin_administrators_router
@@ -20,6 +22,12 @@ from app.auth.csrf import enforce as enforce_csrf, issue as issue_csrf
 from app.core.config import settings
 from app.core.runtime import get_runtime
 from app.admin.qa_routes import router as admin_qa_router
+from app.admin.attention_routes import router as admin_attention_router
+from app.admin.member_lifecycle_routes import router as admin_member_lifecycle_router
+from app.members.activity import router as member_activity_router
+from app.members.invitation_routes import admin_router as admin_member_invitations_router, public_router as member_invitation_router
+from app.progress.scales import router as progress_scales_router
+from app.progress.starts import router as assessment_starts_router
 from app.food.routes import router as food_diary_router
 from app.food_choices.routes import router as food_choices_router
 from app.meal_plans.routes import router as meal_plans_router
@@ -84,7 +92,21 @@ async def lifespan(_: FastAPI):
         loop.stop()
 
 
+log = logging.getLogger("veye.api")
+
 app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
+
+
+def _unexpected(request: Request, exc: Exception) -> JSONResponse:
+    """What went wrong belongs in the log; the person gets words. Answered here,
+    inside CORS: an exception left to Starlette is answered outside it, without
+    the headers a browser needs to read it, and the page could only say
+    "Failed to fetch"."""
+    log.exception("unhandled error on %s %s", request.method, request.url.path)
+    if isinstance(exc, (OperationalError, InterfaceError, PoolTimeout)):
+        return JSONResponse(status_code=503, content={"detail": "Veye is not available right now. Please try again in a moment."},
+                            headers={"Retry-After": "5"})
+    return JSONResponse(status_code=500, content={"detail": "Something went wrong on our side. Please try again in a moment."})
 
 
 @app.middleware("http")
@@ -101,7 +123,10 @@ async def csrf_and_headers(request: Request, call_next):
     except HTTPException as exc:
         response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     else:
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:  # recorded and answered in words, never with what broke
+            response = _unexpected(request, exc)
     issue_csrf(response, request, secure=settings.session_cookie_secure)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -137,6 +162,13 @@ app.include_router(admin_guided_flows_router)
 app.include_router(admin_knowledge_router)
 app.include_router(admin_advanced_router)
 app.include_router(admin_console_router)
+app.include_router(admin_member_lifecycle_router)
+app.include_router(admin_attention_router)
+app.include_router(admin_member_invitations_router)
+app.include_router(member_invitation_router)
+app.include_router(member_activity_router)
+app.include_router(assessment_starts_router)
+app.include_router(progress_scales_router)
 app.include_router(admin_administrators_router)
 app.include_router(admin_account_router)
 app.include_router(admin_peer_photos_router)

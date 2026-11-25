@@ -9,6 +9,7 @@ categories hand the conversation to a person."""
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 POLICY_VERSION = "1.0.0"
@@ -72,6 +73,14 @@ def default_policy() -> dict:
     }
 
 
+# The floor under the editable list. Somebody saying this is handed to a person
+# whatever an administrator has done to the topics: switching the rule off, or
+# deleting a keyword, must not make it an ordinary question.
+CRISIS_FLOOR = ("suicid", "kill myself", "killing myself", "end my life", "ending my life", "want to die", "better off dead",
+                "hurt myself", "hurting myself", "harm myself", "harming myself", "self-harm", "self harm", "overdose")
+CRISIS_CATEGORY = "wellbeing_concern"
+
+
 @dataclass(frozen=True)
 class PolicyDecision:
     outcome: str
@@ -88,12 +97,34 @@ class PolicyDecision:
         return self.outcome == OUTCOME_ALLOW
 
 
+# A keyword stands for the word and its ordinary forms. Whole-word matching
+# alone missed everything the list itself spells as a stem: "suicid" matched
+# neither "suicidal" nor "suicide", "diagnos" never matched "diagnosed", and
+# "pill" did not match "pills" — so the questions a person must see were
+# answered as if they were ordinary ones. Endings are a closed list, so
+# "statin" is not "stating" and "pill" is not "pillow".
+_WORD_ENDINGS = "(?:s|es|d|ed|ing)?"
+_STEM_ENDINGS = "(?:s|es|d|ed|ing|e|is|al|ally|tic|tics|able|t|ts|cy|cies|ness|ly)?"
+
+
+def normalise_message(message: str) -> str:
+    """Lower case, single spaces, and the keyboard's own characters folded: a
+    phone types can’t, and full-width letters are still letters."""
+    text = unicodedata.normalize("NFKC", message or "").lower()
+    for mark in ("‘", "’", "ʼ", "´", "`"):
+        text = text.replace(mark, "'")
+    return " ".join(text.split())
+
+
 def _matches(text: str, keyword: str) -> bool:
-    keyword = keyword.lower().strip()
+    keyword = normalise_message(keyword)
     if not keyword:
         return False
     if re.fullmatch(r"[a-z0-9]+", keyword):
-        return re.search(rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])", text) is not None
+        if len(keyword) <= 2:  # a unit: "500mg" is the same question as "500 mg"
+            return re.search(rf"(?<![a-z]){re.escape(keyword)}(?![a-z0-9])", text) is not None
+        endings = _STEM_ENDINGS if len(keyword) >= 6 else _WORD_ENDINGS
+        return re.search(rf"(?<![a-z0-9]){re.escape(keyword)}{endings}(?![a-z0-9])", text) is not None
     if keyword.endswith("*"):
         return keyword[:-1] in text
     return keyword in text
@@ -105,9 +136,13 @@ class PolicyEngine:
         self.version = str(self.policy.get("version") or POLICY_VERSION)
 
     def evaluate(self, message: str) -> PolicyDecision:
-        text = " ".join(message.lower().split())
+        text = normalise_message(message)
         if not text:
             return PolicyDecision(OUTCOME_OFF_TOPIC, None, None, "Empty message.", policy_version=self.version)
+
+        for phrase in CRISIS_FLOOR:
+            if _matches(text, phrase):
+                return PolicyDecision(OUTCOME_ESCALATE, CRISIS_CATEGORY, phrase, "Always handed to a person.", policy_version=self.version)
 
         # Sensitive categories first: escalation wins over prohibition, both win over any allowed topic.
         matched: list[tuple[dict, str]] = []

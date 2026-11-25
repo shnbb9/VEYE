@@ -118,16 +118,29 @@ def test_only_real_still_pictures_are_kept(member_client, data, mime, status):
     assert keys(member_client.account["member_id"]) == []
 
 
-def test_another_member_can_neither_see_nor_change_my_meal_photo(member_client):
+def test_another_member_can_neither_see_nor_change_my_meal_photo(member_client, monkeypatch):
+    monkeypatch.setattr("app.food.routes.RemoteImageFetcher", FakeFetcher)
+    FakeFetcher.result, FakeFetcher.calls = picture(color=(9, 9, 9)), []
     meal = add_meal(member_client)
     assert put_photo(member_client, meal["id"], picture()).status_code == 200
+    mine = member_client.get(f"{DIARY}/{meal['id']}/photo").content
+    missing = __import__("uuid").uuid4()
     with TestClient(app) as other:
         assert sign_up(other, email="someone.else@demo.veye.test").status_code == 201
-        assert other.get(f"{DIARY}/{meal['id']}/photo").status_code == 404
+        add_meal(other, "Their own lunch")
+        for size in ("full", "thumb"):
+            theirs = other.get(f"{DIARY}/{meal['id']}/photo?size={size}")
+            nothing = other.get(f"{DIARY}/{missing}/photo?size={size}")
+            # Word for word what a meal that never existed answers.
+            assert (theirs.status_code, theirs.json()) == (404, nothing.json())
         assert put_photo(other, meal["id"], picture(color=(0, 0, 0))).status_code == 404
         assert other.delete(f"{DIARY}/{meal['id']}/photo").status_code == 404
         assert other.post(f"{DIARY}/{meal['id']}/photo/link", json={"url": "https://images.example.com/a.png"}).status_code == 404
+        assert FakeFetcher.calls == [], "refused before anything is fetched on the caller's behalf"
+    with TestClient(app) as nobody:
+        assert nobody.get(f"{DIARY}/{meal['id']}/photo").status_code == 401
     assert len(keys(member_client.account["member_id"])) == 2
+    assert member_client.get(f"{DIARY}/{meal['id']}/photo").content == mine
 
 
 # ---- a photo from a link -------------------------------------------------------------
@@ -184,34 +197,37 @@ def test_the_real_fetcher_never_reaches_this_machine(member_client):
 
 # ---- who sees it ------------------------------------------------------------------------
 
-def test_the_console_sees_a_meal_photo_only_while_the_member_shares(member_client, admin_client):
+def test_the_console_sees_a_meal_photo_with_its_diary_entry_and_only_under_its_own_member(member_client, admin_client):
+    """The diary is outside the sharing choice (Cara, 25 Nov 2026): no
+    permission is asked, and none of it is reachable through another member."""
     meal = add_meal(member_client)
     assert put_photo(member_client, meal["id"], picture()).status_code == 200
     member_id = member_client.account["member_id"]
     route = f"/api/v1/admin/members/{member_id}/food-diary/{meal['id']}/photo"
 
-    assert admin_client.get(route).status_code == 404, "not shared: indistinguishable from no photo"
-    assert admin_client.get(f"/api/v1/admin/members/{member_id}").json()["food_diary"] == []
-
-    assert decide_sharing(member_client).status_code == 200
     shown = admin_client.get(route)
     assert shown.status_code == 200 and max(decode(shown.content).size) == 400, "the thumbnail by default"
     assert max(decode(admin_client.get(route + "?size=full").content).size) == 1600
     assert admin_client.get(f"/api/v1/admin/members/{member_id}").json()["food_diary"][0]["photo_version"]
+    assert TestClient(app).get(route).status_code == 401
 
-    # A meal is served only under its own member: another member who shares
-    # does not make this member's photo reachable through their id.
     with TestClient(app) as other:
         created = sign_up(other, email="also.sharing@demo.veye.test")
         assert created.status_code == 201
-        assert decide_sharing(other).status_code == 200
         other_id = created.json()["account"]["member_id"]
+        assert other.get(route).status_code == 401, "a member session opens no console route"
     assert admin_client.get(f"/api/v1/admin/members/{other_id}/food-diary/{meal['id']}/photo").status_code == 404
 
-    assert member_client.post("/api/v1/members/me/health-permission/revoke").status_code == 200
-    assert admin_client.get(route).status_code == 404, "withdrawal takes effect on the very next request"
+    # A member who asked to be deleted: closed at once, before the purge.
     with SessionLocal() as db:
-        assert db.get(FoodDiaryEntry, __import__("uuid").UUID(meal["id"])).photo_object_key, "withheld, not deleted"
+        from datetime import datetime, timezone
+
+        from app.members.models import Member
+
+        db.get(Member, __import__("uuid").UUID(member_id)).erasure_requested_at = datetime.now(timezone.utc)
+        db.commit()
+    assert admin_client.get(route).status_code == 404
+    assert admin_client.get(f"/api/v1/admin/members/{member_id}").json()["food_diary"] == []
 
 
 # ---- erasure ------------------------------------------------------------------------------

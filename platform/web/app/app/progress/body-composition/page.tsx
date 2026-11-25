@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useAssessmentStart } from "@/components/member/use-assessment-start";
 import { useEffect, useMemo, useState } from "react";
 import {
   calculateBodyComposition,
@@ -48,6 +49,8 @@ export default function BodyCompositionPage() {
   const [showResult, setShowResult] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState(false);
+  useAssessmentStart("body_composition", touched && !showResult);
 
   useEffect(() => {
     getBodyCompositionHistory().then((data) => {
@@ -92,6 +95,7 @@ export default function BodyCompositionPage() {
       const saved = await calculateBodyComposition(input);
       setHistory((current) => ({ member_id: saved.member_id, latest: saved, history: [saved, ...(current?.history ?? [])] }));
       setShowResult(true);
+      setTouched(false);
       scrollToTop();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We could not save this measurement.");
@@ -109,7 +113,7 @@ export default function BodyCompositionPage() {
       </header>
 
       {!showResult && (
-        <section className="bmi-wrap fade-in d1">
+        <section className="bmi-wrap fade-in d1" onInputCapture={() => setTouched(true)} onClickCapture={(event) => { if ((event.target as HTMLElement).closest("button")) setTouched(true); }}>
           <h2 className="bmi-title">Choose the biology that best describes you</h2>
           <div className="bmi-toggle" role="group" aria-label="Biology">
             <button className={`bmi-toggle-btn${sex === "female" ? " active" : ""}`} type="button" aria-pressed={sex === "female"} onClick={() => chooseSex("female")}>Woman</button>

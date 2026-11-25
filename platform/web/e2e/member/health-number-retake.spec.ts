@@ -30,8 +30,19 @@ async function pick(page: Page, option: string) {
   await page.locator("#wizardOptions .wizard-option", { hasText: new RegExp(`^${option.replace(/[()]/g, "\\$&")}$`) }).click();
 }
 
+/** A tick box is drawn only where more than one answer may be chosen (owner,
+ *  15 Nov 2026): a single-choice answer is a plain button. The box is the
+ *  option's ::after, so its computed content says whether one is drawn. */
+async function expectTickBoxes(page: Page, drawn: boolean) {
+  const boxes = await page.locator("#wizardOptions .wizard-option").evaluateAll((options) =>
+    options.map((option) => getComputedStyle(option, "::after").content !== "none" || getComputedStyle(option, "::before").content !== "none"));
+  expect(boxes.length).toBeGreaterThan(0);
+  expect(boxes, drawn ? "a multi-choice question ticks every option" : "a single-choice question draws no tick box").toEqual(boxes.map(() => drawn));
+}
+
 async function answerEverything(page: Page, tired: "Yes" | "No") {
   await step(page, "1/11", "What are your goals?");
+  await expectTickBoxes(page, true);
   await pick(page, "Lose Body Fat");
   await next(page).click();
 
@@ -42,6 +53,7 @@ async function answerEverything(page: Page, tired: "Yes" | "No") {
   await next(page).click();
 
   await step(page, "3/11", "Select your activity level");
+  await expectTickBoxes(page, false);
   await pick(page, "Light (I work, I walk some)");
   await next(page).click();
 
@@ -56,6 +68,7 @@ async function answerEverything(page: Page, tired: "Yes" | "No") {
     await step(page, label, title);
     // The prototype lists No before Yes on the retake.
     await expect(page.locator("#wizardOptions .wizard-option")).toHaveText(["No", "Yes"]);
+    await expectTickBoxes(page, false);
     await pick(page, answer);
     await next(page).click();
   }
@@ -93,7 +106,7 @@ test.describe.serial("the Health Number inside the dashboard", () => {
   });
 
   test("the first take starts from the dashboard, asks eleven questions and goes straight to the result", async ({ page }) => {
-    await page.getByRole("link", { name: /Take the assessment/ }).click();
+    await page.getByRole("link", { name: "Take the assessment", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/progress\/health-number\?from=dashboard&start=1$/);
     await expect(page.locator("#wizardStepWrap")).toBeVisible();
     await expect(page.locator("#wizardPrev")).toBeDisabled();
@@ -101,7 +114,7 @@ test.describe.serial("the Health Number inside the dashboard", () => {
     // The back arrow returns to where the member came from.
     await page.locator("#healthQuizBack").click();
     await expect(page).toHaveURL(/\/app$/);
-    await page.getByRole("link", { name: /Take the assessment/ }).click();
+    await page.getByRole("link", { name: "Take the assessment", exact: true }).click();
 
     await answerEverything(page, "Yes");
     // Q12 is asked at onboarding only (client, 20 Aug 2026).

@@ -6,7 +6,10 @@ import { Fragment, createContext, useContext, useEffect, useState, type ReactNod
 import { MemberAvatar } from "@/components/member/member-avatar";
 import { MEMBER_NAV, activeNavKey, type NavKey } from "@/components/member/member-nav";
 import { NavIcon } from "@/components/member/nav-icons";
+import { ScreenStyles } from "@/components/screen-styles";
+import { MemberSkeleton } from "@/components/skeleton";
 import { RequirePortal, useSession } from "@/components/session";
+import { recordActivity } from "@/lib/member-api";
 
 /* Member application chrome, ported from the approved consumer prototype
    (build/dashboard.html): the 22px green strip, the white sidebar (208px of
@@ -17,6 +20,8 @@ import { RequirePortal, useSession } from "@/components/session";
 
 const MEMBER_FONTS =
   "https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Nunito+Sans:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&family=Kumbh+Sans:wght@200;300;400;500;600;700&family=Teachers:wght@400;500;600&display=swap";
+
+const MEMBER_SHEETS = ["/member-css/dashboard.css", "/member-css/member.css"];
 
 type ToastApi = { message: string; flash: (message: string) => void };
 const ToastContext = createContext<ToastApi | null>(null);
@@ -59,20 +64,16 @@ function Toast({ message }: { message: string }) {
 
 export function MemberChrome({ children }: { children: ReactNode }) {
   return (
-    <RequirePortal portal="member" fallback={<SigningIn />}>
-      <MemberFrame>{children}</MemberFrame>
-    </RequirePortal>
+    <ScreenStyles sheets={MEMBER_SHEETS} fonts={MEMBER_FONTS} waiting={<MemberSkeleton />}>
+      <RequirePortal portal="member" fallback={<SigningIn />}>
+        <MemberFrame>{children}</MemberFrame>
+      </RequirePortal>
+    </ScreenStyles>
   );
 }
 
 function SigningIn() {
-  return (
-    <>
-      <link rel="stylesheet" href="/member-css/dashboard.css" />
-      <div className="top-strip" />
-      <p style={{ fontFamily: "Nunito Sans, sans-serif", color: "var(--body-text-light)", padding: "40px 32px" }}>Opening your dashboard…</p>
-    </>
-  );
+  return <MemberSkeleton />;
 }
 
 function MemberFrame({ children }: { children: ReactNode }) {
@@ -88,6 +89,7 @@ function MemberFrame({ children }: { children: ReactNode }) {
   const active: NavKey | null = pathname === "/app/progress/health-number" && fromDashboard ? "dashboard" : activeNavKey(pathname);
   const toast = useToastState();
   const session = useSession();
+  useEffect(() => { void recordActivity(); }, []);
 
   async function logOut() {
     // End the MEMBER session on the server, then a full navigation to the
@@ -97,12 +99,6 @@ function MemberFrame({ children }: { children: ReactNode }) {
 
   return (
     <ToastContext.Provider value={toast}>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href={MEMBER_FONTS} rel="stylesheet" />
-      <link rel="stylesheet" href="/member-css/dashboard.css" />
-      <link rel="stylesheet" href="/member-css/member.css" />
-
       <div className="top-strip" />
 
       <div className="app">

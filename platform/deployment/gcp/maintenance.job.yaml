@@ -34,12 +34,33 @@ spec:
               env:
                 - name: VEYE_ENVIRONMENT
                   value: production
+                # Everything below is the API service's own value (api.service.yaml).
+                # Without it the job starts with the laptop defaults: a local
+                # folder it may not write, a mail server on 127.0.0.1, and links
+                # to localhost in the emails it retries. The job refuses to run
+                # that way, and tests/test_entry_points.py keeps the two in step.
+                - name: VEYE_WEB_BASE_URL
+                  value: https://${WEB_HOST}
                 - name: VEYE_EMAIL_PROVIDER
                   value: smtp
+                - name: VEYE_SMTP_HOST
+                  value: smtp-relay.gmail.com
+                - name: VEYE_SMTP_PORT
+                  value: "587"
+                - name: VEYE_EMAIL_FROM
+                  value: "Veye <no-reply@${MAIL_DOMAIN}>"
+                - name: VEYE_EMAIL_REPLY_TO
+                  value: ${MONITORED_REPLY_TO}
                 - name: VEYE_MEDIA_OBJECT_STORE
                   value: gcs
                 - name: VEYE_MEDIA_BUCKET
                   value: veye-${ENV}-member-media
+                - name: VEYE_KNOWLEDGE_OBJECT_STORE
+                  value: gcs
+                - name: VEYE_KNOWLEDGE_BUCKET
+                  value: veye-${ENV}-knowledge
+                - name: VEYE_GCP_PROJECT
+                  value: ${PROJECT_ID}
                 - name: VEYE_DATABASE_URL
                   valueFrom: {secretKeyRef: {name: veye-database-url, key: latest}}
                 - name: VEYE_SMTP_USERNAME

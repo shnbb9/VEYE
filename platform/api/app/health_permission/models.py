@@ -2,8 +2,9 @@
 
 The member decides whether the Veye team may look at their health records in
 the console. Until they say yes, nobody there sees a Health Number, a blood
-marker, a mood or a diary entry — not because a screen hides them, but because
-the API does not send them.
+marker or a mood — not because a screen hides them, but because the API does
+not send them. The food diary is not part of this choice (Cara, 25 Nov 2026):
+the team sees it, and the member is told so where they write it.
 
 Deliberately *not* called a HIPAA Authorization anywhere a member can read.
 That is a legal term with legal consequences, and no counsel has approved the
@@ -59,7 +60,8 @@ STATE_LABELS = {
 # whenever that copy changes, so an old decision is never silently credited to
 # new wording. v2 (9 Nov 2026) added Veye Companion: the same records reaching
 # Sprout is the same disclosure, and the member has to have been told that.
-POLICY_VERSION = "health-sharing-2026-11-09-v2"
+# v3 (25 Nov 2026): the food diary is not part of this choice (Cara, 25 Nov).
+POLICY_VERSION = "health-sharing-2026-11-25-v3"
 
 # Where a decision came from. A permission is never granted by replying to an
 # email: the member has to act in the application, and the source says so.

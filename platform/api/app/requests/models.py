@@ -22,6 +22,12 @@ KIND_BETA = "join_beta"
 KINDS = (KIND_CONTACT, KIND_HELP, KIND_BETA)
 KIND_LABELS = {KIND_CONTACT: "Contact Us", KIND_HELP: "Help question", KIND_BETA: "Join Beta"}
 
+# How important the TEAM says a question is. Set by a person, never inferred:
+# it is not medical triage and no model guesses it. None = nobody has said.
+PRIORITY_HIGH, PRIORITY_MEDIUM, PRIORITY_LOW = "high", "medium", "low"
+PRIORITIES = (PRIORITY_HIGH, PRIORITY_MEDIUM, PRIORITY_LOW)
+PRIORITY_LABELS = {PRIORITY_HIGH: "High", PRIORITY_MEDIUM: "Medium", PRIORITY_LOW: "Low"}
+
 STATUS_NEW = "new"
 STATUS_IN_PROGRESS = "in_progress"
 STATUS_RESOLVED = "resolved"
@@ -57,6 +63,7 @@ class MemberRequest(Base):
     handled_by: Mapped[str | None] = mapped_column(String(160), nullable=True)
     handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution_note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    priority: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     replies = relationship("MemberRequestReply", back_populates="request", cascade="all, delete-orphan")
 

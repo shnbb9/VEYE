@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
 import {
   CARE_KINDS,
@@ -49,10 +49,16 @@ export default function FitnessLibraryAdminPage() {
     return () => { live = false; };
   }, [goal]);
 
+  const shown = useRef(goal);
+  shown.current = goal;
+
   async function run(action: () => Promise<AdminFitnessLibrary>, done: string) {
     setBusy(true); setError(""); setNote("");
+    const asked = goal;
     try {
-      setLibrary(await action());
+      const next = await action();
+      // A slow answer about one goal must not be drawn under another.
+      if (shown.current === asked) setLibrary(next);
       setNote(done);
       return true;
     } catch (reason) {

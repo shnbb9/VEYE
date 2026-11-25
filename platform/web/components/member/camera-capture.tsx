@@ -27,9 +27,11 @@ export function CameraCapture({ onUse, onCancel, onChooseFile }: Props) {
   const stream = useRef<MediaStream | null>(null);
   const [phase, setPhase] = useState<Phase>("starting");
   const [message, setMessage] = useState("");
+  const opening = useRef(0);   // the attempt the dialog is waiting for; 0 = closed
   const [shot, setShot] = useState<{ blob: Blob; url: string } | null>(null);
 
   const stop = useCallback(() => {
+    opening.current = 0;
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
   }, []);
@@ -37,8 +39,13 @@ export function CameraCapture({ onUse, onCancel, onChooseFile }: Props) {
   const start = useCallback(async () => {
     setPhase("starting");
     setMessage("");
+    const mine = Date.now() + Math.random();
+    opening.current = mine;
     try {
       const media = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1600 }, height: { ideal: 1200 } }, audio: false });
+      // Permission can be given after the dialog closed (or was reopened): a
+      // camera nobody is waiting for is switched straight off.
+      if (opening.current !== mine) { media.getTracks().forEach((track) => track.stop()); return; }
       stream.current = media;
       if (video.current) {
         video.current.srcObject = media;
@@ -46,6 +53,7 @@ export function CameraCapture({ onUse, onCancel, onChooseFile }: Props) {
       }
       setPhase("live");
     } catch (reason) {
+      if (opening.current !== mine) return;
       const name = reason instanceof DOMException ? reason.name : "";
       setMessage(name === "NotAllowedError" || name === "SecurityError"
         ? "Camera access was blocked. Allow the camera for this site in your browser, or choose a file instead."
@@ -64,7 +72,12 @@ export function CameraCapture({ onUse, onCancel, onChooseFile }: Props) {
   useEffect(() => () => { if (shot) URL.revokeObjectURL(shot.url); }, [shot]);
 
   const close = useCallback(() => { stop(); onCancel(); }, [onCancel, stop]);
-  useModalDialog(true, card, close, "[data-camera-primary]");
+  useModalDialog(true, card, close, "[data-camera-cancel]");
+  // The main button changes with each step; focus follows it, never lost
+  // behind the dialog.
+  useEffect(() => {
+    if (phase !== "starting") card.current?.querySelector<HTMLElement>("[data-camera-primary]")?.focus();
+  }, [phase]);
 
   function take() {
     const el = video.current;
@@ -104,7 +117,7 @@ export function CameraCapture({ onUse, onCancel, onChooseFile }: Props) {
         </div>
         {message && <p className={styles.error} role="alert">{message}</p>}
         <div className={styles.actions}>
-          <button type="button" className="btn-ghost" onClick={close}>Cancel</button>
+          <button type="button" className="btn-ghost" onClick={close} data-camera-cancel>Cancel</button>
           {phase === "blocked" ? (
             <button type="button" className="btn-primary" onClick={() => { stop(); onChooseFile(); }} data-camera-primary data-testid="camera-choose-file">
               Choose a file instead

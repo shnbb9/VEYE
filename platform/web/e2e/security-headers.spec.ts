@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { ADITYA, ADMIN } from "./fixtures/accounts";
-import { adminSignIn, expectAdminHome, expectMemberDashboard, memberSignIn, open } from "./fixtures/helpers";
+import { adminSignIn, cancelledPrefetch, expectAdminHome, expectMemberDashboard, memberSignIn, open } from "./fixtures/helpers";
 
 /* The headers a browser actually receives, and the CSRF token the client
    carries. Asserted on real responses rather than on the config, because a
@@ -35,7 +35,7 @@ test.describe("Security headers and CSRF", () => {
     page.on("console", (message) => {
       if (message.type() === "error") problems.push(`${page.url()} :: ${message.text()}`);
     });
-    page.on("pageerror", (error) => problems.push(`${page.url()} :: ${error.message}`));
+    page.on("pageerror", (error) => { if (!cancelledPrefetch(page, error.message)) problems.push(`${page.url()} :: ${error.message}`); });
 
     for (const path of ["/", "/why-veye", "/help", "/login", "/admin/login"]) {
       const response = await page.goto(path);

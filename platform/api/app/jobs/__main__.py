@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from app.db import registry  # noqa: F401 — this process imports no routes, so no models either
 from app.db.session import SessionLocal
 from app.jobs.runner import JOBS, ON_DEMAND, run_job
 

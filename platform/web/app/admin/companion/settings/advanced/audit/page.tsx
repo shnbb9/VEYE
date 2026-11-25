@@ -62,9 +62,9 @@ export default function AuditPage() {
               {data.total > data.page_size && (
                 <span className="row gap-2">
                   <button className="btn btn--secondary btn--sm" type="button" data-testid="audit-newer"
-                          disabled={data.page <= 1} onClick={() => setPage((c) => c - 1)}>Newer</button>
+                          disabled={data.page <= 1} onClick={() => setPage((c) => c - 1)} title="Previous page: newer entries">Newer</button>
                   <button className="btn btn--secondary btn--sm" type="button" data-testid="audit-older"
-                          disabled={!hasMore} onClick={() => setPage((c) => c + 1)}>Older</button>
+                          disabled={!hasMore} onClick={() => setPage((c) => c + 1)} title="Next page: older entries">Older</button>
                 </span>
               )}
             </div>

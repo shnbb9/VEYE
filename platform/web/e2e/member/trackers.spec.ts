@@ -174,9 +174,16 @@ test.describe.serial("Member trackers", () => {
     await expect(page.locator(".module-upd--none")).toHaveCount(0);
     await open(page, "/app");
     await expect(page.getByText("5/5")).toBeVisible();
-    // the tracker graph draws four real lines now (no "not connected" rest states)
-    await expect(page.locator(".tracker-graph__legend")).not.toContainText("not connected");
-    await expect(page.locator(".tracker-graph__legend")).toContainText("Health Questionnaire");
+    // Concept A: five cards, each instrument on its own scale, none at rest.
+    const cards = page.getByTestId("tracker-cards");
+    await expect(cards.locator(".tracker-card")).toHaveCount(5);
+    await expect(cards.locator(".tracker-card--rest")).toHaveCount(0);
+    await expect(page.getByTestId("tracker-health-assessment")).toContainText("of 33");
+    // Every figure can be read as a table, not only seen.
+    const quizCard = page.getByTestId("tracker-simple-quiz");
+    await expect(quizCard).toContainText("8 No");
+    await quizCard.getByRole("button", { name: /Show table/ }).click();
+    await expect(quizCard.locator("tbody tr")).toHaveCount(2);
   });
 
   test("Fitness shows the published Care Studio recommendations; Supplements and Resources render their approved copy", async ({ page }) => {

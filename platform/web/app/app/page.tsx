@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   getBloodMarkersHistory, getBodyCompositionHistory, getHealthAssessmentHistory, getHealthNumberHistory, getSimpleQuizHistory,
-  type BloodMarkersHistory, type BodyCompositionHistory, type HealthAssessmentHistory, type HealthNumberHistoryItem, type SimpleQuizHistory,
+  type BloodMarkersHistory, type BodyCompositionHistory, type HealthAssessmentHistory, type HealthNumberHistory, type HealthNumberHistoryItem, type SimpleQuizHistory,
 } from "@/lib/api";
 import { FIRST_TIME_FLOW, PROGRESS_GUIDE_FLOW, getGuidedOverview, skipFlow, type GuidedOverview } from "@/lib/guided-flows-api";
 import { getMood, getPersonalTip, getPublishedContent, getSupportDetails, myRequests, type MemberRequest, type MoodOverview, type PersonalTip, type SupportDetails } from "@/lib/member-api";
 import { displayHealthNumber, prefersReducedMotion } from "@/lib/member-format";
 import { useToast } from "@/components/member/member-chrome";
 import { ContactUsDialog } from "@/components/member/contact-us-dialog";
-import { TrackerGraph } from "@/components/member/tracker-graph";
+import { TrackerCards } from "@/components/member/tracker-cards";
 import { useSession } from "@/components/session";
 
 /* The approved Dashboard (build/dashboard.html, #view-dashboard): three fixed
@@ -31,6 +31,7 @@ const SCALE_SENTENCE_PREFIX = "On a scale of 1 to 10, where 1 is very healthy an
 export default function MemberDashboard() {
   const router = useRouter();
   const [health, setHealth] = useState<HealthState>({ kind: "loading" });
+  const [history, setHistory] = useState<HealthNumberHistory | null>(null);
   const [modulesDone, setModulesDone] = useState<number | null>(null);
   const [body, setBody] = useState<BodyCompositionHistory | null>(null);
   const [blood, setBlood] = useState<BloodMarkersHistory | null>(null);
@@ -53,6 +54,7 @@ export default function MemberDashboard() {
     Promise.allSettled([getHealthNumberHistory(), getBodyCompositionHistory(), getBloodMarkersHistory(), getHealthAssessmentHistory(), getSimpleQuizHistory()]).then(([hn, bc, bm, ha, sq]) => {
       if (cancelled) return;
       if (hn.status === "fulfilled") {
+        setHistory(hn.value);
         setHealth(hn.value.latest ? { kind: "taken", latest: hn.value.latest } : { kind: "untaken" });
       } else {
         setHealth({ kind: "error", message: (hn.reason as Error).message });
@@ -251,16 +253,14 @@ export default function MemberDashboard() {
         </div>
       </div>
 
-      {/* Progress Trackers line graph (Cara, Progress Trackers Decision Tree): real
-          dated results per tracker; unused or unconnected trackers stay at rest. */}
-      {/* Sits on the page like the Activity Tracker row above it — no white
-          card (owner, 14 Nov 2026). */}
+      {/* Progress Trackers (concept A, owner 25 Nov 2026): each instrument on its
+          own true scale; unused ones stay at rest (Cara's decision tree). */}
       <section className="tracker-section fade-in" aria-labelledby="trackerGraphTitle">
         <div className="tracker-section__head">
           <h2 id="trackerGraphTitle" className="activity-title tracker-section__title">Progress Trackers</h2>
           <Link className="tracker-section__link" href={`/app/companion?flow=${PROGRESS_GUIDE_FLOW}`}>Let Sprout guide you</Link>
         </div>
-        <TrackerGraph blood={blood} body={body} assessment={assessment} quiz={quiz} />
+        <TrackerCards loading={modulesDone === null} health={history} body={body} blood={blood} assessment={assessment} quiz={quiz} />
       </section>
 
       <ContactUsDialog open={contactOpen} supportEmail={support?.support_email ?? "contact@veye.co"} supportPhone={support?.support_phone ?? ""} requests={requests}

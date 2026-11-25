@@ -4,14 +4,18 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
+import { TrendCell } from "@/components/admin/member-cells";
 import {
   REQUEST_STATUS_LABELS,
+  archiveMember,
   getHealthPermission,
   getMember360,
   memberAccountAction,
+  memberMealPhotoUrl,
   memberPhotoUrl,
   requestHealthPermission,
   resendHealthPermissionEmail,
+  restoreMember,
   type HealthPermission,
   type Member360,
   type MemberAccountAction,
@@ -104,9 +108,9 @@ function SharingBanner({ member, memberId, onAsked }: { member: Member360; membe
       <Icon name="shield" size={18} />
       <div style={{ minWidth: 0 }}>
         <strong>Health records are not shared.</strong> {explanation}{" "}
-        Their Health Number, body composition, blood markers, questionnaires, moods and food diary are not sent to
-        this console — the tabs below are empty for that reason, not because nothing was recorded. Name, email and
-        their messages to Veye are not covered by sharing and stay visible so the team can answer them.
+        Their Health Number, body composition, blood markers, questionnaires and moods are not sent to this
+        console — those tabs are empty for that reason, not because nothing was recorded. Name, email, their food
+        diary and their messages to Veye are not covered by sharing and stay visible so the team can help them.
         {delivery && member.sharing_state === "requested" && (
           <p className="t-support" style={{ marginTop: 6 }} data-testid="sharing-delivery">
             {DELIVERY_LABELS[delivery.status] ?? delivery.status}
@@ -196,7 +200,9 @@ function Member360View() {
             <div style={{ minWidth: 0 }}>
               <div className="m360__id">{profile.email} · joined {fmtDate(profile.joined_at)}</div>
               <div className="row gap-2 wrap" style={{ marginTop: 6 }}>
-                <Chip label={profile.is_active ? "Active" : "Inactive"} tone={profile.is_active ? "live" : "archived"} />
+                {profile.archived_at
+                  ? <Chip label="Archived" tone="archived" />
+                  : <Chip label={profile.is_active ? "Active" : "Inactive"} tone={profile.is_active ? "live" : "archived"} />}
                 <span className="tag">{profile.email_verified ? "Email verified" : "Email unverified"}</span>
                 {profile.is_synthetic && <span className="tag">Synthetic demo account</span>}
                 {profile.admin_access && <span className="tag">Also has admin access</span>}
@@ -229,6 +235,7 @@ function Member360View() {
                 {member.shares_health_data ? (profile.health_number_status ?? "Not completed") : "Not shared"}
               </div>
               <p className="t-support" style={{ marginTop: 4 }}>A lower number is better on this scale.</p>
+              {member.shares_health_data && profile.trend.state !== "none" && <p style={{ marginTop: 6 }} data-testid="m360-trend"><TrendCell trend={profile.trend} /></p>}
               <p className="t-support">
                 {!member.shares_health_data
                   ? "Withheld until this member shares their records."
@@ -239,7 +246,13 @@ function Member360View() {
         </div>
       </section>
 
-      <SharingBanner member={member} memberId={memberId} onAsked={reload} />
+      {profile.archived_at && (
+        <div className="notice" data-testid="archived-banner"><Icon name="lock" size={18} /><div>
+          <strong>Archived</strong> {fmtDate(profile.archived_at)}{profile.archived_by ? ` by ${profile.archived_by}` : ""}.{profile.archive_reason ? ` ${profile.archive_reason}.` : ""} They cannot open the
+          member application and are left out of the directory and every total. Nothing is deleted. Their health records stay closed until they are restored.
+        </div></div>
+      )}
+      {!profile.archived_at && <SharingBanner member={member} memberId={memberId} onAsked={reload} />}
 
       <Subnav items={TABS.map((t) => ({ key: t.key, label: t.label, href: `/admin/members/${memberId}?tab=${t.key}` }))} active={tab} />
 
@@ -251,7 +264,7 @@ function Member360View() {
               <div className="card__body">
                 <div className="minirow">
                   <div className="mini"><span className="mini__n">{profile.onboarding}</span><span className="mini__l">Onboarding</span></div>
-                  <div className="mini"><span className="mini__n">{profile.trackers_completed} of 5</span><span className="mini__l">Trackers with results</span></div>
+                  <div className="mini"><span className="mini__n">{profile.trackers_completed === null ? "Not shared" : `${profile.trackers_completed} of 5`}</span><span className="mini__l">Trackers with results</span></div>
                   <div className="mini"><span className="mini__n">{member.guided_sessions.length}</span><span className="mini__l">Guided sessions</span></div>
                   <div className="mini"><span className="mini__n">{member.conversations.length}</span><span className="mini__l">Sprout conversations</span></div>
                 </div>
@@ -270,7 +283,7 @@ function Member360View() {
                       </div>
                     ))}
                   </div>
-                ) : <p className="t-support">No Health Number saved yet.</p>}
+                ) : <p className="t-support">{member.shares_health_data ? "No Health Number saved yet." : "Not shared."}</p>}
               </div>
             </div>
           </div>
@@ -279,7 +292,7 @@ function Member360View() {
               <div className="card__head"><div><h2 className="card__title">Progress trackers</h2><p className="t-support">Results saved, and the latest date.</p></div></div>
               <div className="card__body">
                 <dl className="kv">
-                  {trackers.map((t) => <span key={t.label} style={{ display: "contents" }}><dt>{t.label}</dt><dd>{t.count ? `${t.count} · latest ${fmtDate(t.latest)}` : <span className="t-muted">Not started</span>}</dd></span>)}
+                  {trackers.map((t) => <span key={t.label} style={{ display: "contents" }}><dt>{t.label}</dt><dd>{t.count ? `${t.count} · latest ${fmtDate(t.latest)}` : <span className="t-muted">{member.shares_health_data ? "Not started" : "Not shared"}</span>}</dd></span>)}
                 </dl>
               </div>
               <div className="card__foot"><Link className="btn btn--secondary btn--sm" href={`/admin/members/${memberId}?tab=assessments`}>Open Assessments</Link><Link className="btn btn--ghost btn--sm" href={`/admin/members/${memberId}?tab=journal`}>Mood & Diary</Link></div>
@@ -288,7 +301,7 @@ function Member360View() {
               <div className="card__head"><div><h2 className="card__title">Journal & requests</h2><p className="t-support">Non-clinical entries and messages from this member.</p></div></div>
               <div className="card__body">
                 <dl className="kv">
-                  <dt>Mood entries</dt><dd>{member.mood_entries.length ? `${member.mood_entries.length} · latest ${member.mood_entries[0].entry_date} (${member.mood_entries[0].mood_label})` : <span className="t-muted">Not started</span>}</dd>
+                  <dt>Mood entries</dt><dd>{member.mood_entries.length ? `${member.mood_entries.length} · latest ${member.mood_entries[0].entry_date} (${member.mood_entries[0].mood_label})` : <span className="t-muted">{member.shares_health_data ? "Not started" : "Not shared"}</span>}</dd>
                   <dt>Food Diary</dt><dd>{member.food_diary_days ? `${member.food_diary_days} day${member.food_diary_days === 1 ? "" : "s"} · latest ${member.food_diary[0]?.entry_date ?? ""}` : <span className="t-muted">Not started</span>}</dd>
                   <dt>Requests</dt><dd>{member.requests.length ? `${member.requests.length} · ${member.requests.filter((r) => r.status !== "resolved").length} open` : <span className="t-muted">None</span>}</dd>
                 </dl>
@@ -319,7 +332,7 @@ function Member360View() {
                   <thead><tr><th scope="col">Day</th><th scope="col">Mood</th><th scope="col">Note</th></tr></thead>
                   <tbody>{member.mood_entries.slice(0, 31).map((m) => <tr key={m.id}><td>{m.entry_date}</td><td>{m.mood_label}</td><td className="t-support">{m.note || "—"}</td></tr>)}</tbody>
                 </table></div>
-              ) : <p className="t-support" style={{ padding: 20 }}>No mood logged yet.</p>}
+              ) : <p className="t-support" style={{ padding: 20 }}>{member.shares_health_data ? "No mood logged yet." : "Not shared."}</p>}
             </div>
           </div>
           <div className="card">
@@ -328,7 +341,7 @@ function Member360View() {
               {member.food_diary.length ? (
                 <div className="table-wrap"><table className="table table--compact">
                   <thead><tr><th scope="col">Day</th><th scope="col">Time</th><th scope="col">Meal</th><th scope="col">Felt before</th></tr></thead>
-                  <tbody>{member.food_diary.map((m) => <tr key={m.id}><td className="t-nowrap">{m.entry_date}</td><td className="t-nowrap">{m.meal_time}</td><td>{m.description}{m.notes ? <div className="cell-sub">{m.notes}</div> : null}</td><td className="t-support">{m.feelings.join(", ") || "—"}</td></tr>)}</tbody>
+                  <tbody>{member.food_diary.map((m) => <tr key={m.id}><td className="t-nowrap">{m.entry_date}</td><td className="t-nowrap">{m.meal_time}</td><td>{m.photo_version && <a className="meal-thumb" href={memberMealPhotoUrl(profile.member_id, m.id, m.photo_version, "full")} target="_blank" rel="noopener noreferrer" aria-label={`Open the photo of ${m.description}`}><img src={memberMealPhotoUrl(profile.member_id, m.id, m.photo_version)} alt="" crossOrigin="use-credentials" /></a>} {m.description}{m.notes ? <div className="cell-sub">{m.notes}</div> : null}</td><td className="t-support">{m.feelings.join(", ") || "—"}</td></tr>)}</tbody>
                 </table></div>
               ) : <p className="t-support" style={{ padding: 20 }}>No diary entry yet.</p>}
             </div>
@@ -408,9 +421,50 @@ function Member360View() {
               </dl>
             </div>
           </div>
+          <ArchiveCard member={member} onChanged={reload} />
           <AccountActions member={member} onChanged={reload} />
         </div>
       )}
+    </div>
+  );
+}
+
+/* Archiving is the ordinary "they have left": reversible, nothing deleted, and
+   it never touches a console access the same person may hold. */
+function ArchiveCard({ member, onChanged }: { member: Member360; onChanged: () => void }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const { profile } = member;
+
+  async function run(action: () => Promise<{ message: string }>) {
+    setBusy(true); setError(""); setNotice("");
+    try { setNotice((await action()).message); setReason(""); onChanged(); } catch (why) {
+      setError(why instanceof Error ? why.message : "That could not be done.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card" data-testid="m360-archive">
+      <div className="card__head"><div><h2 className="card__title">{profile.archived_at ? "Restore member" : "Archive member"}</h2>
+        <p className="t-support">{profile.archived_at
+          ? "They can open the member application again, with the password they had. Their own decision about sharing applies again exactly as they left it."
+          : `Takes them out of the active directory and closes the member application to them. Nothing is deleted and you can restore them at any time.${profile.admin_access ? " Their console access is not affected." : ""}`}</p></div></div>
+      <div className="card__body stack gap-4">
+        {error && <p className="errorbar" role="alert">{error}</p>}
+        {notice && <p className="t-support" role="status" data-testid="archive-notice">{notice}</p>}
+        {profile.archived_at ? (
+          <div><button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => void run(() => restoreMember(profile.member_id))} data-testid="member-restore">{busy ? "Working…" : "Restore member"}</button></div>
+        ) : (
+          <>
+            <div className="field"><label htmlFor="archiveReason">Reason <span className="t-muted">(optional, kept with the record)</span></label>
+              <input className="input" id="archiveReason" maxLength={300} value={reason} onChange={(event) => setReason(event.target.value)} /></div>
+            <div><button className="btn btn--danger-quiet btn--sm" type="button" disabled={busy} data-testid="member-archive"
+                         onClick={() => { if (window.confirm(`Archive ${profile.name}? They are signed out of the member application and leave the directory. You can restore them later.`)) void run(() => archiveMember(profile.member_id, reason.trim())); }}>{busy ? "Working…" : "Archive member"}</button></div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

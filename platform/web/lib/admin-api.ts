@@ -1,4 +1,4 @@
-import { apiJson, csrfHeaders, postJson } from "@/lib/api";
+import { apiJson, csrfHeaders, postJson, veyeFetch } from "@/lib/api";
 import { apiPath } from "@/lib/api-base";
 import type { Message } from "@/lib/companion-api";
 
@@ -29,6 +29,9 @@ export type ConversationSummary = {
   flag_reason: string | null;
   reviewed_at: string | null;
   reviewed_by: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  priority: "high" | "medium" | "low" | null;
   first_message: string;
   feedback_rating: string | null;
   outcomes: string[];
@@ -218,9 +221,13 @@ export type AuditEntry = { id: string; actor_name: string; action: string; entit
 export type AuditPage = { rows: AuditEntry[]; total: number; page: number; page_size: number };
 
 export const getOverview = () => apiJson<Overview>(`${BASE}/overview`);
-export const listConversations = (filter: "needs_review" | "reviewed" | "all", q = "") =>
+export const listConversations = (filter: "needs_review" | "reviewed" | "unresolved" | "all", q = "") =>
   apiJson<ConversationSummary[]>(`${BASE}/conversations?filter=${filter}&q=${encodeURIComponent(q)}`);
 export const getConversation = (id: string) => apiJson<ConversationDetail>(`${BASE}/conversations/${id}`);
+export const resolveConversation = (id: string) => postJson<ConversationSummary>(`${BASE}/conversations/${id}/resolve`, {});
+export const reopenConversation = (id: string) => postJson<ConversationSummary>(`${BASE}/conversations/${id}/reopen`, {});
+export const setConversationPriority = (id: string, priority: ConversationSummary["priority"]) =>
+  postJson<ConversationSummary>(`${BASE}/conversations/${id}/priority`, { priority }, "PUT");
 export const reviewConversation = (id: string, note?: string) => postJson<ConversationSummary>(`${BASE}/conversations/${id}/review`, { note: note ?? null });
 export const listFeedback = (filter: "all" | "unreviewed" | "reviewed") => apiJson<FeedbackRow[]>(`${BASE}/feedback?filter=${filter}`);
 export const reviewFeedback = (id: string) => postJson<FeedbackRow>(`${BASE}/feedback/${id}/review`, {});
@@ -235,7 +242,7 @@ export const transitionKnowledgeSource = (id: string, action: "activate" | "deac
 export async function attachKnowledgeDocument(id: string, file: File): Promise<KnowledgeSource> {
   const body = new FormData();
   body.append("file", file);
-  const response = await fetch(apiPath(`${BASE}/knowledge-sources/${id}/document`),
+  const response = await veyeFetch(apiPath(`${BASE}/knowledge-sources/${id}/document`),
     { method: "POST", body, credentials: "include", headers: csrfHeaders() });
   if (!response.ok) {
     const detail = await response.json().catch(() => null) as { detail?: unknown } | null;

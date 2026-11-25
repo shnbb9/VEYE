@@ -36,7 +36,7 @@ body { margin: 0; }
    carried to the canvas; this app's <html> is the member app's cream
    (#FFF8EA), a 15-level difference measured on Pricing and Privacy. The page
    root takes the public site's colour only when it holds the public site. */
-html:has(body > .public-site) { background:#fffdf9; }
+html:has(.public-site) { background:#fffdf9; }
 .public-site img, .public-site svg { display:block; max-width:100%; }
 .public-site a { color:inherit; text-decoration:none; }
 
@@ -68,3 +68,37 @@ html:has(body > .public-site) { background:#fffdf9; }
   background: #FBEDEA; border-bottom: 1px solid #E6C3BB; color: #7A2E22;
   font-family: var(--f-body, "Teachers", sans-serif); font-size: 15px; line-height: 1.5;
 }
+
+/* ---- waiting (components/skeleton.tsx, components/session.tsx) ----------------
+   Here rather than in a portal's sheet, because it is what shows before one. */
+.sr-status { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skel { display: block; border-radius: 10px; background: linear-gradient(100deg, #EDF0E2 30%, #F8F9F1 50%, #EDF0E2 70%) 0 0 / 300% 100%; animation: skel-shimmer 1.6s linear infinite; }
+.skel--bar { height: 16px; margin-bottom: 22px; }
+.skel--title { width: 240px; max-width: 60%; height: 34px; margin-bottom: 26px; }
+.skel--tile { height: 104px; border-radius: 14px; }
+.skel--block { height: 190px; border-radius: 14px; margin-top: 20px; }
+.skel--card { height: 300px; border-radius: 14px; }
+.skel-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.skel-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.skel-console { min-height: 100vh; display: grid; grid-template-columns: 232px minmax(0, 1fr); background: #FEFBF5; }
+.skel-console__rail { padding: 96px 24px 24px; border-right: 1px solid #E7E7D6; }
+.skel-console__main { padding: 92px 44px 40px; }
+.skel-member { min-height: 100vh; display: grid; grid-template: 22px minmax(0, 1fr) / 214px minmax(0, 1fr); background: #FFF7E9; }
+.skel-member__strip { grid-column: 1 / -1; background: #8DC412; }
+.skel-member__side { padding: 96px 24px 24px; background: #fff; }
+.skel-member__main { padding: 48px 40px; }
+.skel-page { padding: 8px 0 40px; }
+@media (max-width: 900px) {
+  .skel-console, .skel-member { grid-template-columns: minmax(0, 1fr); }
+  .skel-console__rail, .skel-member__side { display: none; }
+  .skel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .skel-cards { grid-template-columns: minmax(0, 1fr); }
+  .skel-console__main, .skel-member__main { padding: 40px 18px; }
+}
+@keyframes skel-shimmer { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+.screen-waiting { position: fixed; inset: 0; z-index: 50; overflow: hidden; }
+.quiet-wait { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px; text-align: center; font-family: "Kumbh Sans", system-ui, sans-serif; color: #384C0C; background: #FFF7E9; }
+.quiet-wait > p { margin: 0; }
+.quiet-wait button { min-height: 44px; padding: 0 22px; border-radius: 999px; border: 1.5px solid #446514; background: #446514; color: #fff; font: inherit; cursor: pointer; }

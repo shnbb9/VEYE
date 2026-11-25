@@ -87,16 +87,14 @@ def homa_ir(insulin: float | None, glucose: float | None) -> float | None:
 
 # ---- goal flags (veye-calculations.js BLOOD_GOALS) --------------------------
 
+# (from inclusive, to, is `to` included) — the client's four goals, once.
+GOALS: dict[str, tuple[float | None, float, bool]] = {
+    "tg_hdl": (None, 1.0, False), "aa_epa": (1.5, 3.0, True), "hba1c": (4.9, 5.1, True), "homa_ir": (None, 1.0, False)}
+
+
 def in_range(key: str, value: float) -> bool:
-    if key == "tg_hdl":
-        return value < 1
-    if key == "aa_epa":
-        return 1.5 <= value <= 3
-    if key == "hba1c":
-        return 4.9 <= value <= 5.1
-    if key == "homa_ir":
-        return value < 1
-    raise KeyError(key)
+    low, high, inclusive = GOALS[key]
+    return (low is None or value >= low) and (value <= high if inclusive else value < high)
 
 
 # ---- bands (dashboard.html classifyMarker) ---------------------------------

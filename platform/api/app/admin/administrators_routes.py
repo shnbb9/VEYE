@@ -90,10 +90,12 @@ def _aware(value: datetime | None) -> datetime | None:
 
 
 def _administrators(db: Session) -> list[UserAccount]:
-    """Everyone who can use the console, plus anyone deactivated while holding
-    it — a withdrawn account must stay visible, not vanish from the page."""
+    """Everyone who can use the console, anyone invited who has not accepted
+    yet (they cannot use it), and anyone deactivated while holding it — a
+    withdrawn account must stay visible, not vanish from the page."""
     return (db.query(UserAccount)
-            .filter(or_(UserAccount.admin_access.is_(True), UserAccount.invitation_accepted_at.isnot(None)))
+            .filter(or_(UserAccount.admin_access.is_(True), UserAccount.invitation_accepted_at.isnot(None),
+                        UserAccount.invited_at.isnot(None)))
             .order_by(UserAccount.created_at)
             .all())
 
@@ -139,7 +141,7 @@ def _row(db: Session, user: UserAccount, principal: CurrentPrincipal, runtime: R
 
 def _target(db: Session, user_id: UUID) -> UserAccount:
     user = db.get(UserAccount, user_id)
-    if user is None or not (user.admin_access or user.invitation_accepted_at is not None):
+    if user is None or not (user.admin_access or user.invitation_accepted_at is not None or user.invited_at is not None):
         raise HTTPException(status_code=404, detail="That administrator was not found.")
     return user
 

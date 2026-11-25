@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Chip, Icon, PageHead, fmtDate } from "@/components/admin/admin-chrome";
+import { AttentionCard } from "@/components/admin/attention-card";
 import { useSession } from "@/components/session";
 import { getOverview, type Overview } from "@/lib/admin-api";
+import { isLocalBuild } from "@/lib/environment";
 import { TRACKER_KEYS, TRACKER_LABELS, getConsoleOverview, type ConsoleOverview } from "@/lib/admin-console-api";
 
 /* Home (admin prototype screens/home.js): greeting with quick actions, four
@@ -12,6 +14,8 @@ import { TRACKER_KEYS, TRACKER_LABELS, getConsoleOverview, type ConsoleOverview 
    every number a PostgreSQL aggregate of the local, synthetic data. No
    revenue, no growth percentages, no clinical conclusions. */
 
+// A visitor's message has no member to open.
+const NO_MEMBER = "00000000-0000-0000-0000-000000000000";
 const KIND_LABEL: Record<string, string> = { ...TRACKER_LABELS, companion: "Sprout", guided_flow: "Guided flow", request: "Request" };
 
 export default function AdminHome() {
@@ -52,15 +56,15 @@ export default function AdminHome() {
           <h2>{greeting}, {account?.first_name ?? ""}</h2>
           <p>
             {overview
-              ? `${overview.members_total} member${overview.members_total === 1 ? "" : "s"}, ${overview.members_active_last_7_days} active in the last seven days, ${overview.members_new_last_7_days} new. ${companion && companion.conversations_needing_review > 0 ? `${companion.conversations_needing_review} Sprout conversation${companion.conversations_needing_review === 1 ? "" : "s"} waiting for review.` : "Nothing is waiting for review."}`
+              ? `${overview.members_total} member${overview.members_total === 1 ? "" : "s"}, ${overview.members_active_last_7_days} active in the last seven days, ${overview.members_new_last_7_days} new. ${companion && companion.conversations_needing_review > 0 ? `${companion.conversations_needing_review} Sprout conversation${companion.conversations_needing_review === 1 ? "" : "s"} waiting for review.` : "No Sprout conversation is waiting for review."}`
               : "Loading today's figures…"}
           </p>
         </div>
         <div className="quick" style={{ minWidth: 230 }}>
-          <Link className="quick__btn" href="/admin/members"><Icon name="users" /><span>View all members</span><Icon name="chevron-right" size={16} /></Link>
           <Link className="quick__btn" href="/admin/assessments"><Icon name="clipboard" /><span>Assessment results</span><Icon name="chevron-right" size={16} /></Link>
           <Link className="quick__btn" href="/admin/care"><Icon name="heart" /><span>Edit member content</span><Icon name="chevron-right" size={16} /></Link>
           <Link className="quick__btn" href="/admin/companion/conversations"><Icon name="sprout" /><span>Review Companion messages</span><Icon name="chevron-right" size={16} /></Link>
+          <Link className="quick__btn" href="/admin/requests?view=awaiting_reply" data-testid="quick-awaiting"><Icon name="inbox" /><span>Questions awaiting a reply{overview ? ` (${overview.questions_awaiting_reply})` : ""}</span><Icon name="chevron-right" size={16} /></Link>
         </div>
       </section>
 
@@ -104,13 +108,15 @@ export default function AdminHome() {
         </div>
       </div>
 
+      <AttentionCard />
+
       <div className="grid grid--main-side" style={{ marginTop: "var(--s-6)" }}>
         <div className="stack gap-5">
           <div className="card">
             <div className="card__head"><div><h2 className="card__title"><Icon name="clipboard" /> Progress trackers</h2><p className="t-support">Members with at least one saved result. The bar is their share of all {overview?.members_total ?? 0} members.</p></div></div>
             <div className="card__body">
               {overview ? (
-                <div className="bars">
+                <div className="bars bars--wide">
                   {TRACKER_KEYS.map((key) => {
                     const members = overview.members_completed[key];
                     const pct = overview.members_total ? Math.round((members / overview.members_total) * 100) : 0;
@@ -137,7 +143,7 @@ export default function AdminHome() {
                     <div className="tl-item" key={`${row.at}-${index}`}>
                       <span className="tl-item__dot" />
                       <div className="tl-item__time">{fmtDate(row.at)}</div>
-                      <div className="tl-item__title"><Link href={`/admin/members/${row.member_id}`}>{row.member_name}</Link> · {KIND_LABEL[row.kind] ?? row.kind}</div>
+                      <div className="tl-item__title">{row.member_id === NO_MEMBER ? row.member_name : <Link href={`/admin/members/${row.member_id}`}>{row.member_name}</Link>} · {KIND_LABEL[row.kind] ?? row.kind}</div>
                       <div className="tl-item__body">{row.summary}</div>
                     </div>
                   ))}
@@ -190,10 +196,12 @@ export default function AdminHome() {
             </div>
           </div>
 
-          <div className="notice notice--quiet">
-            <Icon name="info" size={18} />
-            <div>Every member and conversation here is synthetic local demonstration data. Nothing leaves this machine except by explicit development configuration.</div>
-          </div>
+          {isLocalBuild && (
+            <div className="notice notice--quiet">
+              <Icon name="info" size={18} />
+              <div>Every member and conversation here is synthetic local demonstration data. Nothing leaves this machine except by explicit development configuration.</div>
+            </div>
+          )}
         </div>
       </div>
     </div>

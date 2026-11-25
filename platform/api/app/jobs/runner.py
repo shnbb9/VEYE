@@ -51,6 +51,32 @@ def _replay_erasures(db: Session, dry_run: bool) -> dict:
     return replay_erasure_ledger(db, dry_run=dry_run)
 
 
+_LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+
+
+def _refuse_laptop_settings() -> None:
+    """A production job with a setting nobody passed runs on the development
+    default: retried emails would go to a mail server on 127.0.0.1 with links
+    to localhost in them. Failing loudly is the better night."""
+    from app.core.config import settings
+
+    if not settings.is_production:
+        return
+    local = []
+    if any(host in settings.web_base_url for host in _LOCAL_HOSTS):
+        local.append("VEYE_WEB_BASE_URL")
+    if settings.email_provider != "smtp":
+        local.append("VEYE_EMAIL_PROVIDER")
+    elif settings.smtp_host in _LOCAL_HOSTS:
+        local.append("VEYE_SMTP_HOST")
+    if settings.media_object_store == "local":
+        local.append("VEYE_MEDIA_OBJECT_STORE")
+    if settings.knowledge_object_store == "local":
+        local.append("VEYE_KNOWLEDGE_OBJECT_STORE")
+    if local:
+        raise RuntimeError("Not configured for production: " + ", ".join(local) + " still has its development default.")
+
+
 JOBS: dict[str, JobFn] = {
     "purge-prospects": _purge_prospects,
     "deliver-outbox": _deliver_outbox,
@@ -78,6 +104,7 @@ def run_job(session_factory: Callable[[], Session], job: str, *, dry_run: bool =
         run_id = run.id
     with session_factory() as db:
         try:
+            _refuse_laptop_settings()
             counts = fn(db, dry_run)
             if dry_run:
                 db.rollback()

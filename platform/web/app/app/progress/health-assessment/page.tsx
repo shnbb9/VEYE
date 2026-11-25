@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useAssessmentStart } from "@/components/member/use-assessment-start";
 import { useEffect, useRef, useState } from "react";
 import {
   calculateHealthAssessment,
@@ -36,6 +37,7 @@ export default function HealthAssessmentPage() {
   const [answers, setAnswers] = useState<Record<string, Tier>>({});
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  useAssessmentStart("health_assessment", mode === "form" && Object.keys(answers).length > 0);
   const [info, setInfo] = useState<{ key: string; x: number; y: number } | null>(null);
   const infoTrigger = useRef<HTMLButtonElement | null>(null);
 

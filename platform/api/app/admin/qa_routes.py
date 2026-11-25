@@ -29,6 +29,7 @@ from app.db.session import get_db
 from app.notifications.models import Notification, NotificationOutbox, NotificationPreference
 from app.care.models import CareContentItem
 from app.content.models import ContentEntry
+from app.members.invitations import MemberInvitation
 from app.members.service import MemberProfileService
 from app.prospects.models import ProspectAssessment, ProspectEvent, ProspectToken
 from app.requests.models import MemberRequest
@@ -79,7 +80,7 @@ def cleanup_synthetic_members(payload: CleanupIn, principal: CurrentPrincipal = 
             continue
         if not E2E_LOCAL_PART.match(local) or local.split(".", 1)[0] not in prefixes:
             continue
-        if user.admin_access and user.member_id is None and not user.is_synthetic:
+        if (user.admin_access or user.invited_at is not None) and user.member_id is None and not user.is_synthetic:
             # A console account the suite invited: stamped address, never a
             # seeded one (those are in PROTECTED above). Remove it too, or the
             # Administrators page fills up with every run's test invitations.
@@ -101,6 +102,11 @@ def cleanup_synthetic_members(payload: CleanupIn, principal: CurrentPrincipal = 
             continue
         service.delete_member_account(user)
         removed.append(email)
+    # Member invitations the suite sent, accepted or not.
+    for invitation in db.query(MemberInvitation).filter(MemberInvitation.email.like(f"%{SYNTHETIC_DOMAIN}")).all():
+        local = invitation.email[: -len(SYNTHETIC_DOMAIN)]
+        if E2E_LOCAL_PART.match(local) and local.split(".", 1)[0] in prefixes and invitation.email not in PROTECTED:
+            db.delete(invitation)
     # Requests those members sent, and public Help questions left with a stamped
     # synthetic address, go too — otherwise the inbox fills with test traffic.
     requests_removed = 0

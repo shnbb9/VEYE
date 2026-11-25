@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # An administrator invitation is a single-use link; a working week is long
     # enough for someone to pick it up and short enough to expire on its own.
     admin_invitation_hours: int = 72
+    # How many proxies of ours sit in front of this API and append to
+    # X-Forwarded-For (Cloud Run or the reference Nginx: 1). 0 = none: the
+    # header is ignored, because then only a caller could have written it.
+    trusted_proxy_hops: int = 0
+    member_invitation_hours: int = 168  # a week: this one is an offer, not a key
     # Confirming a new email address: the link goes to the NEW address.
     email_change_hours: int = 24
     # Brute-force protection for sign-in. Counted over one rolling window: per

@@ -70,11 +70,12 @@ class HealthPermissionService:
         if not (row and row.shares_health_data):
             return False
         # A member who asked to be deleted shares nothing from that moment,
-        # even before the purge has removed the permission row.
+        # even before the purge has removed the permission row; nor does an
+        # archived one, who cannot sign in to withdraw.
         from app.members.models import Member
 
         member = self.db.get(Member, member_id)
-        return member is not None and member.erasure_requested_at is None
+        return member is not None and member.erasure_requested_at is None and member.archived_at is None
 
     def states_for(self, member_ids: list[UUID]) -> dict[UUID, str]:
         """Bulk read for list screens, so a page of members costs one query."""

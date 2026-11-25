@@ -97,6 +97,51 @@ def test_policy_allow_prohibit_escalate_and_off_topic():
     assert PolicyEngine(policy).evaluate("What should I eat for lunch today?").outcome == "prohibit"
 
 
+@pytest.mark.parametrize("question", [
+    "I feel suicidal", "I have been thinking about suicide", "I want to die", "I have thought about killing myself", "I might overdose",
+    "I can\u2019t go on", "I feel HOPELESS", "\uff53uicidal thoughts again",
+])
+def test_distress_is_handed_to_a_person_however_it_is_spelled(question):
+    """Every stem in the list is matched as the words people use. Whole-word
+    matching answered "I feel suicidal" as an off-topic question."""
+    decision = PolicyEngine(default_policy()).evaluate(question)
+    assert (decision.outcome, decision.category) == ("escalate", "wellbeing_concern"), question
+
+
+@pytest.mark.parametrize("question", [
+    "I was diagnosed with diabetes, what food is best?", "Can you diagnose my rash?", "What do my symptoms mean for my blood markers?",
+    "My pills make me tired, what food helps?", "Should my medications change my plan?", "I am pregnant, what should I eat?",
+    "Do statins change my Health Number?", "My prescriptions ran out",
+])
+def test_medical_questions_are_handed_to_a_person_in_every_form(question):
+    decision = PolicyEngine(default_policy()).evaluate(question)
+    assert (decision.outcome, decision.category) == ("escalate", "medical"), question
+
+
+def test_a_unit_stuck_to_its_number_is_still_an_amount():
+    assert PolicyEngine(default_policy()).evaluate("Is 500mg in my plan ok?").category == "supplement_amounts"
+    assert PolicyEngine(default_policy()).evaluate("5000iu with my meal?").category == "supplement_amounts"
+
+
+@pytest.mark.parametrize("question,outcome", [
+    ("I was stating my goals for the plan", "allow"), ("My pillow and my sleep", "allow"), ("Which meals suit me?", "allow"),
+    ("I took a plane", "off_topic"), ("What do you think about the new phone that came out?", "off_topic"),
+    ("What is the Health Number?", "allow"), ("How do I reset my password?", "allow"),
+])
+def test_the_wider_match_does_not_swallow_ordinary_words(question, outcome):
+    assert PolicyEngine(default_policy()).evaluate(question).outcome == outcome, question
+
+
+def test_the_crisis_floor_stands_whatever_the_editable_policy_says():
+    policy = default_policy()
+    policy["prohibited"] = []
+    policy["topics"] = [{"key": "everything", "label": "Everything", "allowed": True, "keywords": ["i"], "retrieval_scopes": [], "member_data_scopes": []}]
+    engine = PolicyEngine(policy)
+    assert engine.evaluate("I want to end my life").outcome == "escalate"
+    assert engine.evaluate("I feel suicidal").outcome == "escalate"
+    assert engine.evaluate("I like this").outcome == "allow"
+
+
 # ---- member context + privacy -----------------------------------------------------------------------------
 def test_member_context_is_minimum_necessary_and_identifier_free(aditya):
     with SessionLocal() as db:
@@ -221,6 +266,8 @@ def test_prohibited_and_off_topic_questions_never_reach_the_model(aditya):
     assert "needs your coach to confirm" in prohibited["reply"] and prohibited["sources"] == [] and prohibited["provider"] is None
     off = aditya.post("/api/v1/companion/messages", json={"message": "What do you think about the new phone that came out?"}).json()
     assert off["outcome"] == "off_topic" and off["reply"].startswith("That is outside what I can help with")
+    distress = aditya.post("/api/v1/companion/messages", json={"message": "I feel suicidal"}).json()
+    assert distress["outcome"] == "escalated" and distress["policy_category"] == "wellbeing_concern" and distress["provider"] is None
     assert len(mock.requests) == before
 
 
@@ -331,6 +378,17 @@ def test_output_safety_blocks_amounts_and_redacts_identifiers():
     assert safety.check("Take 3.5g of EPA/DHA daily.").text == "SAFE"
     assert safety.check("30g of protein has the same effect as new GLP1 drugs.").result == "pass"
     assert safety.check("").text == "FALLBACK"
+    for text in ("You have diabetes and should change your meals.", "You probably have type 2 diabetes.", "You may be prediabetic.",
+                 "You\u2019re diabetic.", "Stop taking your metformin.", "You could reduce your blood pressure medication.",
+                 "Skip your pills today and talk to your doctor later.", "Double your insulin."):
+        blocked = safety.check(text)
+        assert (blocked.result, blocked.text) == ("blocked_medical", "SAFE"), text
+    for text in ("Do not stop your medication without talking to your doctor.", "Ask your doctor before you change your medication.",
+                 "You show signs of insulin resistance, which will lead to chronic disease or a worsening of established chronic disease.",
+                 "Veye can help you reduce your insulin resistance.", "Your Health Number runs from 1 to 10; a lower number is better.",
+                 "You have a Health Number of 2.5.", "You have improved since August.", "Veye programs help members manage disease.",
+                 "You are in moderately good health."):
+        assert safety.check(text).result == "pass", text
     redacted = safety.check("Write to x@demo.veye.test for help.")
     assert redacted.result == "redacted_identifier" and "demo.veye.test" not in redacted.text
 

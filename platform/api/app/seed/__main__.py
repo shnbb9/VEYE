@@ -5,6 +5,7 @@ run against a production environment."""
 import json
 
 from app.companion.settings import get_or_create_settings
+from app.db import registry  # noqa: F401 — every model, whatever the seed happens to import
 from app.db.session import SessionLocal
 from app.guided_flows.catalog import ensure_builtin_flows
 from app.seed.care import seed_care

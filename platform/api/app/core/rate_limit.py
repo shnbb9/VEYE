@@ -80,6 +80,10 @@ LIMITS = {
     "resend_verification": Limit("resend_verification", per_subject=5, window_minutes=60),
     # Writes from anyone at all.
     "public_request": Limit("public_request", per_subject=10, window_minutes=60),
+    # Each member invitation emails an address an administrator typed.
+    "member_invitation": Limit("member_invitation", per_subject=60, window_minutes=60),
+    # Presenting an invitation token: 32 random bytes, so this is about load.
+    "member_invitation_token": Limit("member_invitation_token", per_subject=60, window_minutes=60),
     # Uploads cost storage and CPU.
     "photo_upload": Limit("photo_upload", per_subject=20, window_minutes=60),
     # Food Diary photos: one per meal is ordinary, a few a day; a link makes
@@ -107,10 +111,20 @@ LIMITS = {
 
 
 def client_address(request: Request) -> str:
-    """The caller's address, trusting the proxy header only for its first hop."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
+    """The caller's address, as far as it can be believed.
+
+    Every proxy APPENDS the address it received the request from, so only the
+    last entries of X-Forwarded-For — one per proxy we run — were written by
+    something we trust. Everything before them is whatever the caller sent:
+    reading the first entry let anyone reset their own limit by inventing one.
+    With no proxy configured the header is not read at all."""
+    from app.core.config import settings
+
+    hops = settings.trusted_proxy_hops
+    if hops > 0:
+        entries = [entry.strip() for entry in request.headers.get("x-forwarded-for", "").split(",") if entry.strip()]
+        if len(entries) >= hops:
+            return entries[-hops][:64]
     return (request.client.host if request.client else "")[:64]
 
 
