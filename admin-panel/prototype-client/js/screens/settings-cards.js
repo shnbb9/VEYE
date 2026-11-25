@@ -261,10 +261,10 @@ const STATUS = 'Engineering draft wording, pending owner and counsel approval. W
 const BACKFILL = 'Automatic mode asks members whose address is verified AFTER it is switched on. It never emails existing members in bulk.';
 const LOCKED = {
   categories: ['Your Health Number and its history', 'Body composition results', 'Blood marker results', 'Your Health Assessment and Simple Quiz answers and results', 'Mood entries and their notes'],
-  companion_use: 'Veye Companion (Sprout) may use summaries of these records and of your food diary to answer you about your own progress. It never receives your notes or meal descriptions word for word.',
+  companion_use: 'Sprout is not part of this choice. Whether Sprout may use your health information is a separate setting, and it starts switched off.',
   expiry_rule: 'Until you withdraw it.',
-  withdrawal: 'You can withdraw at any time in Settings, and it stops at once: from that moment the team and Sprout no longer see your records. Withdrawing cannot undo what was already seen while sharing was on.',
-  not_covered: 'Your name, email address, the messages you send to Veye, and your food diary with its photos are not covered by this choice and stay visible to the team so they can help you.',
+  withdrawal: 'You can withdraw at any time in Settings, and it stops at once: from that moment the team no longer sees your records. Withdrawing cannot undo what was already seen while sharing was on.',
+  not_covered: 'Your name, email address, the messages you send to Veye, what you write to Sprout, and your food diary with its photos are not covered by this choice and stay visible to the team so they can help you.',
 };
 const SHARING_LINK_NOTE = 'This button opens the Veye app. Opening it does not share anything: you decide there, after signing in.';
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -490,7 +490,7 @@ function termsSection(host) {
     </div>
     <div id="termsDetailsHost"></div>
     <div class="notice notice--quiet">${icon('lock', { size: 18 })}<div>
-      <strong>Fixed — always shown, not editable here:</strong> what is shared (${esc(LOCKED.categories.join('; '))}), ${esc(LOCKED.companion_use)}
+      <strong>Fixed — always shown, not editable here:</strong> what is shared (${esc(LOCKED.categories.join('; '))}). ${esc(LOCKED.companion_use)}
       For how long: ${esc(LOCKED.expiry_rule)} ${esc(LOCKED.withdrawal)} Not covered: ${esc(LOCKED.not_covered)}
     </div></div>
     <div class="row gap-2 wrap">

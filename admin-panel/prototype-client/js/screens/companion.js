@@ -33,7 +33,7 @@ const COMPANION_NAV = [
   { key: 'settings', label: 'Settings', route: '/companion/settings' },
 ];
 const MODES = { conversations: 'conversations', 'knowledge-sources': 'knowledge', feedback: 'feedback', settings: 'settings' };
-const DEFAULT_DESC = "Sprout is the companion members talk to inside Veye. It answers from approved Veye knowledge and short summaries of the member's own results.";
+const DEFAULT_DESC = "Sprout is the companion members talk to inside Veye. It answers from approved Veye knowledge and, if the member lets it, short summaries of their own results.";
 const ADVANCED_NAV = [
   { key: 'ai-monitoring', label: 'AI Monitoring' }, { key: 'retrieval-diagnostics', label: 'Retrieval Diagnostics' },
   { key: 'safety-analytics', label: 'Safety Analytics' }, { key: 'provider-status', label: 'Provider Status' }, { key: 'audit', label: 'Audit' },
@@ -62,18 +62,20 @@ function render(outlet, route) {
 }
 
 /* ========================================================= CONVERSATIONS == */
-const FILTERS = [['needs_review', 'Needs review'], ['reviewed', 'Reviewed'], ['all', 'All']];
+const FILTERS = [['needs_review', 'Needs review'], ['unresolved', 'Not resolved'], ['reviewed', 'Reviewed'], ['all', 'All']];
+// What the console's API sends in place of it (admin/companion_routes.py).
+const WITHHELD_REPLY = 'Hidden. Sprout wrote this from health information this member does not share with the team.';
 let conv = { filter: 'needs_review', q: '', selected: null };
 
 function conversationRows() {
   const st = S.get();
   const q = conv.q.trim().toLowerCase();
   return st.conversations
-    .filter((c) => conv.filter === 'all' || (conv.filter === 'reviewed' ? !!c.reviewed_at : c.flagged && !c.reviewed_at))
+    .filter((c) => conv.filter === 'all' || (conv.filter === 'reviewed' ? !!c.reviewed_at : conv.filter === 'unresolved' ? c.flagged && !!c.reviewed_at && !c.resolved_at : c.flagged && !c.reviewed_at))
     .filter((c) => {
       if (!q) return true;
       const m = S.member(c.member_id);
-      return (m && (m.name + ' ' + m.email).toLowerCase().includes(q)) || c.messages.some((x) => x.content.toLowerCase().includes(q));
+      return (m && (m.name + ' ' + m.email).toLowerCase().includes(q)) || c.messages.some((x) => !(x.personal && !S.shares(m)) && x.content.toLowerCase().includes(q));
     })
     .sort((a, b) => (a.last_message_at < b.last_message_at ? 1 : -1));
 }
@@ -161,7 +163,7 @@ function detail(host, outlet, route) {
     <div class="convo convo--wide">
       ${c.messages.map((x) => `<div class="msg msg--${x.role === 'member' ? 'member' : 'companion'}">
         <div class="msg__meta">${x.role === 'member' ? esc(name) : 'Sprout'}${x.outcome && x.outcome !== 'answered' ? ' · ' + H.chip(x.outcome) : ''}${x.policy_decision && x.role === 'member' ? ` · policy: ${esc(x.policy_decision.outcome)}${x.policy_decision.category ? ` (${esc(x.policy_decision.category)})` : ''}` : ''}</div>
-        <div class="msg__bubble">${esc(x.content)}</div>
+        ${x.personal && !S.shares(m) ? `<div class="msg__bubble msg__bubble--withheld" data-testid="reply-withheld">${icon('lock', { size: 14 })}${esc(WITHHELD_REPLY)}</div>` : `<div class="msg__bubble">${esc(x.content)}</div>`}
         ${x.role === 'sprout' ? `<div class="msg__sources">${x.sources.length ? `Sources · ${x.sources.length}: ${x.sources.map((s) => esc(s.title) + ' v' + s.source_version).join(', ')} · ` : ''}${x.provider ? `${esc(x.provider)}${x.model ? ' · ' + esc(x.model) : ''} · ${x.latency_ms || 0} ms · safety ${esc(x.safety_result || '—')}` : 'no model call'}${x.feedback ? ` · feedback: ${esc(x.feedback.rating.replace('_', ' '))}${x.feedback.reason ? ` (${esc(x.feedback.reason)})` : ''}` : ''}</div>` : ''}
       </div>`).join('')}
     </div>
@@ -526,7 +528,7 @@ function settings(outlet, route) {
               <input type="checkbox" data-scope="${scope}" ${draft.policy.member_data_scopes_enabled.includes(scope) ? 'checked' : ''}>
               <span class="switch__track"></span><span class="check__text">${esc(scope.replace(/_/g, ' '))}</span>
             </label>`).join('')}
-            <p class="t-support">Mood and food-pattern summaries are built from the member’s own entries as counts and trends — never a note or a meal description. A member who has not shared their health records gets a Sprout that answers without them.</p>
+            <p class="t-support">Mood and food-pattern summaries are built from the member’s own entries as counts and trends — never a note or a meal description. Sprout gets none of this unless the member has turned on Sprout personalization, which is their own choice and separate from sharing with the team.</p>
           </div>
         </div>
 

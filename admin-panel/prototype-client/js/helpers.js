@@ -63,7 +63,7 @@ function subnav(items, activeKey) {
    list is drawn in the draft tone — "Published" included. */
 const CHIP_TONE = {
   Active: 'live', Inactive: 'draft', Draft: 'draft', Archived: 'archived', ingested: 'live', failed: 'error', pending: 'draft',
-  answered: 'live', prohibited: 'attention', escalated: 'attention', off_topic: 'draft', unavailable: 'error',
+  answered: 'live', prohibited: 'attention', escalated: 'attention', off_topic: 'draft', unavailable: 'error', support: 'info', safety: 'attention',
   allow: 'live', prohibit: 'attention', escalate: 'error', helpful: 'live', not_helpful: 'attention', pass: 'live',
   enabled: 'live', disabled: 'archived', sent: 'live', skipped: 'draft',
 };

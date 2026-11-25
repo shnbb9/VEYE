@@ -227,8 +227,8 @@ const PASSAGES = {
   ],
   companion: [
     ['What Sprout can do', 'Sprout can explain how the Veye assessments work, help you think through meals and food choices from the Veye food lists, look at how your week is going from your own diary and check-ins, and point you to the right part of your dashboard.'],
-    ['What Sprout will not do', 'Sprout does not diagnose, treat or prevent any condition. Questions about symptoms, medicines, or how much of a supplement to take are always handed to a person from the Veye team.'],
-    ['Your data', 'Sprout only sees short summaries of your saved Veye results, never your whole record, and it never sees your name, email address or other contact details.'],
+    ['What Sprout will not do', 'Sprout does not diagnose, treat or prevent any condition. Questions about symptoms, medicines, or how much of a supplement to take are always handed to a person from the Veye team. Sprout is a program, not a clinician or a crisis service, and nobody watches the conversation around the clock.'],
+    ['Your data', 'Sprout uses your health information only if you have turned on Personalize Sprout using my health information, in Settings under Your privacy choices. It is off until you turn it on, it is separate from sharing with the Veye team, and you can turn it off at any time.'],
     ['Feedback', 'Every reply has Helpful and Feedback controls. Use them: the Veye team reads the feedback and reviews conversations that were handed to a person.'],
   ],
 };
@@ -513,7 +513,8 @@ function buildSeed(NOW) {
   const sprout = (d, h, m, content, o = {}) => ({ id: uuid('msg:' + (++msgSeq)), role: 'sprout', content, created_at: ago(d, h, m),
     outcome: o.outcome || 'answered', policy_decision: null, sources: o.sources || [],
     provider: o.model === false ? null : 'mock', model: o.model === false ? null : 'veye-mock-1',
-    latency_ms: o.model === false ? null : (o.latency || 6), safety_result: o.model === false ? 'not_generated' : 'pass', feedback: o.feedback || null });
+    latency_ms: o.model === false ? null : (o.latency || 6), safety_result: o.safety || (o.model === false ? 'not_generated' : 'pass'), feedback: o.feedback || null,
+    personal: !!o.personal });   // written from the member's own records: hidden while they do not share with the team
   const conversation = (key, memberKey, o) => {
     const messages = o.messages;
     return { id: uuid('conversation:' + key), member_id: mid(memberKey), started_at: messages[0].created_at,
@@ -566,6 +567,16 @@ function buildSeed(NOW) {
         sprout(2, 9, 30, COMPANION_SETTINGS.fallback, { outcome: 'off_topic', model: false, feedback: { rating: 'not_helpful', reason: 'Did not answer my question', comment: 'Fair enough, just curious.' } }),
         say(2, 9, 27, 'How do I retake the Health Number?', { policy: ['allow', 'assessments'] }),
         sprout(2, 9, 27, 'You can re-take the Health Number assessment whenever you like from My Progress. Every result is kept, so your history shows how the number has moved.', { sources: [SRC.hn], latency: 6 }),
+      ],
+    }),
+    // Sprout only: the member lets Sprout use their records and does not share with the team.
+    conversation('peter-1', 'peter-novak', {
+      messages: [
+        say(4, 3, 20, 'How is my progress this month?', { policy: ['allow', 'progress'] }),
+        sprout(4, 3, 20, 'Your Health Number went from 3.5 to 3.0 since your last result, and lower is better.', { sources: [SRC.hn], latency: 7, personal: true }),
+        say(4, 3, 16, "I've been feeling really low this week", { policy: ['support', 'wellbeing_concern'] }),
+        sprout(4, 3, 16, "I'm sorry it feels heavy right now. You don't have to fix it all at once. A few slow breaths, a short walk, or telling someone you trust how today has been can help. You can also note how you feel in your Mood Tracker. If it keeps going, a doctor or a counselor is a good person to talk to.",
+          { outcome: 'support', model: false, safety: 'safety-2026-11-25-draft4' }),
       ],
     }),
     conversation('owen-1', 'owen-wright', {

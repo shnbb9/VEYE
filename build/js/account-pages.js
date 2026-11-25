@@ -82,9 +82,11 @@
         '<p class="auth__links"><button type="button" class="auth__link-button" data-erase>Delete my saved result</button></p>');
       page.querySelectorAll('[data-handoff]').forEach(function (a) { a.addEventListener('click', handOff); });
       page.querySelector('[data-erase]').addEventListener('click', function () {
-        if (!window.confirm(SR.TEXT.eraseConfirm)) return;
-        SR.erase();
-        showErased(SR.TEXT.erased);
+        VeyeConfirm.ask({ title: 'Delete your saved result?', text: 'Your saved result and the email address you gave are deleted. This cannot be undone.', confirm: 'Delete', cancel: 'Keep it', danger: true }).then(function (yes) {
+          if (!yes) return;
+          SR.erase();
+          showErased(SR.TEXT.erased);
+        });
       });
     }
 

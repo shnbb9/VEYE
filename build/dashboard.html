@@ -6176,7 +6176,7 @@
      details, Sharing, Your data, the deletion dialog, the consent screen and
      Add it to your account): rules copied unchanged from
      platform/web/public/member-css/member.css, after this <style> as there. -->
-<link rel="stylesheet" href="styles/member-app.css?v=1">
+<link rel="stylesheet" href="styles/member-app.css?v=4">
 <link rel="stylesheet" href="styles/tracker-cards.css?v=1">
 </head>
 <body>
@@ -7655,15 +7655,21 @@
             <p class="settings-help">Choose how often Sprout can surface a helpful prompt. This prototype stores your preference locally.</p>
             <button class="settings-save settings-save--quiet" id="settingsCompanionSave" type="button">Save preference</button>
           </section>
-          <!-- Health data sharing — owner decision, 14 Nov 2026 (the
-               application's card, app/app/settings/page.tsx). Everything after
-               the heading is drawn by renderSharingCard() from this browser's
-               demo state (veye_health_sharing); deciding happens on the
-               consent screen (#view-sharing-request), withdrawing here. -->
-          <section class="settings-card fade-in d4" id="privacy">
+          <!-- Two separate choices — owner decision, 25 Nov 2026 (the
+               application's card, components/member/privacy-choices.tsx).
+               Neither ever sets the other. Drawn by renderSharingCard() and
+               renderSproutChoice() from this browser's demo state; deciding
+               about the team happens on the consent screen
+               (#view-sharing-request), withdrawing here. -->
+          <section class="settings-card settings-card--choices fade-in d4" id="privacy">
             <div class="settings-card__head">
-              <div><span class="settings-kicker">Your health records</span><h2>Sharing with the Veye team</h2></div>
+              <div><span class="settings-kicker">Your health records</span><h2>Your privacy choices</h2></div>
               <span class="settings-card__mark">04</span>
+            </div>
+            <p class="settings-help">Two separate choices. Saying yes to one never says yes to the other.</p>
+            <div class="choice-pair">
+              <div class="choice" id="choiceTeamBox" role="group" aria-labelledby="choiceTeam"></div>
+              <div class="choice" id="choiceSproutBox" role="group" aria-labelledby="choiceSprout"></div>
             </div>
           </section>
           <section class="settings-card fade-in d4">
@@ -7693,8 +7699,9 @@
            (app/app/sharing-request/page.tsx). Everything the member agrees to
            is on the page before either button; the two choices weigh the same
            and nothing is pre-selected. The terms are the application's built-in
-           version 1 (platform/api/app/health_permission/policy.py). Reached
-           from Settings → Sharing with the Veye team. -->
+           ones (platform/api/app/health_permission/policy.py, revision 3: Sprout
+           is no longer part of them). Reached from Settings → Your privacy
+           choices. -->
       <div class="view view-sharing-request" id="view-sharing-request">
         <header class="settings-hero fade-in">
           <div>
@@ -7706,7 +7713,7 @@
         <section class="settings-card consent fade-in d1" id="consentCard" aria-labelledby="consentWho">
           <h2 id="consentWho" class="consent__heading">Who is asking</h2>
           <p class="settings-help" id="consentWhoText">The Veye team &mdash; the people who run your Veye account.</p>
-          <div class="consent__rich"><p>Sharing lets the Veye team open your saved results when they are helping you, and lets Veye Companion use them to answer you about your own progress. Until you share them, nobody at Veye can see them.</p></div>
+          <div class="consent__rich"><p>Sharing lets the Veye team open your saved results when they are helping you. Until you share them, nobody at Veye can see them.</p></div>
           <h2 class="consent__heading">What would be shared</h2>
           <ul class="consent__list">
             <li>Your Health Number and its history</li>
@@ -7715,15 +7722,15 @@
             <li>Your Health Assessment and Simple Quiz answers and results</li>
             <li>Mood entries and their notes</li>
           </ul>
-          <p class="settings-help">Veye Companion (Sprout) may use summaries of these records and of your food diary to answer you about your own progress. It never receives your notes or meal descriptions word for word.</p>
+          <p class="settings-help">Sprout is not part of this choice. Whether Sprout may use your health information is a separate setting, and it starts switched off.</p>
           <h2 class="consent__heading">Who receives it, and why</h2>
           <p class="settings-help"><b>The Veye team &mdash; the people who run your Veye account.</b> To help you with your Veye program and to answer your questions about your own progress.</p>
           <h2 class="consent__heading">For how long</h2>
-          <p class="settings-help">Until you withdraw it. You can withdraw at any time in Settings, and it stops at once: from that moment the team and Sprout no longer see your records. Withdrawing cannot undo what was already seen while sharing was on.</p>
+          <p class="settings-help">Until you withdraw it. You can withdraw at any time in Settings, and it stops at once: from that moment the team no longer sees your records. Withdrawing cannot undo what was already seen while sharing was on.</p>
           <h2 class="consent__heading">What is not covered</h2>
-          <p class="settings-help">Your name, email address, the messages you send to Veye, and your food diary with its photos are not covered by this choice and stay visible to the team so they can help you.</p>
+          <p class="settings-help">Your name, email address, the messages you send to Veye, what you write to Sprout, and your food diary with its photos are not covered by this choice and stay visible to the team so they can help you.</p>
           <h2 class="consent__heading">If you don&rsquo;t allow it</h2>
-          <p class="settings-help">If you don't allow sharing, nobody at Veye can open your saved results, and Sprout answers without them.</p>
+          <p class="settings-help">If you don't allow sharing, nobody at Veye can open your saved results. Your Sprout choice stays as it is.</p>
           <details class="consent__details">
             <summary>Read the full terms</summary>
             <div class="consent__rich"><p>The team sees your records only inside the Veye console, only while sharing is on, and every time they open them it is recorded with who looked and when.</p><p>Veye does not sell your records and does not use them for advertising.</p></div>
@@ -7888,6 +7895,7 @@
             <label class="fdx-label" for="fdxNotes">Any other notes</label>
             <textarea class="fdx-input fdx-textarea" id="fdxNotes" rows="2" placeholder="Anything worth remembering about this meal"></textarea>
 
+            <p class="fdx-macro-note fdx-target" id="fdxTarget" hidden></p>
             <button class="btn-primary fdx-add" id="fdxAdd" type="button">Add Entry</button>
             <p class="fdx-err" id="fdxErr" role="alert" hidden></p>
           </section>
@@ -7925,8 +7933,19 @@
             </div>
 
             <div class="fdx-history" id="fdxHistory" hidden>
-              <h3>History</h3>
-              <div id="fdxHistoryDays"></div>
+              <div class="fdx-history-head">
+                <h3>History</h3>
+                <div class="fdx-views" role="group" aria-label="Show history as">
+                  <button class="fdx-view" type="button" id="fdxViewList" aria-label="List view" title="List view" aria-pressed="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6.5h12M8 12h12M8 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01"/></svg>
+                  </button>
+                  <button class="fdx-view" type="button" id="fdxViewCalendar" aria-label="Calendar view" title="Calendar view" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 9.8h17M8 3v4M16 3v4M8 13.6h.01M12 13.6h.01M16 13.6h.01M8 16.9h.01M12 16.9h.01"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="fdxCalendar" hidden></div>
+              <div id="fdxHistoryDays" class="fdx-history-days"></div>
               <div id="fdxHistoryLegacy" hidden>
                 <h4>Earlier diary entries</h4>
                 <p class="fdx-macro-note">Saved in the previous table format and kept exactly as written.</p>
@@ -8166,6 +8185,9 @@
 <!-- A visitor's saved result (owner decision, 14 Nov 2026), for Add it to your account. -->
 <script src="js/saved-result.js?v=1"></script>
 <script src="js/tracker-cards.js?v=1"></script>
+<script src="js/confirm-dialog.js?v=1"></script>
+<script src="js/diary-calendar.js?v=1"></script>
+<script src="js/safety-words.js?v=1"></script>
 <script>
   // The dashboard scrolls inside .main. Browsers can restore that nested scroll
   // position when a file:// prototype is reopened, clipping the welcome title.
@@ -8707,7 +8729,7 @@
     if (t) t.remove();
   }
 
-  function addBotMessage(htmlText) {
+  function addBotMessage(htmlText, whole) {
     removeTypingIndicator();
     const thread = document.getElementById('chatThread');
     const row = document.createElement('div');
@@ -8722,6 +8744,13 @@
     thread.appendChild(row);
     thread.scrollTop = thread.scrollHeight;
 
+    // Words somebody may need now are not typed out a letter at a time.
+    if (whole) {
+      row.querySelector('.msg-typewriter').innerHTML = htmlText;
+      row.dataset.copyText = row.querySelector('.msg-bubble').innerText;
+      thread.scrollTop = thread.scrollHeight;
+      return;
+    }
     setMascotState('talking');
     typewriter(row.querySelector('.msg-typewriter'), htmlText, () => {
       row.dataset.copyText = row.querySelector('.msg-bubble').innerText;
@@ -8824,6 +8853,10 @@
     // hide quick replies after first user message
     const qr = document.getElementById('quickReplies');
     if (qr && !qr.classList.contains('hidden')) qr.classList.add('hidden');
+
+    // Is this person all right? Asked before anything else, a guide included.
+    const safety = VeyeSafetyWords.reply(trimmed);
+    if (safety) { addUserMessage(trimmed); addBotMessage(escapeHtml(safety), true); return; }
 
     // A guided step is waiting: a question ("…?") is answered and the step is
     // kept; anything else is the member's reply to the step.
@@ -9622,23 +9655,13 @@
   // ====================== DASHBOARD HYDRATION ======================
   const PREFERS_REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  /** Count a numeric readout up to its value once. The exact final value is
-   *  always written; with reduced motion it is written immediately. */
-  function countUpTo(el, target) {
-    const final = String(target);
-    if (PREFERS_REDUCED.matches || el.dataset.counted === final) { el.textContent = final; return; }
-    el.dataset.counted = final;
-    const t = parseFloat(target);
-    if (isNaN(t)) { el.textContent = final; return; }
-    const dur = 650, t0 = performance.now();
-    const isWhole = t === Math.round(t);
-    (function step(now) {
-      const k = Math.min(1, (now - t0) / dur);
-      const eased = 1 - Math.pow(1 - k, 3);
-      const v = t * eased;
-      el.textContent = isWhole ? String(Math.round(v)) : v.toFixed(1);
-      if (k < 1) requestAnimationFrame(step); else el.textContent = final;
-    })(t0);
+  /** A health value is never shown on its way to itself: it used to count up
+   *  from nought, and for most of a second the card said something that was
+   *  not so. It arrives whole (application: HealthValue, 25 Nov 2026). */
+  function showHealthValue(el, value) {
+    if (el.textContent === value) return;
+    el.textContent = value;
+    el.classList.remove('hn-value'); void el.offsetWidth; el.classList.add('hn-value');
   }
 
   /** Overall Progress + Mood halves of the tracker row. Both read REAL saved
@@ -9809,7 +9832,7 @@
         // Keep the published one-decimal format identical on the onboarding
         // result, Dashboard, Companion copy, and My Progress (for example 1.0).
         const displayNumber = Number(hn.number).toFixed(1);
-        if (numEl) countUpTo(numEl, displayNumber);
+        if (numEl) showHealthValue(numEl, displayNumber);
         // The onboarding result sentence, verbatim (client: "the same
         // information that shows when you start the process").
         if (scaleEl) {
@@ -12414,10 +12437,13 @@
       const store = loadFdx();
       const day = store.days[fdxDay] || { meals: [] };
       el('fdxDate').value = fdxDay;
+      // Where the meal being written will go, when that is not simply today.
+      el('fdxTarget').hidden = fdxEditIndex === null && fdxDay === todayKeyFdx();
+      el('fdxTarget').textContent = (fdxEditIndex !== null ? 'From ' : 'This will be added to ') + VeyeDiaryCalendar.shortDay(fdxDay) + '.';
       const meals = day.meals || [];
       el('fdxEmpty').hidden = meals.length > 0;
       el('fdxMeals').innerHTML = meals.map((m, i) => `
-        <article class="fdx-meal">
+        <article class="fdx-meal${fdxEditIndex === i ? ' is-editing' : ''}">
           <div class="fdx-meal-top">
             <span class="fdx-meal-time">${escapeHtml(m.time || '')}</span>
             <span class="fdx-meal-macros">P ${m.p}g &middot; C ${m.c}g &middot; F ${m.f}g &middot; ${m.k} kcal</span>
@@ -12446,14 +12472,18 @@
         saveFdx(st2);
         if (gone) fdxForgetPhoto(gone.photo);   // a meal's photo goes with it
         // The entry being edited is gone, or has moved up one.
-        if (fdxEditIndex === at) { fdxEditIndex = null; fdxDropPhoto = false; el('fdxAdd').textContent = 'Add Entry'; }
+        if (fdxEditIndex === at) fdxStopEditing();
         else if (fdxEditIndex !== null && at < fdxEditIndex) fdxEditIndex--;
         renderFdxDay(); renderFdxHistory(); renderFdxPhoto();
       }));
-      view.querySelectorAll('[data-fdx-edit]').forEach(b => b.addEventListener('click', () => {
+      view.querySelectorAll('[data-fdx-edit]').forEach(b => b.addEventListener('click', async () => {
         const st2 = loadFdx();
-        const m = st2.days[fdxDay].meals[parseInt(b.dataset.fdxEdit, 10)];
-        fdxEditIndex = parseInt(b.dataset.fdxEdit, 10);
+        const at = parseInt(b.dataset.fdxEdit, 10);
+        if (fdxEditIndex !== null && fdxEditIndex !== at && fdxEditChanged() && !(await VeyeConfirm.ask({
+          title: 'Leave without saving this meal?', text: 'What you changed in the other meal has not been saved yet.',
+          confirm: 'Leave without saving', cancel: 'Keep editing', danger: true }))) return;
+        const m = st2.days[fdxDay].meals[at];
+        fdxEditIndex = at;
         el('fdxWhat').value = m.what; el('fdxTime').value = m.time || '';
         el('fdxNotes').value = m.notes || '';
         fdxFeelingsSel = (m.feelings || []).slice();
@@ -12463,6 +12493,7 @@
         });
         // A fresh photo row: the meal's own photo shows, ready to replace or remove.
         fdxPending = null; el('fdxPhotoUrl').value = ''; fdxDropPhoto = false;
+        renderFdxDay();
         renderFdxPhoto();
         refreshMacroPreview();
         el('fdxAdd').textContent = 'Update Entry';
@@ -12561,19 +12592,43 @@
     });
 
     // --- history -----------------------------------------------------------
+    const fdxCalendar = VeyeDiaryCalendar.mount(el('fdxCalendar'), (key, byPointer) => {
+      fdxOpenDay(key).then(opened => {
+        // The day opens above the month: bring its title into view if it is not.
+        if (opened && byPointer) el('fdxRightTitle').scrollIntoView({ block: 'nearest', behavior: PREFERS_REDUCED.matches ? 'auto' : 'smooth' });
+      });
+    });
+    // List or month, for this tab. A convenience: nothing depends on it.
+    let fdxView = 'list';
+    try { if (sessionStorage.getItem('veye_diary_history') === 'calendar') fdxView = 'calendar'; } catch (e) {}
+    function fdxShowAs(next) {
+      fdxView = next;
+      try { sessionStorage.setItem('veye_diary_history', next); } catch (e) {}
+      el('fdxViewList').setAttribute('aria-pressed', String(next === 'list'));
+      el('fdxViewCalendar').setAttribute('aria-pressed', String(next === 'calendar'));
+      el('fdxCalendar').hidden = next !== 'calendar';
+      el('fdxHistoryDays').hidden = next !== 'list';
+    }
+    el('fdxViewList').addEventListener('click', () => fdxShowAs('list'));
+    el('fdxViewCalendar').addEventListener('click', () => { fdxShowAs('calendar'); renderFdxHistory(); });
+    fdxShowAs(fdxView);
+
     function renderFdxHistory() {
       const store = loadFdx();
       const keys = Object.keys(store.days).sort().reverse();
+      const rows = {};
+      keys.forEach(k => { const d = store.days[k]; rows[k] = { meals: d.meals.length, kcal: d.meals.reduce((a, m) => a + m.k, 0), saved: !!d.savedAt }; });
+      fdxCalendar.show({ selected: fdxDay, today: todayKeyFdx(), rows });
       el('fdxHistoryDays').innerHTML = keys.length
         ? keys.map(k => {
             const d = store.days[k];
             const tot = d.meals.reduce((a, m) => a + m.k, 0);
-            return `<button class="fdx-hist-row" data-fdx-day="${k}" type="button">
+            return `<button class="fdx-hist-row${k === fdxDay ? ' is-open' : ''}" data-fdx-day="${k}" type="button"${k === fdxDay ? ' aria-current="date"' : ''}>
               <b>${k}</b><span>${d.meals.length} meal${d.meals.length === 1 ? '' : 's'} &middot; ~${tot} kcal${d.savedAt ? ' &middot; saved' : ''}</span></button>`;
           }).join('')
         : '<p class="fdx-macro-note">No saved days yet.</p>';
-      view.querySelectorAll('[data-fdx-day]').forEach(b => b.addEventListener('click', () => {
-        fdxDay = b.dataset.fdxDay; renderFdxDay();
+      view.querySelectorAll('[data-fdx-day]').forEach(b => b.addEventListener('click', async () => {
+        if (!(await fdxOpenDay(b.dataset.fdxDay))) return;
         el('fdxHistory').hidden = true;
         el('fdxHistoryBtn').setAttribute('aria-expanded', 'false');
       }));
@@ -12584,6 +12639,47 @@
           '<div class="fdx-legacy-row fdx-legacy-row--head"><span>Day/Date</span><span>Comments</span><span>Protein</span><span>Carbs</span><span>Fat</span></div>' +
           legacy.map(r => '<div class="fdx-legacy-row">' + r.slice(0, 5).map(c => '<span>' + escapeHtml(c || '') + '</span>').join('') + '</div>').join('');
       }
+    }
+
+    // --- opening another day -------------------------------------------------
+    // A meal being written keeps what was typed (it has no day until it is
+    // added, and the form says which day that will be). A meal being EDITED
+    // belongs to its day: leaving it asks first, if anything was changed.
+    function fdxEditChanged() {
+      const m = fdxEditingMeal();
+      if (!m) return false;
+      const feels = m.feelings || [];
+      return el('fdxWhat').value !== m.what || el('fdxTime').value !== (m.time || '') || el('fdxNotes').value !== (m.notes || '') ||
+        fdxFeelingsSel.length !== feels.length || fdxFeelingsSel.some(f => !feels.includes(f)) ||
+        fdxPending !== null || el('fdxPhotoUrl').value.trim() !== '' || fdxDropPhoto;
+    }
+    // The words of a meal that is no longer being edited do not stay in the form.
+    function fdxStopEditing() {
+      fdxEditIndex = null;
+      el('fdxAdd').textContent = 'Add Entry';
+      el('fdxWhat').value = ''; el('fdxTime').value = ''; el('fdxNotes').value = '';
+      fdxFeelingsSel = [];
+      view.querySelectorAll('.fdx-feel').forEach(f => { f.classList.remove('on'); f.setAttribute('aria-pressed', 'false'); });
+      el('fdxMacros').hidden = true;
+      el('fdxErr').hidden = true;
+      fdxPending = null; el('fdxPhotoUrl').value = ''; fdxDropPhoto = false;
+    }
+    async function fdxOpenDay(next) {
+      if (next === fdxDay) return true;
+      if (fdxBusy) { el('fdxDate').value = fdxDay; return false; }
+      if (fdxEditIndex !== null) {
+        if (fdxEditChanged() && !(await VeyeConfirm.ask({
+          title: 'Leave without saving this meal?', text: 'What you changed has not been saved yet.',
+          confirm: 'Leave without saving', cancel: 'Keep editing', danger: true }))) {
+          el('fdxDate').value = fdxDay;
+          el('fdxWhat').focus();
+          return false;
+        }
+        fdxStopEditing();
+      }
+      fdxDay = next;
+      renderFdxDay(); renderFdxHistory(); renderFdxPhoto();
+      return true;
     }
 
     // --- controls ----------------------------------------------------------
@@ -12682,19 +12778,9 @@
       err.hidden = false;
     }
 
-    const shiftDay = delta => {
-      const d = new Date(fdxDay + 'T12:00:00');
-      d.setDate(d.getDate() + delta);
-      fdxDay = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      fdxEditIndex = null; el('fdxAdd').textContent = 'Add Entry';
-      fdxDropPhoto = false;
-      renderFdxDay(); renderFdxPhoto();
-    };
-    el('fdxPrevDay').addEventListener('click', () => shiftDay(-1));
-    el('fdxNextDay').addEventListener('click', () => shiftDay(1));
-    el('fdxDate').addEventListener('change', () => {
-      if (el('fdxDate').value) { fdxDay = el('fdxDate').value; fdxEditIndex = null; el('fdxAdd').textContent = 'Add Entry'; fdxDropPhoto = false; renderFdxDay(); renderFdxPhoto(); }
-    });
+    el('fdxPrevDay').addEventListener('click', () => fdxOpenDay(VeyeDiaryCalendar.addDays(fdxDay, -1)));
+    el('fdxNextDay').addEventListener('click', () => fdxOpenDay(VeyeDiaryCalendar.addDays(fdxDay, 1)));
+    el('fdxDate').addEventListener('change', () => { if (el('fdxDate').value) fdxOpenDay(el('fdxDate').value); else el('fdxDate').value = fdxDay; });
 
     el('fdxSaveDay').addEventListener('click', () => {
       const store = loadFdx();
@@ -12919,7 +13005,7 @@
   });
 
   // ============ 14 Nov 2026 screens (owner decisions) ============
-  // The application's Settings → Sharing with the Veye team and Your data,
+  // The application's Settings → Your privacy choices and Your data,
   // its consent screen (/app/sharing-request), deletion dialog and "Add it to
   // your account" (/app/saved-result). Demo state in this browser only;
   // nothing is sent. Every member-facing word is the application's
@@ -12933,10 +13019,11 @@
   const SHARING_LABELS = { not_requested: 'Not requested', requested: 'Awaiting your decision',
     granted: 'Shared with the Veye team', declined: 'Declined', revoked: 'Withdrawn' };
   const SHARING_EXPLANATION = 'Sharing lets the Veye team open your saved results — your Health Number, body ' +
-    'composition, blood markers, questionnaires and moods — when they are helping you, and lets ' +
-    'Veye Companion use them to answer you about your own progress. Until you share them, nobody at Veye can see ' +
-    'them and Sprout answers without them. Your name, email, the messages you send and your food diary are not ' +
-    'covered by this and stay visible to the team so they can help you. You can withdraw sharing at any time, and it stops at once.';
+    'composition, blood markers, questionnaires and moods — when they are helping you. ' +
+    'Until you share them, nobody at Veye can see them. Your name, email, the messages ' +
+    'you send, what you write to Sprout and your food diary are not covered by this and ' +
+    'stay visible to the team so they can help you. Sprout is a separate choice. You can ' +
+    'withdraw sharing at any time, and it stops at once.';
   const SHARING_RECIPIENT = 'The Veye team — the people who run your Veye account';
   const SHARING_AUTOMATIC = 'Veye (automatic)';
   let consentForRequest = false;  // opened from "Review the request" (the application's ?request=<ref>)
@@ -12968,39 +13055,94 @@
     setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ block: 'start' }), 60);
   }
 
+  const choiceHead = (id, title, on) => '<div class="choice__head"><h3 id="' + id + '">' + title + '</h3><span class="choice__state' + (on ? ' choice__state--on' : '') + '">' + (on ? 'On' : 'Off') + '</span></div>';
+  const choiceHistory = rows => rows.length ? '<details class="choice__history"><summary>What has happened (' + rows.length + ')</summary><ul class="settings-session-list">' +
+    rows.slice().reverse().map(row => '<li>' + escapeHtml(row.text) + ' &middot; ' + sharingShortDate(row.at) + '</li>').join('') + '</ul></details>' : '';
+
   function renderSharingCard() {
-    const card = document.getElementById('privacy');
+    const card = document.getElementById('choiceTeamBox');
     if (!card) return;
     const s = loadSharing();
     const asked = s.state === 'requested';
     const sharing = s.state === 'granted';
-    let html = '<p class="settings-help"><strong>' + SHARING_LABELS[s.state] + '.</strong> ' +
+    let html = choiceHead('choiceTeam', 'Share health information with the VEYE team', sharing) +
+      '<p class="settings-help"><strong>' + SHARING_LABELS[s.state] + (sharing && s.decidedAt ? ', since ' + sharingShortDate(s.decidedAt) : '') + '.</strong> ' +
         (sharing ? 'The Veye team can open your saved results while they are helping you.'
                  : 'Nobody at Veye can open your saved results.') + '</p>' +
       '<p class="settings-help">' + escapeHtml(SHARING_EXPLANATION) + '</p>';
     if (asked && s.requestedBy) {
       html += '<p class="settings-help">' + escapeHtml(s.requestedBy) + ' asked on ' + sharingShortDate(s.requestedAt) + '.</p>';
     }
-    html += '<div class="settings-profile-actions">' +
+    html += '<div class="choice__actions">' +
       (sharing ? '<button class="settings-outline" type="button" data-sharing-revoke>Stop sharing</button>'
                : '<a class="settings-save" href="#" data-sharing-review>' + (asked ? 'Review the request' : 'Review and decide') +
                  ' <span aria-hidden="true">&rarr;</span></a>') +
-      '</div>';
-    if (s.events.length) {
-      html += '<p class="settings-help" style="margin-top: 18px;"><strong>What has happened</strong></p>' +
-        '<ul class="settings-session-list">' +
-        s.events.slice().reverse().map(ev => '<li>' + escapeHtml(describeSharingEvent(ev)) + ' &middot; ' + sharingShortDate(ev.at) + '</li>').join('') +
-        '</ul>';
-    }
-    [...card.children].forEach(n => { if (!n.classList.contains('settings-card__head')) n.remove(); });
-    card.insertAdjacentHTML('beforeend', html);
+      '</div>' + choiceHistory(s.events.map(ev => ({ text: describeSharingEvent(ev), at: ev.at })));
+    card.innerHTML = html;
+    renderSproutChoice();
     card.querySelector('[data-sharing-review]')?.addEventListener('click', e => { e.preventDefault(); openSharingRequest(asked); });
     card.querySelector('[data-sharing-revoke]')?.addEventListener('click', withdrawSharing);
   }
 
+  // ---- Sprout: the other choice. Off until the member turns it on, and
+  // everything agreed to is on screen first (app/sprout_permission/terms.py).
+  const SPROUT_KEY = 'veye_sprout_personalization';
+  const SPROUT_TERMS = {
+    purpose: 'So Sprout can answer you about your own progress and write your Personal tip.', recipient: 'Sprout, inside Veye. Not the Veye team.',
+    information: ['Health Number: your latest result, its range, and whether it went up or down', 'Body composition: your latest BMI and body fat', 'Blood markers: which ones are in range',
+      'Moods: how often you logged each one, your Balance score and your streak', 'Food diary and meal plans: how often you log and plan'],
+    never: 'From your records, Sprout never gets your notes, what you ate, your photos, exact dates, your name or your contact details.',
+    separate: "This is separate from sharing with the Veye team. It does not let the team see your health information. If you don't share with the team, answers Sprout writes from it are hidden from them too.",
+    outside: 'This does not let an outside AI company process your health information. That would need a separate approval from you.',
+    until: 'Until you turn it off. You can turn this off here at any time. From your next message, Sprout answers without your health information, and your Personal tip is removed. What Sprout already told you stays in your conversation.',
+    without: 'If you leave this off, Sprout still answers about Veye, food and the app, without your health information.',
+    version: 'Version 1 (sprout-personalization-2026-11-25-v1)',
+  };
+  let sproutOpen = false;
+  function loadSprout() {
+    try { const s = JSON.parse(localStorage.getItem(SPROUT_KEY) || 'null'); if (s && Array.isArray(s.events)) return s; } catch (e) {}
+    return { state: 'off', events: [] };
+  }
+  function setSprout(on) {
+    const s = loadSprout();
+    const now = new Date().toISOString();
+    if ((s.state === 'on') === on) return;
+    s.state = on ? 'on' : 'turned_off';
+    s[on ? 'authorizedAt' : 'revokedAt'] = now;
+    s.events.push({ to: s.state, at: now });
+    try { localStorage.setItem(SPROUT_KEY, JSON.stringify(s)); } catch (e) {}
+    sproutOpen = false;
+    renderSproutChoice();
+    flashToast(on ? 'Sprout personalization is on' : 'Sprout personalization is off');
+  }
+  function renderSproutChoice() {
+    const box = document.getElementById('choiceSproutBox');
+    if (!box) return;
+    const s = loadSprout(), on = s.state === 'on', t = SPROUT_TERMS;
+    box.innerHTML = choiceHead('choiceSprout', 'Personalize Sprout using my health information', on) +
+      '<p class="settings-help"><strong>' + (on ? 'On, since ' + sharingShortDate(s.authorizedAt) + '.' : s.state === 'turned_off' ? 'Off. You turned it off on ' + sharingShortDate(s.revokedAt) + '.' : 'Off.') + '</strong> ' +
+        (on ? 'Sprout may use summaries of your health information to answer you.' : 'Sprout answers without your health information.') + '</p>' +
+      '<p class="settings-help">' + escapeHtml(t.separate) + '</p>' +
+      '<div class="choice__actions"><button class="' + (on ? 'settings-outline' : 'settings-save') + '" type="button" aria-expanded="' + sproutOpen + '" aria-controls="sproutTerms" data-sprout-review>' +
+        (on ? 'See what Sprout uses' : sproutOpen ? 'Hide' : 'Review and decide') + '</button>' + (on ? '<button class="settings-outline" type="button" data-sprout-off>Turn off</button>' : '') + '</div>' +
+      '<div class="choice__panel" id="sproutTerms"' + (sproutOpen ? '' : ' hidden') + '><h4>Why</h4><p>' + t.purpose + ' <b>' + t.recipient + '</b></p>' +
+        '<h4>' + (on ? 'What Sprout uses' : 'What Sprout would use') + '</h4><ul>' + t.information.map(item => '<li>' + item + '</li>').join('') + '</ul><p>' + t.never + '</p>' +
+        '<h4>An outside AI company</h4><p>' + t.outside + '</p><h4>For how long</h4><p>' + t.until + '</p><h4>When it is off</h4><p>' + t.without + '</p><p class="choice__meta">' + t.version + '</p>' +
+        (on ? '' : '<div class="consent__choices" role="group" aria-label="Your choice"><button class="consent__choice" type="button" data-sprout-on>Turn on personalization</button>' +
+          '<button class="consent__choice" type="button" data-sprout-keep>Keep it off</button></div>') + '</div>' +
+      choiceHistory(s.events.map(ev => ({ text: ev.to === 'on' ? 'You turned personalization on' : 'You turned personalization off', at: ev.at })));
+    const press = (selector, what) => { const el = box.querySelector(selector); if (el) el.addEventListener('click', what); };
+    const toggle = open => { sproutOpen = open; const panel = box.querySelector('#sproutTerms'), b = box.querySelector('[data-sprout-review]'); panel.hidden = !open; b.setAttribute('aria-expanded', String(open)); if (!on) b.textContent = open ? 'Hide' : 'Review and decide'; };
+    press('[data-sprout-review]', () => toggle(!sproutOpen));
+    press('[data-sprout-keep]', () => toggle(false));
+    press('[data-sprout-on]', () => setSprout(true));
+    press('[data-sprout-off]', () => setSprout(false));
+  }
+
   // Withdrawing is one confirmed click, and takes effect at once.
-  function withdrawSharing() {
-    if (!window.confirm('Stop sharing your saved results with the Veye team? It takes effect at once.')) return;
+  async function withdrawSharing() {
+    if (!(await VeyeConfirm.ask({ title: 'Stop sharing with the Veye team?', text: 'They can no longer open your saved results, from this moment.',
+      confirm: 'Stop sharing', cancel: 'Keep sharing', danger: true }))) return;
     const s = loadSharing();
     if (s.state !== 'granted') return;
     const now = new Date().toISOString();

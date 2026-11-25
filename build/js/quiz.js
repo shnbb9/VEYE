@@ -329,13 +329,15 @@
   }
 
   function eraseSaved() {
-    if (!window.confirm(SAVED.TEXT.eraseConfirm)) return;
-    SAVED.erase();
-    savedView = { saved: null, erased: SAVED.TEXT.erased };
-    var old = root.querySelectorAll('[data-saved]');
-    if (!old.length) return;
-    old[0].insertAdjacentHTML('beforebegin', savedStatusHtml());
-    Array.prototype.forEach.call(old, function (n) { n.parentNode.removeChild(n); });
+    VeyeConfirm.ask({ title: 'Delete your saved result?', text: 'Your saved result and the email address you gave are deleted. This cannot be undone.', confirm: 'Delete', cancel: 'Keep it', danger: true }).then(function (yes) {
+      if (!yes) return;
+      SAVED.erase();
+      savedView = { saved: null, erased: SAVED.TEXT.erased };
+      var old = root.querySelectorAll('[data-saved]');
+      if (!old.length) return;
+      old[0].insertAdjacentHTML('beforebegin', savedStatusHtml());
+      Array.prototype.forEach.call(old, function (n) { n.parentNode.removeChild(n); });
+    });
   }
 
   // What the result says about saving — the application's words and classes

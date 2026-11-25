@@ -432,8 +432,10 @@ group('H · Empty states', () => {
     const block = m[0];
     assert.ok(/const taken = hn\.number !== null/.test(block), 'the taken/untaken test was removed');
     assert.ok(/if \(taken\)/.test(block), 'hydration no longer branches on whether a score exists');
-    assert.ok(/countUpTo\(numEl, displayNumber\)/.test(block),
+    assert.ok(/showHealthValue\(numEl, displayNumber\)/.test(block),
       'the real Health Number is no longer written to the badge');
+    assert.ok(!/countUpTo/.test(DASH_SCRIPT),
+      'the Health Number counts up again: for most of a second it says something that is not so');
     assert.ok(/descEl\.textContent = hn\.info\.desc/.test(block),
       'the real interpretation is no longer written to the card');
     assert.ok(/numEl\.textContent = '—'/.test(block), 'the uncompleted badge state is missing');
@@ -1295,6 +1297,128 @@ group('P · Client presentation finish', () => {
       'phone or ZIP are not restored from veye_user');
     assert.ok(/user\.phone = value\('settingsPhone'\)/.test(DASH_SCRIPT) && /user\.zip = value\('settingsPostal'\)/.test(DASH_SCRIPT),
       'phone or ZIP are not saved to veye_user');
+  });
+});
+
+/* ======================================================================== Q
+   Owner decisions of 25 Nov 2026: the Food Diary's History as a month, two
+   separate privacy choices, words for somebody who may not be all right, and
+   motion that never shows a health value on its way to itself. The prototype is
+   drawn from the application; where both are in one checkout the words and the
+   styles are compared, so neither can drift from the other. */
+
+group('Q · 25 Nov — calendar, choices, safety', () => {
+  const vm = require('vm');
+  const run = (file, extra) => {
+    const window = Object.assign({ matchMedia: () => ({ matches: false }) }, extra);
+    vm.runInNewContext(read(path.join('js', file)), { window, Date, document: { createElement: () => ({}), head: { appendChild() {} } } });
+    return window;
+  };
+  const platform = rel => { const p = path.join(ROOT, 'platform', rel); return fs.existsSync(p) ? fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n') : null; };
+
+  check('a day is the member\'s own, whatever the month, the leap year or the turn of the year', () => {
+    const C = run('diary-calendar.js').VeyeDiaryCalendar;
+    const same = (got, want) => assert.strictEqual(JSON.stringify(got), JSON.stringify(want));
+    same([C.addDays('2026-12-31', 1), C.addDays('2027-01-01', -1), C.addDays('2028-02-28', 1), C.addDays('2027-02-28', 1)],
+      ['2027-01-01', '2026-12-31', '2028-02-29', '2027-03-01']);
+    same([C.addMonths('2026-01-31', 1), C.addMonths('2028-01-31', 1), C.addMonths('2026-11-30', 3), C.addMonths('2026-03-31', -1)],
+      ['2026-02-28', '2028-02-29', '2027-02-28', '2026-02-28']);
+    [['2026-02', 28], ['2028-02', 29], ['2026-11', 30], ['2026-12', 31]].forEach(([month, days]) => {
+      const weeks = C.monthWeeks(month);
+      assert.strictEqual(weeks.length, 6, 'every month has the same height');
+      assert.strictEqual(weeks.reduce((n, w) => n + w.filter(Boolean).length, 0), days, month);
+    });
+    assert.ok(!/new Date\((?:key|k|day|fdxDay)\b/.test(read(path.join('js', 'diary-calendar.js'))), 'a day was turned into an instant');
+  });
+  check('History is a list or a month, and the list stays', () => {
+    ['fdxViewList', 'fdxViewCalendar', 'fdxCalendar', 'fdxHistoryDays', 'fdxTarget'].forEach(id =>
+      assert.ok(HTML.dashboard.includes('id="' + id + '"'), '#' + id + ' is missing'));
+    assert.ok(/VeyeDiaryCalendar\.mount\(el\('fdxCalendar'\)/.test(DASH_SCRIPT), 'the month is not drawn');
+    ['diary-calendar.js', 'confirm-dialog.js', 'safety-words.js'].forEach(f =>
+      assert.ok(new RegExp('<script src="js/' + f.replace('.', '\\.') + '\\?v=\\d+"></script>').test(HTML.dashboard), f + ' is not loaded'));
+  });
+  check('another day is opened in one place, and a changed meal is asked about first', () => {
+    const open = DASH_SCRIPT.match(/async function fdxOpenDay\(next\)[\s\S]*?\n    \}\n/) || DASH_SCRIPT.match(/async function fdxOpenDay\(next\)[\s\S]*?\r?\n    \}/);
+    assert.ok(open && /fdxEditChanged\(\)/.test(open[0]) && /VeyeConfirm\.ask/.test(open[0]), 'leaving an edited meal no longer asks');
+    ['fdxPrevDay', 'fdxNextDay', 'fdxDate'].forEach(id =>
+      assert.ok(new RegExp("el\\('" + id + "'\\)\\.addEventListener\\('(?:click|change)', \\(\\) => (?:\\{ if \\(el\\('fdxDate'\\)\\.value\\) )?fdxOpenDay\\(").test(DASH_SCRIPT), id + ' goes round it'));
+    assert.strictEqual((DASH_SCRIPT.match(/\bfdxDay = /g) || []).length, 3, 'the open day is set somewhere else as well (declared, opened, reset)');
+  });
+  check('two separate choices: no line sets both, and Sprout starts off', () => {
+    ['choiceTeamBox', 'choiceSproutBox'].forEach(id => assert.ok(HTML.dashboard.includes('id="' + id + '"'), id));
+    const part = (from, to) => DASH_SCRIPT.slice(DASH_SCRIPT.indexOf(from), DASH_SCRIPT.indexOf(to, DASH_SCRIPT.indexOf(from)));
+    const sprout = part('function loadSprout()', '// Withdrawing is one confirmed click');
+    assert.ok(/return \{ state: 'off', events: \[\] \}/.test(sprout), 'Sprout personalization is not off by default');
+    assert.ok(!/saveSharing|SHARING_KEY/.test(sprout), 'the Sprout choice touches the team choice');
+    const team = part('async function withdrawSharing()', 'function openSharingRequest') + part('function decideSharing(allow)', "document.getElementById('consentBack')");
+    assert.ok(team.length > 200 && !/setSprout|SPROUT_KEY/.test(team), 'the team choice touches the Sprout choice');
+    assert.ok(/Saying yes to one never says yes to the other/.test(HTML.dashboard), 'the sentence that says so is gone');
+  });
+  check('the words are the application\'s', () => {
+    const join = text => text.replace(/"\s*\n\s*"/g, '').replace(/\\'/g, "'");
+    const terms = platform('api/app/sprout_permission/terms.py');
+    const policy = platform('api/app/health_permission/policy.py');
+    const copy = platform('api/app/companion/safety_copy.py');
+    if (!terms) return;
+    const said = HTML.dashboard;
+    const block = said.slice(said.indexOf('const SPROUT_TERMS'), said.indexOf('let sproutOpen'));
+    const mine = vm.runInNewContext('(' + block.slice(block.indexOf('{'), block.lastIndexOf('}') + 1) + ')');
+    const py = join(terms);
+    [mine.purpose, mine.recipient, mine.never, mine.separate, mine.outside, mine.without].concat(Array.from(mine.information)).forEach(t =>
+      assert.ok(py.includes(t), 'not the application\'s words: ' + t.slice(0, 70)));
+    assert.ok(mine.until === 'Until you turn it off. ' + (py.match(/WITHDRAWAL = \("([^"]+)"/) || [])[1], 'how it is turned off is not the application\'s words');
+    assert.ok(/sprout-personalization-2026-11-25-v1/.test(block) && terms.includes('sprout-personalization-2026-11-25-v1'), 'the version moved');
+    const consent = said.slice(said.indexOf('id="consentCard"'), said.indexOf('id="consentDecision"'));
+    ['Sprout is not part of this choice. Whether Sprout may use your health information is a separate setting, and it starts switched off.',
+      'from that moment the team no longer sees your records.', 'what you write to Sprout, and your food diary with its photos are not covered by this choice',
+      'Your Sprout choice stays as it is.'].forEach(t => {
+      assert.ok(join(policy).includes(t), 'policy.py moved: ' + t.slice(0, 60));
+      assert.ok(consent.includes(t), 'the consent screen does not say: ' + t.slice(0, 60));
+    });
+    assert.ok(!/and Sprout no longer see|Companion use them/.test(consent), 'the consent screen still shares with Sprout');
+    const S = run('safety-words.js').VeyeSafetyWords;
+    ["I'm going to kill myself tonight", 'I took too many pills', 'I feel suicidal', "I can't go on"].forEach(t => {
+      const words = S.reply(t).split(" I'm a program")[0];
+      assert.ok(words.length > 100 && join(copy).includes(words), 'not the application\'s words: ' + words.slice(0, 70));
+    });
+  });
+  check('a plain sentence is never answered with a snack, and a saying is not an emergency', () => {
+    const S = run('safety-words.js').VeyeSafetyWords;
+    ['I feel suicidal', 'I want to kill myself', 'i want to end my life', 'I’m going to kill myself tonight', 'I took too many pills', "I can't breathe", "I can't go on", 'better off dead'].forEach(t =>
+      assert.ok(/emergency services/.test(S.reply(t)), 'not heard: ' + t));
+    ["I'm not suicidal, what should I eat?", 'this cake is to die for', 'I died of embarrassment', 'What should I eat for lunch?', "I'm feeling a bit stressed today.", 'kill the cravings', 'I cut down on sugar'].forEach(t =>
+      assert.strictEqual(S.reply(t), '', 'alarmed by: ' + t));
+    assert.ok(/nobody reads what is typed here/.test(S.reply('I feel suicidal')), 'the prototype must not suggest that somebody is told');
+    assert.ok(!/\d{3}/.test(read(path.join('js', 'safety-words.js')).replace(/\/\*[\s\S]*?\*\//g, '')), 'a telephone number appeared');
+    const send = DASH_SCRIPT.slice(DASH_SCRIPT.indexOf('function sendChat(text)'), DASH_SCRIPT.indexOf('// wire chat input'));
+    assert.ok(send.indexOf('VeyeSafetyWords.reply') > 0 && send.indexOf('VeyeSafetyWords.reply') < send.indexOf('guidedHandlesText'), 'a guide is a way round it');
+  });
+  check('the styles are the application\'s, rule for rule', () => {
+    const member = platform('web/public/member-css/member.css');
+    if (!member) return;
+    const from = member.indexOf('/* ---- Motion (owner, 25 Nov 2026)');
+    const part = member.slice(from, member.indexOf("/* My Progress: the prototype's guide control", from)).trim();
+    assert.ok(part.length > 6000, 'the application\'s block was not found');
+    assert.ok(read(path.join('styles', 'member-app.css')).replace(/\r\n/g, '\n').includes(part), 'styles/member-app.css has drifted from member.css');
+    assert.ok(/member-app\.css\?v=[2-9]/.test(HTML.dashboard), 'the cache key was not bumped');
+  });
+  check('questions are asked in the application\'s own dialog', () => {
+    [['account-pages.js'], ['quiz.js']].forEach(([f]) => assert.ok(!/window\.confirm/.test(read(path.join('js', f))), f + ' asks with the browser'));
+    ['onboarding.html', 'saved-result.html'].forEach(f => assert.ok(/js\/confirm-dialog\.js\?v=\d/.test(read(f)), f + ' does not load the dialog'));
+    const dialog = read(path.join('js', 'confirm-dialog.js'));
+    assert.ok(/no\.focus\(\)/.test(dialog) && /Escape/.test(dialog), 'the safe answer is not the one with the focus');
+    assert.ok(/prefers-reduced-motion/.test(dialog), 'it moves for a reader who asked for less');
+  });
+  check('the console prototype hides what Sprout wrote from records a member does not share', () => {
+    const screen = fs.readFileSync(path.join(ROOT, 'admin-panel', 'prototype-client', 'js', 'screens', 'companion.js'), 'utf8');
+    assert.ok(/x\.personal && !S\.shares\(m\)/.test(screen), 'it shows them');
+    assert.ok(/!\(x\.personal && !S\.shares\(m\)\) && x\.content/.test(screen), 'a search finds what the screen hides');
+    const routes = platform('api/app/admin/companion_routes.py');
+    const words = screen.match(/const WITHHELD_REPLY = '([^']+)'/);
+    assert.ok(words, 'the words are gone');
+    if (routes) assert.ok(routes.includes(words[1]), 'not the words the console\'s API sends');
+    const cards = fs.readFileSync(path.join(ROOT, 'admin-panel', 'prototype-client', 'js', 'screens', 'settings-cards.js'), 'utf8');
+    assert.ok(/Sprout is not part of this choice/.test(cards) && !/the team and Sprout no longer see/.test(cards), 'the locked terms still include Sprout');
   });
 });
 
