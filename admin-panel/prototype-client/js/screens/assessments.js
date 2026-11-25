@@ -42,7 +42,8 @@ function instrument(key) {
   const attempts = allowed.flatMap((m) => m.records[key]);
   const last = attempts.map((a) => a.completed_at).sort().pop() || null;
   return { ...def, calculation_owner: 'System managed', attempts_total: attempts.length,
-    members_scored: allowed.filter((m) => m.records[key].length).length, last_completed_at: last };
+    members_scored: allowed.filter((m) => m.records[key].length).length, last_completed_at: last,
+    starts: S.get().assessmentStarts[key][0], unfinished: S.get().assessmentStarts[key][1] };
 }
 
 let compare = false;
@@ -77,7 +78,7 @@ function render(outlet) {
     </div>` : ''}
 
     <div class="instruments" data-testid="instruments">
-      ${list.map((i) => `<a class="instr" href="${R.href('/assessments/' + i.key)}" style="text-decoration:none;color:inherit">
+      ${list.map((i) => `<a class="instr instr--three" href="${R.href('/assessments/' + i.key)}" style="text-decoration:none;color:inherit">
         <span class="instr__name">
           <span class="instr__icon">${icon(ICONS[i.key] || 'clipboard', { size: 20 })}</span>
           <span style="min-width:0">
@@ -85,7 +86,7 @@ function render(outlet) {
             <span class="instr__desc">${esc(i.description)}</span>
           </span>
         </span>
-        <span class="instr__versions">
+        <span class="instr__versions instr__versions--three">
           <span class="vslot vslot--live">
             <span class="vslot__label">Calculation</span>
             <span class="vslot__v">${esc(i.version)}</span>
@@ -95,6 +96,11 @@ function render(outlet) {
             <span class="vslot__label">Members scored</span>
             <span class="vslot__v">${i.members_scored}</span>
             <span class="vslot__meta">${i.attempts_total} result${i.attempts_total === 1 ? '' : 's'}${i.last_completed_at ? ' · last ' + esc(H.fmtDate(i.last_completed_at)) : ''}</span>
+          </span>
+          <span class="vslot" data-testid="unfinished-${i.key}">
+            <span class="vslot__label">Started, not finished</span>
+            <span class="vslot__v">${i.unfinished}</span>
+            <span class="vslot__meta">of ${i.starts} started</span>
           </span>
         </span>
         <span class="btn btn--secondary btn--sm">Open</span>

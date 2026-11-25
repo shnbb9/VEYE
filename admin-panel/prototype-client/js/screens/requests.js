@@ -2,8 +2,8 @@
    Requests & Inbox
    ----------------------------------------------------------------------------
    The console's inbox (platform/web app/admin/requests/page.tsx): Contact Us
-   messages, Help questions and Join Beta submissions — a list with Open / All /
-   Resolved, the selected request on the right, and three plain status moves.
+   messages, Help questions and Join Beta submissions — a list with Open /
+   Awaiting a reply / All / Resolved, the selected request on the right, and three plain status moves.
 
    A reply is a record of what was sent: the administrator's words go out
    unaltered, the address is captured on the reply itself, and a send that the
@@ -20,17 +20,22 @@ const S = window.Veye.S;
 const H = window.Veye.H;
 const esc = window.Veye.UI.esc;
 
-const VIEWS = [['open', 'Open'], ['all', 'All'], ['resolved', 'Resolved']];
+const VIEWS = [['open', 'Open'], ['awaiting_reply', 'Awaiting a reply'], ['all', 'All'], ['resolved', 'Resolved']];
+const M = window.Veye.MC;
+const SOURCES = [['', 'From anyone'], ['member', 'From members'], ['public', 'From visitors']];
+const IMPORTANCE = [['', 'Any importance'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['unassigned', 'Not set']];
 const KINDS = { contact_us: 'Contact Us', help_question: 'Help question', join_beta: 'Join Beta' };
 const STATUS_LABELS = { new: 'New', in_progress: 'In progress', resolved: 'Resolved' };
 const STATUS_TONE = { new: 'attention', in_progress: 'info', resolved: 'live' };
 
-let view = { view: 'open', kind: '', q: '', selected: null, pinned: null, reply: '', sent: '', error: '', note: null };
+let view = { view: 'open', kind: '', source: '', priority: '', q: '', selected: null, pinned: null, reply: '', sent: '', error: '', note: null };
 
 function list() {
   const q = view.q.trim().toLowerCase();
   const rows = S.get().requests
-    .filter((r) => view.view === 'all' || (view.view === 'resolved' ? r.status === 'resolved' : r.status !== 'resolved'))
+    .filter((r) => view.view === 'all' || (view.view === 'resolved' ? r.status === 'resolved' : view.view === 'awaiting_reply' ? window.Veye.awaitingReply(r) : r.status !== 'resolved'))
+    .filter((r) => !view.source || r.source === view.source)
+    .filter((r) => !view.priority || (r.priority || 'unassigned') === view.priority)
     .filter((r) => !view.kind || r.kind === view.kind)
     .filter((r) => !q || `${r.name} ${r.email} ${r.subject} ${r.message}`.toLowerCase().includes(q))
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
@@ -65,15 +70,17 @@ function render(outlet) {
 
     <div class="review2">
       <div class="card">
-        <div class="findbar" style="padding:var(--s-4);flex-wrap:wrap;gap:10px">
+        <div class="findbar findbar--stack">
           <div class="modeswitch" role="tablist" aria-label="Which requests">
             ${VIEWS.map(([k, l]) => `<button class="modeswitch__btn" type="button" role="tab" aria-selected="${view.view === k}" data-view="${k}">${l}</button>`).join('')}
           </div>
           <label class="sr-only" for="rqKind">Kind</label>
-          <select class="select" id="rqKind" style="max-width:170px">
+          <select class="select" id="rqKind">
             <option value="">All kinds</option>
             ${Object.entries(KINDS).map(([k, l]) => `<option value="${k}" ${view.kind === k ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
+          <label class="sr-only" for="rqSource">From</label><select class="select" id="rqSource">${SOURCES.map(([v, l]) => `<option value="${v}" ${v === view.source ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <label class="sr-only" for="rqPriority">Importance</label><select class="select" id="rqPriority">${IMPORTANCE.map(([v, l]) => `<option value="${v}" ${v === view.priority ? 'selected' : ''}>${l}</option>`).join('')}</select>
           <div class="search" style="flex:1 1 160px;position:relative">
             <span class="search__icon">${icon('search', { size: 18 })}</span>
             <label class="sr-only" for="rqSearch">Search requests</label>
@@ -86,7 +93,8 @@ function render(outlet) {
             <span class="flag__top">
               <span class="flag__who">${esc(r.name || 'Visitor')}</span>
               ${r.status === 'new' ? '<span class="chip chip--attention chip--sm">New</span>' : ''}
-              ${r.replies.length > 0 ? '<span class="chip chip--live chip--sm">Answered</span>' : ''}
+              ${window.Veye.requestState(r) === 'replied' ? '<span class="chip chip--live chip--sm">Answered</span>' : window.Veye.requestState(r) === 'failed' ? '<span class="chip chip--error chip--sm">Reply not delivered</span>' : ''}
+              ${M.priorityChip(r.priority)}
             </span>
             <span class="flag__why">${esc(r.subject || r.message.slice(0, 80))}</span>
             <span class="t-support">${esc(KINDS[r.kind])} · ${esc(H.fmtDate(r.created_at))}</span>
@@ -101,6 +109,7 @@ function render(outlet) {
           ${H.chip(STATUS_LABELS[item.status], STATUS_TONE[item.status])}
         </div>
         <div class="card__body stack gap-5">
+          ${M.prioritySelect('rqImportance', item.priority)}
           <div><div class="t-eyebrow">Source</div><p>${esc(KINDS[item.kind])} · ${item.source === 'member' ? 'signed-in member' : 'public website'}${item.page ? ' · ' + esc(item.page) : ''}</p></div>
           <div><div class="t-eyebrow">Message</div><p style="white-space:pre-wrap">${item.message ? esc(item.message) : '<span class="t-support">No message — a Join Beta request carries only the member’s identity.</span>'}</p></div>
           ${item.member_id && S.member(item.member_id) ? `<div><div class="t-eyebrow">Member</div><p><a href="${R.href('/members/' + item.member_id)}">Open Member 360</a></p></div>` : ''}
@@ -152,7 +161,16 @@ function render(outlet) {
     view.selected = b.dataset.rq; view.pinned = null; view.note = null; view.reply = ''; view.sent = ''; view.error = '';
     render(outlet);
   }));
+  outlet.querySelector('#rqSource').addEventListener('change', (e) => { view.source = e.target.value; reset(); render(outlet); });
+  outlet.querySelector('#rqPriority').addEventListener('change', (e) => { view.priority = e.target.value; reset(); render(outlet); });
   if (!item) return;
+
+  outlet.querySelector('#rqImportance').addEventListener('change', (e) => {
+    const priority = e.target.value || null;
+    S.set({ requests: S.get().requests.map((r) => (r.id === item.id ? { ...r, priority } : r)) }, { silent: true });
+    S.audit('requests.priority', 'member_request', item.id, { from: item.priority, to: priority });
+    view.pinned = item.id; render(outlet); outlet.querySelector('#rqImportance').focus();
+  });
 
   const replyBox = outlet.querySelector('#rqReply');
   const sendBtn = outlet.querySelector('#sendReply');
@@ -201,7 +219,7 @@ window.Veye.screens = window.Veye.screens || {};
 /* A link can carry ?view= and ?id= (Member 360 → Requests → Open). */
 window.Veye.screens.requests = { render: (outlet, route) => {
   const v = VIEWS.some(([k]) => k === route.query.view) ? route.query.view : 'open';
-  view = { view: v, kind: '', q: '', selected: route.query.id || null, pinned: route.query.id || null, reply: '', sent: '', error: '', note: null };
+  view = { view: v, kind: '', source: '', priority: '', q: '', selected: route.query.id || null, pinned: route.query.id || null, reply: '', sent: '', error: '', note: null };
   render(outlet);
 } };
 

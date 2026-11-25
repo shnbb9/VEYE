@@ -350,6 +350,7 @@ function buildSeed(NOW) {
       sharing: share.none(),
       records: { health_number: [], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
       mood: [], diary: [], guided: [],
+      archivedAt: null, archivedBy: null, archiveReason: '', firstReturnDay: 1 + (first.length * 3 + last.length) % 9, choseFoods: true,
       ...o, email,
     };
   };
@@ -399,7 +400,7 @@ function buildSeed(NOW) {
       guided: [session('first_time_user', 'completed', 'complete', 40, 40, true)],
     }),
     member('robert-williams', 'Robert', 'Williams', {
-      joined: 361, lastActive: [0, 19, 40], phone: '+1 555 0165', postalCode: '60614', activeSessions: 1, lastSessionAt: ago(0, 19, 40),
+      joined: 361, lastActive: [0, 19, 40], phone: '+1 555 0165', postalCode: '60614', firstReturnDay: 41, activeSessions: 1, lastSessionAt: ago(0, 19, 40),
       sharing: share.granted('robert.williams@demo.veye.test', 70),
       records: {
         health_number: [HN(9, 7.5, 'Insulin Resistance Risk', 'mixed'), HN(68, 8, 'Insulin Resistance Risk', 'mixed'), HN(150, 7, 'Insulin Resistance Risk', 'food')],
@@ -452,7 +453,7 @@ function buildSeed(NOW) {
       mood: moods('sophie-patel', 2, ['stressed', 'tired', 'neutral', 'calm']),
     }),
     member('tomas-rivera', 'Tomás', 'Rivera', {
-      joined: 313, lastActive: [5, 7], phone: '+1 555 0233', postalCode: '85004',
+      joined: 313, lastActive: [5, 7], phone: '+1 555 0233', postalCode: '85004', firstReturnDay: 17,
       sharing: { state: 'declined', requested_at: ago(21), requested_by_name: 'Priya Shah', decided_at: ago(19, 4), revoked_at: null, policy_version: 'health-sharing-terms-v1',
         delivery: sent('tomas.rivera@demo.veye.test', 21) },
       records: { health_number: [HN(36, 4, 'Moderately Good Health', 'mixed'), HN(126, 4.5, 'Moderately Good Health', 'mixed')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
@@ -469,15 +470,15 @@ function buildSeed(NOW) {
       mood: moods('peter-novak', 10, ['calm', 'neutral', 'happy']),
     }),
     member('maya-chen', 'Maya', 'Chen', {
-      joined: 3, lastActive: [2, 22], emailVerified: false, onboarding: 'Not started', phone: '+1 555 0210', postalCode: '80202',
+      joined: 3, lastActive: [2, 22], emailVerified: false, onboarding: 'Not started', phone: '+1 555 0210', postalCode: '80202', firstReturnDay: null, choseFoods: false,
     }),
     member('grace-lin', 'Grace', 'Lin', {
-      joined: 13, lastActive: [0, 6, 40], postalCode: '92101',
+      joined: 13, lastActive: [0, 6, 40], postalCode: '92101', choseFoods: false,
       records: { health_number: [HN(13, 6, 'Moderately Good Health', 'food')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
       guided: [session('progress_tracker_guide', 'skipped', 'pt_intro', 12, 12)],
     }),
     member('hannah-weiss', 'Hannah', 'Weiss', {
-      joined: 260, lastActive: [31], isActive: false, deactivatedAt: ago(26, 4),
+      joined: 260, lastActive: [31], isActive: false, deactivatedAt: ago(26, 4), firstReturnDay: 12, choseFoods: false,
       records: { health_number: [HN(80, 2, 'Relatively Good Health', 'lifestyle')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
     }),
     member('sam-okonkwo', 'Sam', 'Okonkwo', {
@@ -498,6 +499,8 @@ function buildSeed(NOW) {
       records: { health_number: [HN(19, 2.5, 'Relatively Good Health', 'food')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] },
     }),
   ];
+  members.push(member('iris-vale', 'Iris', 'Vale', { joined: 330, lastActive: [140], archivedAt: ago(90, 2), archivedBy: 'Cara Hogue', archiveReason: 'Asked to pause their membership',
+    records: { health_number: [HN(150, 3, 'Relatively Good Health', 'food')], body_composition: [], blood_markers: [], health_assessment: [], simple_quiz: [] } }));
   const byKey = (key) => members.find((m) => m.id === uuid('member:' + key));
   const mid = (key) => uuid('member:' + key);
 
@@ -515,10 +518,12 @@ function buildSeed(NOW) {
     const messages = o.messages;
     return { id: uuid('conversation:' + key), member_id: mid(memberKey), started_at: messages[0].created_at,
       last_message_at: messages[messages.length - 1].created_at, message_count: messages.length,
-      flagged: !!o.flag, flag_reason: o.flag || null, reviewed_at: o.reviewedAt || null, reviewed_by: o.reviewedBy || null, messages };
+      flagged: !!o.flag, flag_reason: o.flag || null, reviewed_at: o.reviewedAt || null, reviewed_by: o.reviewedBy || null,
+      priority: o.priority || null, resolved_at: null, resolved_by: null, messages };
   };
   const conversations = [
     conversation('cara-1', 'cara-morgan', {
+      priority: 'high',
       flag: "Handed to a person: Policy is to hand this to a person. (rule 'nothing is working').",
       messages: [
         say(0, 5, 22, 'Explain what my Health Number means in plain language', { policy: ['allow', 'assessments'] }),
@@ -588,7 +593,7 @@ function buildSeed(NOW) {
     delivery_status: failed ? 'failed' : 'sent', delivery_detail: failed ? '550 5.1.1 Mailbox unavailable' : null, created_at: ago(d, h) });
   const request = (key, o) => ({ id: uuid('request:' + key), kind: 'contact_us', status: 'new', source: 'public', member_id: null, name: '', email: '',
     subject: '', message: '', page: null, created_at: ago(o.d, o.h || 0), updated_at: ago(o.d, o.h || 0), handled_by: null, handled_at: null,
-    resolution_note: '', replies: [], ...o });
+    resolution_note: '', replies: [], priority: null, ...o });
   const requests = [
     request('cara-history', { d: 0, h: 2, kind: 'contact_us', source: 'member', member_id: mid('cara-morgan'), name: 'Cara Morgan', email: 'cara.morgan@demo.veye.test',
       subject: 'Question about my assessment history', page: '/app/contact',
@@ -613,9 +618,32 @@ function buildSeed(NOW) {
       subject: 'Beta application', message: '', page: '/app', handled_by: 'Cara Hogue', handled_at: ago(8, 20), resolution_note: 'Added to the Beta cohort.',
       replies: [reply('sam-beta-1', 8, 21, 'Hi Sam,\n\nYou are in — welcome to the Veye Beta. Your dashboard already has everything switched on.\n\nCara', 'sam.okonkwo@demo.veye.test', 'Cara Hogue', false)] }),
     request('daniel-email', { d: 0, h: 9, kind: 'contact_us', source: 'member', member_id: mid('daniel-kim'), name: 'Daniel Kim', email: 'daniel.kim@demo.veye.test',
-      subject: 'Please correct the email on my account', message: 'I signed up with my work address by mistake. Can it be changed to my personal one?', page: '/app/contact' }),
+      priority: 'medium', subject: 'Please correct the email on my account', message: 'I signed up with my work address by mistake. Can it be changed to my personal one?', page: '/app/contact' }),
   ];
   requests.forEach((r) => { if (r.replies.length) r.updated_at = r.replies[r.replies.length - 1].created_at; });
+
+  /* ---- Members → Invitations (Cara, 15 Nov): an invitation is not an account ---- */
+  const invitation = (key, email, name, o) => ({ id: uuid('invitation:' + key), email, name, invited_by: 'Cara Hogue', created_at: ago(o.d, o.h || 0),
+    expires_at: ago(o.d - 7, o.h || 0), sent_count: 1, accepted_at: null, revoked_at: null, member_id: null, delivery: 'sent', delivery_error: null, ...o });
+  const memberInvitations = [
+    invitation('nora', 'nora.field@demo.veye.test', 'Nora Field', { d: 1, h: 3 }),
+    invitation('theo', 'theo.banks@demo.veye.test', '', { d: 2, h: 5, invited_by: 'Priya Shah', sent_count: 2 }),
+    invitation('grace', 'grace.lin@demo.veye.test', 'Grace Lin', { d: 15, accepted_at: ago(13, 2), member_id: mid('grace-lin') }),
+    invitation('omar', 'omar.said@demo.veye.test', 'Omar Said', { d: 24 }),
+    invitation('lucy', 'lucy.hart@demo.veye.test', 'Lucy Hart', { d: 30, revoked_at: ago(29, 4) }),
+  ];
+
+  /* ---- Care Studio → Fitness library. Captions are the consumer prototype's
+     own; the two addresses are the videos Cara supplied (17 Sep 2026). ---- */
+  const fitnessVideo = (goal, order, title, subtitle, url, o = {}) => ({ id: uuid('fitness:' + goal + order), goal, order, title, subtitle, provider: 'youtube', url,
+    published: true, is_main: order === 1, updated_at: ago(10, order), ...o });
+  const fitnessVideos = [
+    fitnessVideo('weight', 1, 'Here are 5 exercises to avoid', 'Exercise guidance', 'https://youtu.be/XLlHJ5-vHWw'),
+    fitnessVideo('fit', 1, 'Need to improve your range of motion?', 'VEYE recommends the NeoRomX System.', 'https://youtu.be/7YLttuiwGvw'),
+  ];
+
+  /* Assessments members began (and those they did not finish), per instrument. */
+  const assessmentStarts = { health_number: [19, 4], body_composition: [9, 2], blood_markers: [8, 3], health_assessment: [8, 2], simple_quiz: [9, 1] };
 
   /* ---- Prospects: visitors' saved results — metadata only ---- */
   const EV = (type, actor, d, h = 0, policyVersion = null) => ({ event_type: type, actor_type: actor, at: ago(d, h), policy_version: policyVersion });
@@ -795,10 +823,11 @@ function buildSeed(NOW) {
   };
 
   return {
-    schema: 3,
+    schema: 4,
     generatedAt: new Date(NOW).toISOString(),
     org: { name: 'Veye', supportEmail: 'contact@veye.co', supportPhone: '', supportUpdatedAt: ago(9, 3), supportUpdatedBy: 'Cara Hogue' },
     meId: ME,
+    memberInvitations, fitnessVideos, assessmentStarts,
     admins, mySessions, members, conversations, feedback, requests, prospects, retention, erasures,
     careItems, contentEntries, knowledgeSources, guidedFlows, telemetry, audit, sharingSettings,
     companion: JSON.parse(JSON.stringify(COMPANION_SETTINGS)),

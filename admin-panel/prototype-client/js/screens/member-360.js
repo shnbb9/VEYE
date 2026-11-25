@@ -7,7 +7,8 @@
 
    Health records are the member's to share. Until they grant it, the console
    is not sent their Health Number, body composition, blood markers,
-   questionnaires, moods or food diary — the tabs are empty for that reason,
+   questionnaires or moods — the tabs are empty for that reason (the food
+   diary is not part of the choice: Cara, 25 Nov 2026),
    and the banner says so rather than letting the record read as an inactive
    member. Asking is the only thing the console can do; the member decides in
    the app. Every opening of a record is written to the audit log as viewed or
@@ -128,7 +129,7 @@ function render(outlet, route) {
           <div style="min-width:0">
             <div class="m360__id">${esc(m.email)} · joined ${esc(H.fmtDate(m.joinedAt))}</div>
             <div class="row gap-2 wrap" style="margin-top:6px">
-              ${H.chip(m.isActive ? 'Active' : 'Inactive', m.isActive ? 'live' : 'archived')}
+              ${m.archivedAt ? H.chip('Archived', 'archived') : H.chip(m.isActive ? 'Active' : 'Inactive', m.isActive ? 'live' : 'archived')}
               <span class="tag">${m.emailVerified ? 'Email verified' : 'Email unverified'}</span>
               ${m.isSynthetic ? '<span class="tag">Synthetic demo account</span>' : ''}
               ${m.adminAccess ? '<span class="tag">Also has admin access</span>' : ''}
@@ -161,6 +162,7 @@ function render(outlet, route) {
             <p class="t-support" style="margin-top:4px">A lower number is better on this scale.</p>
             <p class="t-support">${!shares ? 'Withheld until this member shares their records.'
               : latest ? `Taken ${esc(H.fmtDate(latest.completed_at))}` : 'No Health Number saved yet.'}</p>
+            ${shares && latest ? `<p style="margin-top:6px">${window.Veye.MC.trendCell(window.Veye.MC.trendOf(m))}</p>` : ''}
           </div>
         </div>
       </div>
@@ -172,7 +174,9 @@ function render(outlet, route) {
     <div id="tabBody"></div>
   </div>`;
 
-  banner(outlet.querySelector('#sharingBanner'), m, outlet, route);
+  if (m.archivedAt) {
+    outlet.querySelector('#sharingBanner').innerHTML = `<div class="notice" data-testid="archived-banner">${icon('lock', { size: 18 })}<div><strong>Archived</strong> ${esc(H.fmtDate(m.archivedAt))}${m.archivedBy ? ' by ' + esc(m.archivedBy) : ''}.${m.archiveReason ? ' ' + esc(m.archiveReason) + '.' : ''} They cannot open the member application, their health records are closed, and they are left out of the directory and every count. Nothing is deleted; restore them under Account.</div></div>`;
+  } else banner(outlet.querySelector('#sharingBanner'), m, outlet, route);
   ({ overview, assessments, journal, companion, requests, account })[tab](outlet.querySelector('#tabBody'), m, outlet, route);
 }
 
@@ -199,9 +203,9 @@ function banner(host, m, outlet, route) {
     ${icon('shield', { size: 18 })}
     <div style="min-width:0">
       <strong>Health records are not shared.</strong> ${esc(explanation)}
-      Their Health Number, body composition, blood markers, questionnaires, moods and food diary are not sent to
-      this console — the tabs below are empty for that reason, not because nothing was recorded. Name, email and
-      their messages to Veye are not covered by sharing and stay visible so the team can answer them.
+      Their Health Number, body composition, blood markers, questionnaires and moods are not sent to this console —
+      the tabs below are empty for that reason, not because nothing was recorded. Their name, email, messages and food
+      diary are not covered by sharing and stay visible so the team can help them.
       ${delivery ? `<p class="t-support" style="margin-top:6px" data-testid="sharing-delivery">
         ${esc(DELIVERY_LABELS[delivery.status] || delivery.status)}${delivery.sent_at ? ' · ' + esc(H.fmtDate(delivery.sent_at)) : ''} · to ${esc(delivery.to_email)}${delivery.last_error && delivery.status !== 'sent' ? ' · ' + esc(delivery.last_error) : ''}
       </p>` : ''}
@@ -262,7 +266,7 @@ function lists(m) {
   return {
     records: shares ? m.records : empty,
     mood: shares ? m.mood : [],
-    diary: shares ? m.diary : [],
+    diary: m.diary,
     trackersCompleted: ['health_number', 'body_composition', 'blood_markers', 'health_assessment', 'simple_quiz'].filter((k) => m.records[k].length).length,
   };
 }
@@ -384,7 +388,7 @@ function journal(host, m) {
         ${mood.length ? `<div class="table-wrap"><table class="table table--compact">
           <thead><tr><th scope="col">Day</th><th scope="col">Mood</th><th scope="col">Note</th></tr></thead>
           <tbody>${mood.slice(0, 31).map((e) => `<tr><td>${esc(e.entry_date)}</td><td>${esc(e.mood_label)}</td><td class="t-support">${esc(e.note || '—')}</td></tr>`).join('')}</tbody>
-        </table></div>` : '<p class="t-support" style="padding:20px">No mood logged yet.</p>'}
+        </table></div>` : `<p class="t-support" style="padding:20px">${S.shares(m) ? 'No mood logged yet.' : 'Not shared.'}</p>`}
       </div>
     </div>
     <div class="card">
@@ -447,6 +451,35 @@ function requests(host, m) {
 
 /* ----------------------------------------------------------- the account -- */
 let accountNote = { id: null, text: '' };
+
+/* Archive first, delete last: an archived member is signed out and left out of
+   the directory, and can be restored. Deletion is a different thing. */
+let archiveNote = '';
+function archiveCard(host, m, outlet, route) {
+  host.innerHTML = `<div class="card" data-testid="m360-archive">
+    <div class="card__head"><div><h2 class="card__title">${m.archivedAt ? 'Restore member' : 'Archive member'}</h2><p class="t-support">${m.archivedAt
+      ? 'Brings them back to the directory and lets them open the member application again. What they share is as they left it.'
+      : 'Signs them out of the member application and leaves them out of the directory. Nothing is deleted and you can restore them.'}</p></div></div>
+    <div class="card__body stack gap-4">
+      ${archiveNote ? `<p class="t-support" role="status" data-testid="archive-notice">${esc(archiveNote)}</p>` : ''}
+      ${m.archivedAt ? '<div><button class="btn btn--secondary btn--sm" type="button" data-testid="member-restore">Restore member</button></div>'
+        : `<div class="field"><label for="archiveReason">Reason <span class="t-muted">(optional, kept with the record)</span></label><input class="input" id="archiveReason" maxlength="300"></div>
+           <div><button class="btn btn--danger-quiet btn--sm" type="button" data-testid="member-archive">Archive member</button></div>`}
+    </div></div>`;
+  const restore = host.querySelector('[data-testid="member-restore"]');
+  if (restore) restore.addEventListener('click', () => {
+    S.updateMember(m.id, (x) => { x.archivedAt = null; x.archivedBy = null; x.archiveReason = ''; return x; });
+    S.audit('member.restored', 'member', m.id, {}); archiveNote = `${m.name} is back in the directory.`; render(outlet, route);
+  });
+  const archive = host.querySelector('[data-testid="member-archive"]');
+  if (archive) archive.addEventListener('click', async () => {
+    const reason = host.querySelector('#archiveReason').value.trim();
+    const r = await UI.confirm({ title: 'Archive this member?', message: `Archive ${esc(m.name)}? They are signed out of the member application and leave the directory.`, reversible: 'You can restore them later.', confirmLabel: 'Archive', danger: true });
+    if (!r.ok) return;
+    S.updateMember(m.id, (x) => { x.archivedAt = S.now(); x.archivedBy = S.me().name; x.archiveReason = reason; x.activeSessions = 0; return x; });
+    S.audit('member.archived', 'member', m.id, { with_reason: !!reason }); archiveNote = `${m.name} is archived.`; render(outlet, route);
+  });
+}
 
 function account(host, m, outlet, route) {
   const notice = accountNote.id === m.id ? accountNote.text : '';
@@ -526,7 +559,9 @@ function account(host, m, outlet, route) {
       </div>` : ''}
       <div class="card__foot"><span class="t-support">Every action here is written to the admin audit log.</span></div>
     </div>`}
+    <div id="archiveHost"></div>
   </div>`;
+  archiveCard(host.querySelector('#archiveHost'), m, outlet, route);
 
   host.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
     const action = btn.dataset.act;
@@ -569,6 +604,7 @@ window.Veye.screens = window.Veye.screens || {};
    an account action re-renders internally so its own result stays on screen. */
 window.Veye.screens['member-360'] = { render: (outlet, route) => {
   accountNote = { id: null, text: '' };
+  archiveNote = '';
   render(outlet, route);
 } };
 

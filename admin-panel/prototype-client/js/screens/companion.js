@@ -108,7 +108,10 @@ function conversations(outlet, route) {
             return `<button class="flag${c.id === conv.selected ? ' is-active' : ''}" type="button" data-conv="${c.id}">
               <span class="flag__top">
                 <span class="flag__who">${esc(memberOf(c).name)}</span>
+                ${window.Veye.MC.priorityChip(c.priority)}
                 ${c.flagged && !c.reviewed_at ? '<span class="chip chip--attention chip--sm">Needs review</span>'
+                  : c.resolved_at ? '<span class="chip chip--live chip--sm">Resolved</span>'
+                  : c.flagged ? '<span class="chip chip--info chip--sm">Reviewed, not resolved</span>'
                   : c.reviewed_at ? '<span class="chip chip--live chip--sm">Reviewed</span>' : '<span class="chip chip--sm">Normal</span>'}
               </span>
               <span class="flag__why">${esc(first.slice(0, 160) || '(no member message)')}</span>
@@ -144,7 +147,7 @@ function detail(host, outlet, route) {
     <div class="card__head">
       <div><h2 class="card__title">${esc(name)}</h2><p class="t-support">${esc(m ? m.email : '')} · started ${esc(H.fmtDate(c.started_at))}</p></div>
       <div class="row gap-2">
-        ${c.reviewed_at ? '<span class="chip chip--live">Reviewed</span>' : ''}
+        ${c.resolved_at ? '<span class="chip chip--live">Resolved</span>' : c.reviewed_at ? `<span class="chip chip--${c.flagged ? 'info' : 'live'}">${c.flagged ? 'Reviewed, not resolved' : 'Reviewed'}</span>` : ''}
         ${m && m.isSynthetic ? '<span class="chip chip--lime">Synthetic</span>' : ''}
       </div>
     </div>
@@ -162,6 +165,11 @@ function detail(host, outlet, route) {
         ${x.role === 'sprout' ? `<div class="msg__sources">${x.sources.length ? `Sources · ${x.sources.length}: ${x.sources.map((s) => esc(s.title) + ' v' + s.source_version).join(', ')} · ` : ''}${x.provider ? `${esc(x.provider)}${x.model ? ' · ' + esc(x.model) : ''} · ${x.latency_ms || 0} ms · safety ${esc(x.safety_result || '—')}` : 'no model call'}${x.feedback ? ` · feedback: ${esc(x.feedback.rating.replace('_', ' '))}${x.feedback.reason ? ` (${esc(x.feedback.reason)})` : ''}` : ''}</div>` : ''}
       </div>`).join('')}
     </div>
+    ${c.flagged ? `<div class="card__body conv-actions" data-testid="conversation-actions">
+      ${window.Veye.MC.prioritySelect('cvImportance', c.priority)}
+      ${c.resolved_at ? '<button class="btn btn--ghost btn--sm" type="button" id="cvReopen">Reopen</button>' : '<button class="btn btn--secondary btn--sm" type="button" id="cvResolve">Mark resolved</button>'}
+      <span class="t-support" style="flex:1 1 220px">Reviewed means somebody read it. It does not answer the member: the team replies outside Sprout, and resolving says nothing is left to do.</span>
+    </div>` : ''}
     ${c.flagged && !c.reviewed_at ? `<div class="held held--pinned">
       <span class="held__label">${icon('lock', { size: 14 })} Handed to a person</span>
       <div class="held__text">${esc(c.flag_reason || '')}</div>
@@ -172,6 +180,17 @@ function detail(host, outlet, route) {
       ${!c.reviewed_at ? '<button class="btn btn--secondary btn--sm" type="button" id="markReviewed">Mark reviewed</button>' : ''}
     </div>`}`;
 
+  const change = (patch, action, details) => {
+    S.set({ conversations: S.get().conversations.map((x) => (x.id === c.id ? { ...x, ...patch } : x)) }, { silent: true });
+    S.audit(action, 'companion_conversation', c.id, details || {});
+    conv.filter = 'all'; conv.selected = c.id; conversations(outlet, route);
+  };
+  const importance = host.querySelector('#cvImportance');
+  if (importance) importance.addEventListener('change', () => change({ priority: importance.value || null }, 'conversation.priority', { from: c.priority, to: importance.value || null }));
+  const resolve = host.querySelector('#cvResolve');
+  if (resolve) resolve.addEventListener('click', () => change({ resolved_at: S.now(), resolved_by: S.me().name, reviewed_at: c.reviewed_at || S.now(), reviewed_by: c.reviewed_by || S.me().name }, 'conversation.resolved'));
+  const reopen = host.querySelector('#cvReopen');
+  if (reopen) reopen.addEventListener('click', () => change({ resolved_at: null, resolved_by: null }, 'conversation.reopened'));
   const btn = host.querySelector('#markReviewed');
   if (btn) btn.addEventListener('click', () => H.busy(btn, 'Mark reviewed', () => {
     S.set({ conversations: S.get().conversations.map((x) => (x.id === c.id ? { ...x, reviewed_at: S.now(), reviewed_by: S.me().name } : x)) });

@@ -14,7 +14,7 @@
 (function () {
 
 const KEY = 'veye_admin_client_v3';
-const SCHEMA = 3;
+const SCHEMA = 4;
 const listeners = new Set();
 
 function fresh() {
@@ -122,7 +122,8 @@ function deliver(email) {
 /* ------------------------------------------------------------------ lookups */
 function member(id) { return state.members.find((m) => m.id === id) || null; }
 function memberName(id) { const m = member(id); return m ? m.name : 'Member'; }
-function shares(m) { return !!m && m.sharing && m.sharing.state === 'granted'; }
+/** Sharing, and still a member: an archived record opens to nobody. */
+function shares(m) { return !!m && m.sharing && m.sharing.state === 'granted' && !m.archivedAt; }
 function sharingIds() { return new Set(state.members.filter(shares).map((m) => m.id)); }
 
 /** Replace one member record and persist. */

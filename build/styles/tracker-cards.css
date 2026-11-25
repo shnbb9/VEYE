@@ -1,0 +1,61 @@
+/* Copied from platform/web/public/member-css/member.css, the Progress Trackers section. */
+/* ---- Progress Trackers (dashboard, concept A) -------------------------------
+   Five cards, each instrument on its own scale. */
+.tracker-section { margin-top: 34px; }
+.tracker-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.tracker-section__title { margin: 0; }
+.tracker-section__link { font-family: 'Teachers', sans-serif; font-size: 12.5px; letter-spacing: .6px; text-transform: uppercase; color: #446514;
+  text-decoration: none; border-bottom: 1px solid rgba(68,101,20,.35); }
+.tracker-section__link:hover { color: #384C0C; border-bottom-color: currentColor; }
+.tracker-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.tracker-card { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; padding: 22px 24px; background: #FFFCF4;
+  border: 1px solid #E7EBDD; border-top: 3px solid; border-radius: 14px; }
+.tracker-card--rest { border-top-style: dotted; }
+.tracker-card__name { margin: 0; font-family: 'Teachers', sans-serif; font-weight: 600; font-size: 16px; color: var(--olive-heading); }
+.tracker-card__headline { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font-family: 'Teachers', sans-serif; font-weight: 600; font-size: 34px; line-height: 1.1; color: var(--olive-heading); }
+.tracker-card__headline small { font-size: 16px; font-weight: 500; color: var(--body-text); }
+.tracker-card__chip { align-self: center; padding: 4px 12px; border-radius: 999px; background: #F1F6E4; font-size: 14px; color: #384C0C; }
+.tracker-card__change, .tracker-card__rest { margin: 0; font-size: 15px; line-height: 1.5; color: var(--body-text); }
+.tracker-card__rest { padding: 18px 0; }
+.tracker-plot { width: 100%; min-width: 0; }
+.tracker-plot svg { display: block; width: 100%; height: auto; }
+.tracker-plot__rule { stroke: rgba(105,124,61,.28); stroke-width: 1; }
+.tracker-plot__tick { font-family: 'Kumbh Sans', sans-serif; font-size: 13px; fill: #4C5940; }
+.tracker-plot__value { font-family: 'Kumbh Sans', sans-serif; font-size: 14px; font-weight: 600; fill: #2F3B26; }
+.tracker-key { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: #4C5940; }
+.tracker-key li { display: inline-flex; align-items: center; gap: 6px; }
+.tracker-key span { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(47,59,38,.25); }
+.tracker-note { margin: 0; font-size: 13.5px; line-height: 1.5; color: #4C5940; }
+.tracker-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1.5px solid #CFD6C0; background: #fff;
+  font: 600 14px 'Kumbh Sans', sans-serif; color: #384C0C; text-decoration: none; cursor: pointer; }
+.tracker-btn--main { background: #446514; border-color: #446514; color: #fff; }
+.tracker-btn--main:hover { background: #384C0C; }
+.tracker-btn:focus-visible, .tracker-switch button:focus-visible { outline: 3px solid #8DC412; outline-offset: 2px; }
+.tracker-card__foot { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; padding-top: 10px; }
+.tracker-table { width: 100%; overflow-x: auto; }
+.tracker-table[hidden] { display: none; }
+.tracker-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tracker-table th, .tracker-table td { padding: 8px 10px 8px 0; text-align: left; border-bottom: 1px solid #E7EBDD; font-weight: 400; white-space: nowrap; }
+.tracker-table thead th { font-weight: 600; color: var(--olive-heading); }
+.tracker-switch { display: inline-flex; gap: 6px; }
+.tracker-switch button { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1.5px solid #CFD6C0; background: #fff; font: 600 14px 'Kumbh Sans', sans-serif; color: #384C0C; cursor: pointer; }
+.tracker-switch button[aria-pressed="true"] { background: #E9F1DB; border-color: #446514; }
+.marker-list { list-style: none; margin: 6px 0 0; padding: 0; width: 100%; display: grid; gap: 14px; }
+.marker-list li { display: grid; grid-template-columns: 116px minmax(0, 1fr) 118px; align-items: center; gap: 14px; }
+.marker-list__name { display: flex; flex-direction: column; font-size: 15px; color: var(--olive-heading); }
+.marker-list__name small { font-size: 13px; color: #4C5940; }
+.marker-list__track { position: relative; height: 10px; border-radius: 999px; background: #E9ECDF; }
+.marker-list__goal { position: absolute; top: 0; bottom: 0; background: #BBD79B; border-radius: 999px; }
+.marker-list__was { position: absolute; top: -6px; width: 2px; height: 22px; margin-left: -1px; background: #7B8670; }
+.marker-list__now { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid #2F3B26; background: #FFFCF4; }
+.marker-list__now.is-in { background: #2F3B26; }
+.marker-list__value { font-size: 14px; text-align: right; color: var(--body-text); }
+.marker-list__none { color: #4C5940; }
+.tracker-cards__error { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 900px) { .tracker-cards { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) {
+  .tracker-card { padding: 18px 16px; }
+  .marker-list li { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+  .marker-list__track { grid-column: 1 / -1; grid-row: 2; }
+}
+button.tracker-section__link { padding: 0; border-width: 0 0 1px; border-style: solid; background: none; cursor: pointer; }

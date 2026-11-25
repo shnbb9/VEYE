@@ -9,8 +9,10 @@
    guards hold whatever the screen does: nobody may switch off their own
    access, and the last active administrator cannot be switched off.
 
-   Your picture is processed here in the browser — cropped, scaled and
-   re-encoded, which drops location and camera details — and never leaves it.
+   Your picture is processed here in the browser and never leaves it: a
+   chosen file opens the circular crop editor first (js/components/crop-
+   dialog.js, owner request 15 Nov 2026), Adjust reopens the kept original at
+   the saved square, and re-encoding drops location and camera details.
    Product settings carries the two V2 cards, Privacy & prospects and Health
    sharing (js/screens/settings-cards.js).
    ============================================================================ */
@@ -78,8 +80,9 @@ function account(host, outlet, route) {
           <div class="row gap-2 wrap" style="align-items:center">
             <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" hidden data-testid="admin-photo-input">
             <button class="btn btn--secondary btn--sm" type="button" id="photoChange" data-testid="admin-photo-change">${me.photo ? 'Change picture' : 'Add a picture'}</button>
+            ${me.photo && me.photoCrop && me.photoOriginal ? '<button class="btn btn--ghost btn--sm" type="button" id="photoAdjust" data-testid="admin-photo-adjust">Adjust</button>' : ''}
             ${me.photo ? '<button class="btn btn--ghost btn--sm" type="button" id="photoRemove" data-testid="admin-photo-remove">Remove</button>' : ''}
-            <span class="t-support">JPG, PNG or WebP, up to 2 MB. Location and camera details are removed.</span>
+            <span class="t-support">JPG, PNG or WebP, up to 10 MB. Location and camera details are removed.</span>
           </div>
           ${ui.photoNote ? `<p class="${ui.photoNote.tone === 'error' ? 'errorbar' : 't-support'}" role="status" data-testid="admin-photo-note">${esc(ui.photoNote.text)}</p>` : ''}
           <div><div class="t-eyebrow">Email</div><p data-testid="settings-admin-email">${esc(me.email)}</p></div>
@@ -130,28 +133,55 @@ function account(host, outlet, route) {
     </div>`;
 
   const again = () => account(host, outlet, route);
+  // An earlier note goes as soon as a new picture is being chosen or adjusted.
+  const dropPhotoNote = () => {
+    ui.photoNote = null;
+    const note = host.querySelector('[data-testid="admin-photo-note"]');
+    if (note) note.remove();
+  };
+  /* The crop editor saves the square; both avatar sizes are cut from the kept
+     original with it (the console's upload and re-crop). `fresh` is a newly
+     chosen file, otherwise Adjust. */
+  const cropPicture = (src, initial, fresh) => window.Veye.Crop.open({
+    src, initial,
+    title: fresh ? 'Crop your new picture' : 'Adjust your picture', saveLabel: 'Save picture',
+    primaryClass: 'btn btn--primary', secondaryClass: 'btn btn--ghost',
+    onCancel: () => { if (src.indexOf('blob:') === 0) URL.revokeObjectURL(src); },
+    onSave: (crop) => window.Veye.Crop.loadImage(src).then((img) => {
+      const photo = { thumb: window.Veye.Crop.cut(img, crop, 128), full: window.Veye.Crop.cut(img, crop, 512) };
+      const version = Date.now().toString(36);
+      S.set({ admins: S.get().admins.map((a) => (a.userId === me.userId ? { ...a, photo, photoVersion: version, photoOriginal: src, photoCrop: crop } : a)) });
+      // One picture per sign-in account: the member record shows the same one.
+      if (me.memberId) S.updateMember(me.memberId, (x) => { x.photo = photo; x.photoVersion = version; return x; });
+      S.audit(fresh ? 'account.photo_changed' : 'account.photo_cropped', 'user_account', me.userId, {});
+      ui.photoNote = { tone: 'ok', text: 'Your picture is updated.' + (memberAccess ? ' It is the same picture in the member application.' : '') };
+      window.Veye.refreshChrome();
+    }),
+    // Drawn again once the editor has gone, with focus back on the same control.
+    onDone: () => { again(); const back = host.querySelector(fresh ? '#photoChange' : '#photoAdjust'); if (back) back.focus(); },
+  });
   const input = host.querySelector('#photoInput');
   host.querySelector('#photoChange').addEventListener('click', () => input.click());
   input.addEventListener('change', () => {
     const file = input.files && input.files[0];
     input.value = '';
     if (!file) return;
-    const btn = host.querySelector('#photoChange');
-    btn.disabled = true; btn.textContent = 'Saving…';
-    processPicture(file).then((photo) => {
-      const version = Date.now().toString(36);
-      S.set({ admins: S.get().admins.map((a) => (a.userId === me.userId ? { ...a, photo, photoVersion: version } : a)) });
-      // One picture per sign-in account: the member record shows the same one.
-      if (me.memberId) S.updateMember(me.memberId, (x) => { x.photo = photo; x.photoVersion = version; return x; });
-      S.audit('account.photo_changed', 'user_account', me.userId, {});
-      ui.photoNote = { tone: 'ok', text: 'Your picture is updated.' + (memberAccess ? ' It is the same picture in the member application.' : '') };
-      window.Veye.refreshChrome();
-      again();
-    }).catch((err) => { ui.photoNote = { tone: 'error', text: err.message }; again(); });
+    const refused = window.Veye.Crop.refusal(file);
+    if (refused) { ui.photoNote = { tone: 'error', text: refused }; again(); return; }
+    dropPhotoNote();
+    // A file that cannot be read still opens the editor, which says so.
+    window.Veye.Crop.keepOriginal(file).then((src) => cropPicture(src, null, true),
+      () => cropPicture(URL.createObjectURL(file), null, true));
+  });
+  const adjust = host.querySelector('#photoAdjust');
+  if (adjust) adjust.addEventListener('click', () => {
+    if (!me.photoOriginal || !me.photoCrop) return;
+    dropPhotoNote();
+    cropPicture(me.photoOriginal, me.photoCrop, false);
   });
   const remove = host.querySelector('#photoRemove');
   if (remove) remove.addEventListener('click', () => H.busy(remove, 'Remove', () => {
-    S.set({ admins: S.get().admins.map((a) => (a.userId === me.userId ? { ...a, photo: null, photoVersion: null } : a)) });
+    S.set({ admins: S.get().admins.map((a) => (a.userId === me.userId ? { ...a, photo: null, photoVersion: null, photoOriginal: null, photoCrop: null } : a)) });
     if (me.memberId) S.updateMember(me.memberId, (x) => { x.photo = null; x.photoVersion = null; return x; });
     S.audit('account.photo_removed', 'user_account', me.userId, {});
     ui.photoNote = { tone: 'ok', text: 'Picture removed — your initials are shown instead.' };
@@ -221,33 +251,6 @@ function syncSessions() {
   const me = S.me();
   const count = S.get().mySessions.filter((s) => s.portal === 'admin').length;
   S.set({ admins: S.get().admins.map((a) => (a.userId === me.userId ? { ...a, activeSessions: count } : a)) });
-}
-
-/** Crop to a square and re-encode, which also drops EXIF (location, camera). */
-function processPicture(file) {
-  return new Promise((resolve, reject) => {
-    if (!file.size) return reject(new Error('Choose an image file.'));
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return reject(new Error('Please choose a JPG, PNG or WebP image.'));
-    if (file.size > 2 * 1000 * 1000) return reject(new Error('The photo is too large. Please use an image under 2 MB.'));
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const side = Math.min(img.naturalWidth, img.naturalHeight);
-      const sx = (img.naturalWidth - side) / 2;
-      const sy = (img.naturalHeight - side) / 2;
-      const draw = (size) => {
-        const c = document.createElement('canvas');
-        c.width = size; c.height = size;
-        c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, size, size);
-        return c.toDataURL('image/jpeg', 0.86);
-      };
-      const photo = { thumb: draw(96), full: draw(256) };
-      URL.revokeObjectURL(url);
-      resolve(photo);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file could not be read as an image.')); };
-    img.src = url;
-  });
 }
 
 /* Create my member profile: the same account gains its own member profile.

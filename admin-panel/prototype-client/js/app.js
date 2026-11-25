@@ -2,7 +2,7 @@
    Veye Admin Console — shell and routing
    ----------------------------------------------------------------------------
    The real console's chrome (platform/web components/admin/admin-chrome.tsx):
-   a rail with the brand, nine destinations and Sign out; a top bar with the
+   a rail with the brand, ten destinations and Sign out; a top bar with the
    environment chip and the signed-in administrator, whose picture or initials
    open Settings → Your account. No roles anywhere: every administrator sees
    this same navigation.
@@ -31,6 +31,7 @@ const NAV = [
   { id: 'requests',    label: 'Requests & Inbox', icon: 'inbox',     route: '/requests' },
   { id: 'content',     label: 'Content',          icon: 'edit',      route: '/content' },
   { id: 'insights',    label: 'Insights',         icon: 'bar-chart', route: '/insights' },
+  { id: 'finance',     label: 'Finance',          icon: 'wallet',    route: '/finance' },
   { id: 'settings',    label: 'Settings',         icon: 'settings',  route: '/settings' },
 ];
 
@@ -42,11 +43,14 @@ const SCREENS = {
   '/accept-invitation': 'accept-invitation',
   '/home': 'home',
   '/members': 'members',
+  '/members/trends': 'member-trends',
+  '/members/invitations': 'member-invitations',
   '/members/prospects': 'prospects',
   '/members/deletions': 'deletions',
   '/members/:id': 'member-360',
   '/members/:id/:tab': 'member-360',
   '/care': 'care-studio',
+  '/care/fitness-library': 'fitness-library',
   '/care/:kind': 'care-studio',
   '/assessments': 'assessments',
   '/assessments/:key': 'assessment-results',
@@ -58,6 +62,7 @@ const SCREENS = {
   '/content': 'content',
   '/content/:group': 'content',
   '/insights': 'insights',
+  '/finance': 'finance',
   '/settings': 'settings',
   '/settings/:section': 'settings',
 };
@@ -228,7 +233,7 @@ function register() {
           desc: `Nothing in this console answers to <code>#${esc(route.path)}</code>. It may be an old link, or a typo in the address.` })}
         <div class="card"><div class="card__body">${H.emptyState({
           icon: 'compass', title: 'Every screen is in the menu on the left',
-          msg: 'Home, Members, Care Studio, Assessments, Companion, Requests &amp; Inbox, Content, Insights and Settings.',
+          msg: 'Home, Members, Care Studio, Assessments, Companion, Requests &amp; Inbox, Content, Insights, Finance and Settings.',
           action: `<a class="btn btn--primary" href="${R.href('/home')}">Go to Home</a>`,
         })}</div></div>
       </div>`;

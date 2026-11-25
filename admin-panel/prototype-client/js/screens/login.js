@@ -58,6 +58,7 @@ function render(outlet, route) {
         <div class="auth-seq__step" style="--i:1">
           <h1>Sign in</h1>
           <p class="auth__lede">Welcome back. Use the email address your invitation was sent to.</p>
+          <p class="t-support" style="margin-top:12px" id="protoHint">Prototype: there are no real accounts. Any email address with a password of 12 or more characters signs in.</p>
           ${flash ? `<p class="notice notice--quiet" style="margin-top:12px">${esc(flash)}</p>` : ''}
         </div>
         <div class="auth__fields auth-seq__step" style="--i:2">
@@ -164,9 +165,11 @@ function render(outlet, route) {
       const remember = outlet.querySelector('#admin-remember').checked;
       H.busy(outlet.querySelector('#submit'), 'Signing in…', () => {
         // Any address and any password of twelve or more characters: there is
-        // no real account behind this prototype.
+        // no real account behind this prototype. The console's own wording,
+        // then how to get in here (a visitor once typed a 6-character password
+        // and had no way to know why it was refused, 15 Nov 2026).
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || pass.length < 12) {
-          showError('That email address and password do not match.');
+          showError('That email address and password do not match. In this prototype, any email address with a password of 12 or more characters signs in.');
           return;
         }
         S.set({ signedIn: true, rememberedEmail: remember ? value : '' });

@@ -228,6 +228,40 @@
   .fdx-photo-clear { border: none; background: none; padding: 0; font: inherit; font-size: 12.5px; color: #C0492F; cursor: pointer; text-decoration: underline; flex: 0 0 auto; }
   .fdx-meal-photo { display: block; margin: 10px 0 4px; padding: 0; border: none; background: none; cursor: zoom-in; }
   .fdx-meal-photo img { display: block; width: 100%; max-width: 280px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; }
+  /* The circular crop editor (Settings: Change photo, Adjust photo), the
+     webcam dialog (Food Diary: Snap a photo on a computer) and the meal-photo
+     viewer, owner request 15 Nov 2026. These are the application's
+     avatar-crop-dialog.module.css under crop-* names, one overlay and card for
+     all three as there, plus the camera's 4:3 stage (cam-*). */
+  .crop-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(23, 31, 12, 0.55); }
+  .crop-card { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: #fff; border-radius: 20px; box-shadow: 0 24px 60px rgba(23, 31, 12, 0.28); padding: 28px 28px 24px; color: #2e4a1a; }
+  .crop-title { margin: 0 0 6px; font-size: 22px; line-height: 1.25; font-weight: 600; color: #384c0c; }
+  .crop-sub { margin: 0 0 20px; font-size: 14px; line-height: 1.5; color: #607a4f; }
+  .crop-stage { display: flex; gap: 24px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .crop-frame { position: relative; width: min(300px, 72vw); aspect-ratio: 1 / 1; overflow: hidden; border-radius: 12px; background: #e9eee2; cursor: grab; touch-action: none; user-select: none; flex: 0 0 auto; }
+  .crop-frame:active { cursor: grabbing; }
+  .crop-frame:focus-visible { outline: 3px solid #8dc412; outline-offset: 3px; }
+  .crop-image { position: absolute; max-width: none; max-height: none; pointer-events: none; user-select: none; }
+  /* Everything outside the inscribed circle is dimmed: the circle is the avatar, exactly. */
+  .crop-mask { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(23, 31, 12, 0.55); outline: 2px solid rgba(255, 255, 255, 0.95); outline-offset: -1px; pointer-events: none; }
+  .crop-previews { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .crop-preview-label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #607a4f; }
+  .crop-preview { display: block; border-radius: 50%; background-color: #e9eee2; background-repeat: no-repeat; box-shadow: 0 0 0 1px rgba(46, 74, 26, 0.15); }
+  .crop-zoom { display: flex; align-items: center; gap: 12px; margin: 20px auto 0; max-width: 360px; font-size: 14px; color: #384c0c; }
+  .crop-zoom input { flex: 1 1 auto; accent-color: #8dc412; }
+  .crop-zoom-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(46, 74, 26, 0.25); background: #fff; color: #384c0c; font-size: 18px; line-height: 1; cursor: pointer; }
+  .crop-zoom-btn:disabled { opacity: 0.4; cursor: default; }
+  .crop-hint { margin: 10px 0 0; text-align: center; font-size: 12px; color: #7a8a6d; }
+  .crop-error { margin: 14px 0 0; font-size: 14px; color: #b42318; }
+  .crop-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
+  @media (max-width: 480px) {
+    .crop-card { padding: 22px 16px 18px; }
+    .crop-stage { gap: 16px; }
+    .crop-previews { flex-direction: row; }
+  }
+  .cam-stage { position: relative; border-radius: 12px; overflow: hidden; background: #1d2614; aspect-ratio: 4 / 3; }
+  .cam-stage video, .cam-stage img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cam-stage [hidden] { display: none; }
   .fdx-macros { margin-top: 14px; background: #F7FAEE; border-radius: 12px; padding: 12px 16px 10px; }
   .fdx-macros .fdx-label { margin-top: 0; }
   .fdx-macro-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
@@ -6006,6 +6040,10 @@
     border:1px solid #DDE6C8; border-radius:999px; background:#fff; color:#446514; font:600 14px 'Teachers',sans-serif; cursor:pointer; white-space:nowrap; }
   .settings-photo-btn:hover { background:#F6F9EE; }
   .settings-photo-hint { margin:0; text-align:center; color:#7A8A66; font:13px/1.35 'Teachers',sans-serif; }
+  /* Adjust photo (owner request, 15 Nov 2026): the application's own rule for
+     the quiet button under Change photo (platform/web member.css). */
+  .settings-photo-remove { border: 0; background: transparent; color: #7A8A66; font: 600 13px 'Teachers', sans-serif; cursor: pointer; text-decoration: underline; }
+  .settings-photo-remove:hover { color: #446514; }
   /* No uploaded photo and not the sample persona: the circle carries the
      member's initial, and the topbar avatar shows the same initial. */
   .settings-photo--initial, .avatar--initial { display:flex; align-items:center; justify-content:center; background-image:none;
@@ -6059,6 +6097,47 @@
   .fit-thumb__cap { font-size:14px; line-height:1.4; }
   .fit-thumb__cap b { font-size:16px; line-height:1.35; }
   .fit-preview-note { font-size:14px; }
+/* ---- Fitness library (15 Nov 2026): the prototype's preview frame made real.
+   A video player needs 16:9 where the static banner was a wide crop; cards are
+   buttons that play in the big player; more than nine videos page. ---------- */
+.fit-hero--video .fit-hero__image { height: auto; aspect-ratio: 16 / 9; }
+.fit-hero--video .fit-hero__image iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.fit-hero__play { position: absolute; inset: 0; display: grid; place-items: center; width: 100%; height: 100%; padding: 0; border: 0; background: #1f2a14; cursor: pointer; }
+.fit-hero__play img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: none; margin: 0; }
+.fit-hero__play svg { position: relative; width: 84px; height: 84px; transition: transform .2s ease; }
+.fit-hero__play:hover svg { transform: scale(1.06); }
+.fit-hero__play:focus-visible { outline: 3px solid #8DC412; outline-offset: -3px; }
+.fit-thumb--video { display: block; width: 100%; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.fit-thumb--video .fit-thumb__image { display: block; aspect-ratio: 16 / 9; }
+.fit-thumb--video .fit-thumb__image img { width: 100%; height: 100%; object-fit: cover; transform: none; }
+.fit-thumb--video .fit-thumb__cap { display: flex; flex-direction: column; gap: 2px; }
+.fit-thumb.is-playing { border-color: #8DC412; box-shadow: 0 0 0 2px rgba(141, 196, 18, 0.45); }
+.fit-thumb__playing { position: absolute; top: 9px; left: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(23, 31, 12, 0.72); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.fit-empty { margin: 8px 0 0; padding: 28px 18px; text-align: center; border: 1.5px dashed #D8DCC9; border-radius: 12px; color: var(--body-text-light); }
+.fit-pages { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 20px; }
+.fit-pages button { min-width: 38px; height: 38px; padding: 0 12px; border-radius: 999px; border: 1.5px solid #E2E6D8; background: #fff; color: var(--olive-heading); font: inherit; font-size: 13px; cursor: pointer; }
+.fit-pages button[aria-current="page"] { background: var(--olive-medium); border-color: var(--olive-medium); color: #fff; }
+.fit-pages button:disabled { opacity: .45; cursor: default; }
+.fit-pages button:focus-visible { outline: 2px solid #446514; outline-offset: 2px; }
+@media (max-width: 760px) { .fit-thumbs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .fit-thumbs { grid-template-columns: minmax(0, 1fr); } }
+  /* Prototype only (15 Nov 2026): no video is supplied yet, so pressing play
+     shows this static placeholder in the player instead of a provider's
+     player: the still, softened, with the "Static preview" pill and a line
+     saying what will happen. */
+  .fit-hero__placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px;
+    padding: 20px; background: #1f2a14; text-align: center; overflow: hidden; outline: none; }
+  .fit-hero__placeholder img { position: absolute; inset: -12px; width: calc(100% + 24px); height: calc(100% + 24px);
+    object-fit: cover; filter: blur(6px) brightness(.5); margin: 0; }
+  .fit-hero__placeholder .fit-static-badge { position: relative; left: auto; top: auto; transform: none; }
+  .fit-hero__placeholder-note { position: relative; max-width: 420px; color: #fff; font-family: 'Teachers', sans-serif;
+    font-size: 15px; line-height: 1.45; }
+  .fit-hero__placeholder:focus-visible { box-shadow: inset 0 0 0 3px #8DC412; }
+  @media (max-width: 480px) {
+    .fit-hero__placeholder { gap: 6px; padding: 10px; }
+    .fit-hero__placeholder .fit-static-badge { min-width: 0; min-height: 30px; padding: 6px 12px; font-size: 10px; }
+    .fit-hero__placeholder-note { font-size: 13px; }
+  }
   .assess-card-viz { display:grid; grid-template-columns:minmax(0,1fr) 90px; gap:14px; align-items:end; width:100%; margin:18px 0 0; }
   .assess-card-bars { height:72px; display:flex; align-items:flex-end; gap:7px; padding:4px 4px 0; border-bottom:1px solid #DDE5D1; }
   .assess-card-bars i { flex:1; min-width:8px; max-width:24px; border-radius:5px 5px 0 0; background:#C9DB9F; }
@@ -6098,6 +6177,7 @@
      Add it to your account): rules copied unchanged from
      platform/web/public/member-css/member.css, after this <style> as there. -->
 <link rel="stylesheet" href="styles/member-app.css?v=1">
+<link rel="stylesheet" href="styles/tracker-cards.css?v=1">
 </head>
 <body>
 
@@ -6456,6 +6536,16 @@
           </button>
         </div>
       </div>
+
+      <!-- Progress Trackers (concept A, owner 25 Nov 2026), as the application's:
+           drawn from this browser's saved results by js/tracker-cards.js. -->
+      <section class="tracker-section fade-in" aria-labelledby="trackerGraphTitle">
+        <div class="tracker-section__head">
+          <h2 id="trackerGraphTitle" class="activity-title tracker-section__title">Progress Trackers</h2>
+          <button type="button" class="tracker-section__link" id="trackerGuideBtn">Let Sprout guide you</button>
+        </div>
+        <div class="tracker-cards" id="trackerCards" data-testid="tracker-cards"></div>
+      </section>
 
       </div><!-- /view-dashboard -->
 
@@ -7411,56 +7501,41 @@
           </div>
         </section>
 
-        <!-- The supplied fitness stills reproduce the current Veye reference
-             while playback remains intentionally honest until final assets and
-             permissions are supplied. -->
-        <h2 class="fit-lib-title">Fitness library preview</h2>
-        <section class="fit-card" aria-label="Fitness library preview">
+        <!-- The Fitness library (owner request, 15 Nov 2026), in the
+             application's frame (platform/web components/member/
+             fitness-library.tsx): the four goal tabs, the big player and the
+             cards in rows of three. The main video waits in the player, every
+             card plays in it ("Now Playing"), more than nine videos page.
+             #fitLibraryPanel is drawn by renderFitnessLibrary() from the stills
+             this page already had (the Lose Weight goal; the other goals are
+             empty). No video is supplied yet, so playing shows a static
+             placeholder and nothing is embedded. -->
+        <h2 class="fit-lib-title">Fitness library</h2>
+        <section class="fit-card" aria-label="Fitness library">
           <div class="fit-tabs" role="tablist" aria-label="Fitness goals">
-            <button class="fit-tab" type="button" role="tab" aria-selected="false" data-fit-category="stronger">
+            <button class="fit-tab" type="button" role="tab" aria-selected="false" data-fit-category="stronger" aria-controls="fitLibraryPanel" aria-label="Get Stronger, 0 videos">
               <span class="fit-tab__icon" aria-hidden="true">
                 <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 27c1.4-5.2 4.7-8.7 9.4-9.6l3.2-.6 2.2-5.2c.5-1.2 1.9-1.8 3.1-1.3l1.2.5c1.2.5 1.7 1.8 1.2 3l-1.9 4.7 4.3 1.2c3.1.9 5.2 3.7 5.2 6.9V31c0 2.4-1.9 4.3-4.3 4.3H20.8c-4.2 0-7.8-3.5-7.8-7.8V27z"/><path d="M12 28.5 7.5 31l-1.8-3.6 5.2-2.7"/><path d="M25.3 19.1c2.4 1.4 4.4 1.6 6.9.8"/></svg>
               </span><span>Get Stronger</span>
             </button>
-            <button class="fit-tab is-active" type="button" role="tab" aria-selected="true" data-fit-category="weight">
+            <button class="fit-tab is-active" type="button" role="tab" aria-selected="true" data-fit-category="weight" aria-controls="fitLibraryPanel" aria-label="Lose Weight, 3 videos">
               <span class="fit-tab__icon" aria-hidden="true">
                 <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h24v18H12z"/><path d="M16 16V9M32 16V9M9 12h7M32 12h7"/><path d="M15 23h18M19 29h10"/><path d="M21 9c-2.3 2.3-2.3 5.2 0 7.2M27 9c2.3 2.3 2.3 5.2 0 7.2"/></svg>
               </span><span>Lose Weight</span>
             </button>
-            <button class="fit-tab" type="button" role="tab" aria-selected="false" data-fit-category="fit">
+            <button class="fit-tab" type="button" role="tab" aria-selected="false" data-fit-category="fit" aria-controls="fitLibraryPanel" aria-label="Get Fit, 0 videos">
               <span class="fit-tab__icon" aria-hidden="true">
                 <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 35c4-3.4 6.3-7.5 7.4-13.1.7-3.5 3.1-5.8 6.6-5.8h2.1c3.5 0 5.9 2.3 6.6 5.8C33.8 27.5 36 31.6 40 35"/><path d="M24 16V9M20.5 9h7"/><path d="M15.5 27c2.4 1.1 4.9 1.6 8.5 1.6s6.1-.5 8.5-1.6"/></svg>
               </span><span>Get Fit</span>
             </button>
-            <button class="fit-tab" type="button" role="tab" aria-selected="false" data-fit-category="performance">
+            <button class="fit-tab" type="button" role="tab" aria-selected="false" data-fit-category="performance" aria-controls="fitLibraryPanel" aria-label="Boost Performance, 0 videos">
               <span class="fit-tab__icon" aria-hidden="true">
                 <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h34M11 15v10M17 12v16M31 12v16M37 15v10"/><path d="M12 34h24M16 30v8M32 30v8"/></svg>
               </span><span>Boost Performance</span>
             </button>
           </div>
 
-          <figure class="fit-hero" id="fitHero">
-            <div class="fit-hero__image">
-              <img src="assets/web/img/fit-hero.jpg" alt="Bodyweight low-impact exercise preview">
-              <span class="fit-static-badge">Static preview</span>
-            </div>
-            <figcaption><strong>Bodyweight Low-Impact HIIT</strong><span class="fit-preview-kind">Video coming later</span></figcaption>
-          </figure>
-
-          <div class="fit-thumbs" aria-label="More fitness previews">
-            <figure class="fit-thumb fit-thumb--featured">
-              <div class="fit-thumb__image"><img src="assets/web/img/fit-thumb1.jpg" alt="Bodyweight Low-Impact HIIT preview"><span class="fit-thumb__chip">Featured</span></div>
-              <span class="fit-thumb__cap"><b>Bodyweight Low-Impact HIIT</b><span>Effective Cardio and Strength Without Jumping</span></span>
-            </figure>
-            <figure class="fit-thumb">
-              <div class="fit-thumb__image"><img src="assets/web/img/fit-thumb2.jpg" alt="Total Body Strength preview"><span class="fit-thumb__chip">Preview</span></div>
-              <span class="fit-thumb__cap"><b>Total Body Strength</b><span>65-Minute Strength and Endurance Challenge</span></span>
-            </figure>
-            <figure class="fit-thumb">
-              <div class="fit-thumb__image"><img src="assets/web/img/fit-thumb3.jpg" alt="Total Body Circuits preview"><span class="fit-thumb__chip">Preview</span></div>
-              <span class="fit-thumb__cap"><b>Total Body Circuits</b><span>Build Total Body Strength</span></span>
-            </figure>
-          </div>
+          <div id="fitLibraryPanel" role="tabpanel" aria-label="Lose Weight"></div>
 
           <p class="fit-preview-note">Preview images are shown here while final video assets and permissions are confirmed.</p>
         </section>
@@ -7550,7 +7625,7 @@
           <section class="settings-card settings-card--profile fade-in d1">
             <div class="settings-card__head"><div><span class="settings-kicker">Profile</span><h2>Your details</h2></div><span class="settings-card__mark">01</span></div>
             <form class="settings-profile" id="settingsProfileForm">
-              <div class="settings-photo-wrap"><div class="settings-photo" id="settingsPhotoPreview" role="img" aria-label="Current profile photo"></div><label class="settings-photo-btn" for="settingsPhotoInput">Change photo</label><input id="settingsPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden><p class="settings-photo-hint">JPG, PNG or WebP<br>up to 2 MB</p></div>
+              <div class="settings-photo-wrap"><div class="settings-photo" id="settingsPhotoPreview" role="img" aria-label="Current profile photo"></div><label class="settings-photo-btn" for="settingsPhotoInput">Change photo</label><input id="settingsPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden><button class="settings-photo-remove" id="settingsPhotoAdjust" type="button" hidden>Adjust photo</button><p class="settings-photo-hint">JPG, PNG or WebP<br>up to 10 MB</p></div>
               <div class="settings-fields">
                 <label>First name<input id="settingsFirstName" type="text" autocomplete="given-name" required maxlength="120"></label>
                 <label>Last name<input id="settingsLastName" type="text" autocomplete="family-name" maxlength="120"></label>
@@ -7639,15 +7714,14 @@
             <li>Blood marker results</li>
             <li>Your Health Assessment and Simple Quiz answers and results</li>
             <li>Mood entries and their notes</li>
-            <li>Food diary entries</li>
           </ul>
-          <p class="settings-help">Veye Companion (Sprout) may use summaries of the same records to answer you about your own progress. It never receives your notes or meal descriptions word for word.</p>
+          <p class="settings-help">Veye Companion (Sprout) may use summaries of these records and of your food diary to answer you about your own progress. It never receives your notes or meal descriptions word for word.</p>
           <h2 class="consent__heading">Who receives it, and why</h2>
           <p class="settings-help"><b>The Veye team &mdash; the people who run your Veye account.</b> To help you with your Veye program and to answer your questions about your own progress.</p>
           <h2 class="consent__heading">For how long</h2>
           <p class="settings-help">Until you withdraw it. You can withdraw at any time in Settings, and it stops at once: from that moment the team and Sprout no longer see your records. Withdrawing cannot undo what was already seen while sharing was on.</p>
           <h2 class="consent__heading">What is not covered</h2>
-          <p class="settings-help">Your name, email address and the messages you send to Veye are not covered by this choice and stay visible to the team so they can answer you.</p>
+          <p class="settings-help">Your name, email address, the messages you send to Veye, and your food diary with its photos are not covered by this choice and stay visible to the team so they can help you.</p>
           <h2 class="consent__heading">If you don&rsquo;t allow it</h2>
           <p class="settings-help">If you don't allow sharing, nobody at Veye can open your saved results, and Sprout answers without them.</p>
           <details class="consent__details">
@@ -7749,23 +7823,30 @@
              saved in that format are preserved read-only under History. -->
         <h1 class="fd-title">Food Diary</h1>
         <p class="fdx-blurb">Note the time, macronutrient content, and how you felt before you ate on the left, and your day summary will update on the right.</p>
+        <p class="fdx-blurb">The Veye team can see your food diary and its photos, so they can help you.</p>
 
         <div class="fdx-layout">
           <!-- ================= left: log a meal ================= -->
           <section class="fdx-panel fdx-left" aria-labelledby="fdxLeftTitle">
             <h2 class="fdx-panel-title" id="fdxLeftTitle">Log a meal</h2>
 
+            <!-- The photo row works (owner request, 15 Nov 2026; it said "In
+                 Development"), as the application's app/app/food-diary/page.tsx:
+                 Snap a photo opens the phone's camera on a touch device and the
+                 webcam dialog on a computer; a pasted link and Choose file work
+                 too. The chosen photo shows below (.fdx-photo-preview, drawn by
+                 renderFdxPhoto) until the entry is saved. -->
             <div class="fdx-photo">
-              <button class="fdx-photo-btn" type="button" disabled aria-disabled="true">
+              <button class="fdx-photo-btn" id="fdxSnap" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3a1.5 1.5 0 0 1 1.5 1.5V19a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 19V9.5A1.5 1.5 0 0 1 4 8z"/><circle cx="12" cy="14" r="3.6"/></svg>
                 Snap a photo
-                <span class="fdx-indev-tag">In Development</span>
               </button>
               <div class="fdx-photo-sub">
                 <label class="fdx-label fdx-label--muted" for="fdxPhotoUrl">Meal photo url</label>
-                <input class="fdx-input" id="fdxPhotoUrl" type="text" disabled aria-disabled="true" placeholder="In Development"/>
-                <button class="fdx-file-btn" type="button" disabled aria-disabled="true">Choose file</button>
-                <span class="fdx-indev-note">In Development</span>
+                <input class="fdx-input" id="fdxPhotoUrl" type="url" inputmode="url" autocomplete="off" placeholder="Paste a link to a picture" maxlength="2048"/>
+                <button class="fdx-file-btn" id="fdxPhotoChoose" type="button">Choose file</button>
+                <input id="fdxPhotoFile" type="file" accept="image/jpeg,image/png,image/webp" hidden/>
+                <input id="fdxPhotoCapture" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden/>
               </div>
             </div>
 
@@ -8084,6 +8165,7 @@
 <script src="js/veye-guided-flows.js?v=1"></script>
 <!-- A visitor's saved result (owner decision, 14 Nov 2026), for Add it to your account. -->
 <script src="js/saved-result.js?v=1"></script>
+<script src="js/tracker-cards.js?v=1"></script>
 <script>
   // The dashboard scrolls inside .main. Browsers can restore that nested scroll
   // position when a file:// prototype is reopened, clipping the welcome title.
@@ -8192,6 +8274,10 @@
     if (viewKey === 'food-diary') {
       // reset to today and re-read storage every time the diary opens
       if (window.initFoodDiaryX) window.initFoodDiaryX();
+    }
+    if (viewKey === 'fitness') {
+      // the library opens as the application's does: first goal, main video waiting
+      if (window.initFitnessLibrary) window.initFitnessLibrary();
     }
     if (viewKey === 'settings') {
       if (window.initSettings) window.initSettings();
@@ -9756,6 +9842,7 @@
     }
 
     hydrateActivityRow();
+    window.VeyeTrackerCards?.render();
 
     // 2) Simple Quiz tile state
     const sSaved = loadQuiz('veye_simple_quiz');
@@ -9812,23 +9899,139 @@
     }
   });
 
-  // Fitness — the screenshot gallery is a truthful preview layer until final
-  // video assets and permissions are available. Unsupported goal tabs stay
-  // visibly selectable without pretending that content exists.
-  document.querySelectorAll('[data-fit-category]').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const supported = tab.dataset.fitCategory === 'weight';
-      if (!supported) {
-        flashToast('This fitness collection is coming in a later update.');
-        return;
-      }
-      document.querySelectorAll('[data-fit-category]').forEach(other => {
-        const active = other === tab;
-        other.classList.toggle('is-active', active);
-        other.setAttribute('aria-selected', String(active));
-      });
+  // Fitness library (owner request, 15 Nov 2026), as the application's
+  // components/member/fitness-library.tsx: each goal shows its main video in
+  // the big player, then its videos (main first) nine to a page; a card
+  // plays in the player ("Now Playing"); a new goal opens on its main video.
+  // PROTOTYPE: the library holds only what this page already had: the three
+  // stills and captions are the Lose Weight goal (the first is its main
+  // video, with the wide still as its player image), and the other goals are
+  // empty, as they are until the Veye team adds videos. No video is supplied,
+  // so playing shows a static placeholder; nothing is embedded or loaded.
+  const FIT_GOALS = [
+    { key: 'stronger', label: 'Get Stronger' }, { key: 'weight', label: 'Lose Weight' },
+    { key: 'fit', label: 'Get Fit' }, { key: 'performance', label: 'Boost Performance' }
+  ];
+  const FIT_PAGE_SIZE = 9;
+  // PROTOTYPE FRAMING: the stills are screenshots of the earlier reference
+  // with its player chrome baked in: a white capture band on top of each card
+  // still, one card's own "Now Playing" label, and a play ring in the wide
+  // still. The inline framing crops the band and that label, and centres the
+  // baked ring, softly darkened, under the player's own button (ring centre
+  // 455,209 of 940x385). The application shows each provider's real still.
+  const FIT_CARD_FRAME = 'height:121.63%;transform:translateY(-17.78%)';
+  const FIT_RING_MASK = 'radial-gradient(circle farthest-corner at 50% 54.29%, rgba(0,0,0,.2) 9.4%, #000 11.6%)';
+  const FIT_LIBRARY = {
+    stronger: [],
+    weight: [
+      { id: 'weight-1', title: 'Bodyweight Low-Impact HIIT', subtitle: 'Effective Cardio and Strength Without Jumping',
+        still: 'assets/web/img/fit-thumb1.jpg', stillFrame: FIT_CARD_FRAME + ';object-position:100% 50%',
+        playerStill: 'assets/web/img/fit-hero.jpg',
+        playerFrame: 'width:120%;height:120%;left:-10%;top:-15.15%;object-position:44.1% 0;-webkit-mask-image:' + FIT_RING_MASK + ';mask-image:' + FIT_RING_MASK,
+        isMain: true },
+      { id: 'weight-2', title: 'Total Body Strength', subtitle: '65-Minute Strength and Endurance Challenge',
+        still: 'assets/web/img/fit-thumb2.jpg', stillFrame: FIT_CARD_FRAME },
+      { id: 'weight-3', title: 'Total Body Circuits', subtitle: 'Build Total Body Strength',
+        still: 'assets/web/img/fit-thumb3.jpg', stillFrame: FIT_CARD_FRAME }
+    ],
+    fit: [],
+    performance: []
+  };
+  // The application's first view: the first goal with videos, else Lose Weight.
+  const fitFirstGoal = () => (FIT_GOALS.find(g => FIT_LIBRARY[g.key].length) || { key: 'weight' }).key;
+  const fitState = { goal: fitFirstGoal(), page: 1, playing: null, started: false };
+  const FIT_PLAY_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="rgba(23,31,12,.45)" stroke="#fff" stroke-width="2"/><path d="M26 20.5 45 32 26 43.5z" fill="#fff"/></svg>';
+
+  // One goal's page as the API serves it: main first, then the rest in order.
+  function fitLibraryPage(goal, page) {
+    const shown = FIT_LIBRARY[goal].slice().sort((a, b) => (b.isMain ? 1 : 0) - (a.isMain ? 1 : 0));
+    const pages = Math.max(1, Math.ceil(shown.length / FIT_PAGE_SIZE));
+    const current = Math.min(Math.max(1, page), pages);
+    return { main: shown.find(v => v.isMain) || shown[0] || null, pages, page: current,
+             videos: shown.slice((current - 1) * FIT_PAGE_SIZE, current * FIT_PAGE_SIZE) };
+  }
+  function fitGoalLabel(key) { return FIT_GOALS.find(g => g.key === key).label; }
+
+  function renderFitnessLibrary(focus) {
+    const panel = document.getElementById('fitLibraryPanel');
+    if (!panel) return;
+    const lib = fitLibraryPage(fitState.goal, fitState.page);
+    fitState.page = lib.page;
+    // A new goal opens on its main video; paging keeps what is playing.
+    if (!fitState.playing || FIT_LIBRARY[fitState.goal].indexOf(fitState.playing) < 0) fitState.playing = lib.main;
+    const label = fitGoalLabel(fitState.goal);
+    document.querySelectorAll('[data-fit-category]').forEach(tab => {
+      const key = tab.dataset.fitCategory, count = FIT_LIBRARY[key].length, active = key === fitState.goal;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', String(active));
+      tab.setAttribute('aria-label', fitGoalLabel(key) + ', ' + count + ' video' + (count === 1 ? '' : 's'));
     });
+    panel.setAttribute('aria-label', label);
+    const v = fitState.playing;
+    let html = '';
+    if (!lib.main) {
+      html = `<p class="fit-empty">No videos in ${escapeHtml(label)} yet &mdash; they will appear here as the Veye team adds them.</p>`;
+    } else if (v) {
+      const still = v.playerStill || v.still;
+      const player = fitState.started
+        ? `<div class="fit-hero__placeholder" tabindex="-1">${still ? `<img src="${still}" alt="">` : ''}<span class="fit-static-badge">Static preview</span>` +
+          '<span class="fit-hero__placeholder-note">The video plays here once the Veye team adds it.</span></div>'
+        : `<button class="fit-hero__play" type="button" aria-label="Play ${escapeHtml(v.title)}">${still ? `<img src="${still}" alt=""${v.playerFrame ? ` style="${v.playerFrame}"` : ''}>` : ''}${FIT_PLAY_SVG}</button>`;
+      html = `<figure class="fit-hero fit-hero--video" id="fitHero"><div class="fit-hero__image">${player}</div>` +
+        `<figcaption><strong>${escapeHtml(v.title)}</strong><span class="fit-preview-kind">${escapeHtml(v.subtitle || (v.isMain ? 'Featured' : ''))}</span></figcaption></figure>`;
+    }
+    if (lib.videos.length) {
+      html += `<div class="fit-thumbs" aria-label="${escapeHtml(label)} videos">` + lib.videos.map(video => {
+        const now = v && v.id === video.id;
+        return `<button type="button" class="fit-thumb fit-thumb--video${video.isMain ? ' fit-thumb--featured' : ''}${now ? ' is-playing' : ''}" aria-pressed="${now}" data-fit-video="${video.id}">` +
+          `<span class="fit-thumb__image">${video.still ? `<img src="${video.still}" alt="" loading="lazy"${video.stillFrame ? ` style="${video.stillFrame}"` : ''}>` : ''}` +
+          `${now ? '<span class="fit-thumb__playing">Now Playing</span>' : ''}${video.isMain ? '<span class="fit-thumb__chip">Featured</span>' : ''}</span>` +
+          `<span class="fit-thumb__cap"><b>${escapeHtml(video.title)}</b>${video.subtitle ? `<span>${escapeHtml(video.subtitle)}</span>` : ''}</span></button>`;
+      }).join('') + '</div>';
+    }
+    if (lib.pages > 1) {
+      let pages = '';
+      for (let n = 1; n <= lib.pages; n++) pages += `<button type="button" data-fit-page="${n}" aria-label="Page ${n}"${n === lib.page ? ' aria-current="page"' : ''}>${n}</button>`;
+      html += `<nav class="fit-pages" aria-label="${escapeHtml(label)} video pages">` +
+        `<button type="button" data-fit-page="${lib.page - 1}"${lib.page <= 1 ? ' disabled' : ''}><span aria-hidden="true">&lsaquo;</span> Previous</button>` +
+        pages + `<button type="button" data-fit-page="${lib.page + 1}"${lib.page >= lib.pages ? ' disabled' : ''}>Next <span aria-hidden="true">&rsaquo;</span></button></nav>`;
+    }
+    panel.innerHTML = html;
+    // The keyboard stays where it was: the pressed card, page or the player.
+    const back = focus && panel.querySelector(focus);
+    if (back) back.focus({ preventScroll: true });
+  }
+
+  document.querySelectorAll('[data-fit-category]').forEach(tab => tab.addEventListener('click', () => {
+    const goal = tab.dataset.fitCategory;
+    if (goal === fitState.goal && fitState.page === 1) return;
+    Object.assign(fitState, { goal, page: 1, playing: null, started: false });
+    renderFitnessLibrary();
+  }));
+  document.getElementById('fitLibraryPanel')?.addEventListener('click', (e) => {
+    const play = e.target.closest('.fit-hero__play');
+    const card = e.target.closest('[data-fit-video]');
+    const page = e.target.closest('[data-fit-page]');
+    if (play) {
+      fitState.started = true;
+      renderFitnessLibrary('.fit-hero__placeholder');
+    } else if (card) {
+      fitState.playing = FIT_LIBRARY[fitState.goal].find(x => x.id === card.dataset.fitVideo) || fitState.playing;
+      fitState.started = true;
+      renderFitnessLibrary('[data-fit-video="' + card.dataset.fitVideo + '"]');
+      document.getElementById('fitHero')?.scrollIntoView({ behavior: PREFERS_REDUCED.matches ? 'auto' : 'smooth', block: 'start' });
+    } else if (page && !page.disabled) {
+      fitState.page = Number(page.dataset.fitPage);
+      renderFitnessLibrary('[data-fit-page="' + fitState.page + '"]');
+    }
   });
+  // Opening Fitness starts where the application does: the first goal, its
+  // main video waiting in the player.
+  window.initFitnessLibrary = function () {
+    Object.assign(fitState, { goal: fitFirstGoal(), page: 1, playing: null, started: false });
+    renderFitnessLibrary();
+  };
+  window.initFitnessLibrary();
   // Streak banner — "Log a Meal" → Food Diary
   document.getElementById('streakLogMealBtn')?.addEventListener('click', () => goTo('food-diary'));
 
@@ -9869,6 +10072,8 @@
     flashToast(step.messages[0] || 'Explore the dashboard at your own pace.');
   });
   document.getElementById('progressGuideBtn')?.addEventListener('click', () => guidedOpen('progress_tracker_guide', 'start'));
+  document.getElementById('trackerGuideBtn')?.addEventListener('click', () => guidedOpen('progress_tracker_guide', 'start'));
+  window.VeyeTrackerGo = (view) => openSubView(view, 'progress');
 
   // Help mini-card → Veye Companion
   // Help & FAQs mini-card → the FAQ page (help.html). Contact Us is a plain
@@ -11604,6 +11809,446 @@
   // ====================== INIT ======================
   document.body.classList.add('loaded');
 
+  // ---------------- Pictures: crop editor, camera, viewer (15 Nov 2026) ----
+  // Owner request, 15 Nov 2026: the application's circular crop editor
+  // (platform/web/components/avatar-crop-dialog.tsx), its webcam dialog
+  // (components/member/camera-capture.tsx) and the Food Diary's full-size
+  // photo viewer, in plain script: the same words, controls and sizes. Styles
+  // are the crop-* / cam-* rules in the stylesheet above.
+  //
+  // PROTOTYPE SIMPLIFICATION: there is no server here, so a picture is made
+  // smaller in the browser and kept in localStorage (about 5 MB per site). The
+  // application keeps what was uploaded in object storage and cuts its own
+  // sizes there. Re-encoding as JPEG also drops EXIF (location, camera), as the
+  // application's rebuild does; a transparent PNG is laid on white.
+  const VeyePhotos = (() => {
+    const TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+    const MAX_BYTES = 10000000;          // the application's limit, 10 MB
+    const MIN_CROP_SIDE = 64;            // never zoom in past a 64 px square of the original
+    const MAX_ZOOM = 8;
+    const KEY_STEP = 10;                 // CSS px per arrow press (Shift: four times that)
+    const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+
+    /** The application's checks before anything is read; '' when fine. */
+    function refusal(blob) {
+      if (!blob || TYPES.indexOf(blob.type) < 0) return 'Please choose a JPG, PNG or WebP image.';
+      if (blob.size > MAX_BYTES) return 'The photo is too large. Please use an image under 10 MB.';
+      return '';
+    }
+    /** A phone or tablet opens its own camera from the file input; a computer gets the webcam dialog. */
+    function prefersNativeCamera() {
+      return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+        !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    }
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => (img.naturalWidth && img.naturalHeight ? resolve(img) : reject(new Error('unreadable')));
+        img.onerror = () => reject(new Error('unreadable'));
+        img.src = src;
+      });
+    }
+    /** JPEG data URL of the whole picture (at most maxSide px on its long side)
+        or, given a crop, of that square at `side` px. Browsers draw a phone
+        photo upright (EXIF orientation), so the pixels match the editor's. */
+    function toJpeg(img, o) {
+      let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight, w, h;
+      if (o.crop) { sx = o.crop.x; sy = o.crop.y; sw = sh = o.crop.size; w = h = o.side; }
+      else {
+        const k = Math.min(1, o.maxSide / Math.max(sw, sh));
+        w = Math.max(1, Math.round(sw * k)); h = Math.max(1, Math.round(sh * k));
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+      return canvas.toDataURL('image/jpeg', o.quality);
+    }
+    /** A chosen file or snapshot, made at most maxSide px on its long side. */
+    function shrink(blob, maxSide, quality) {
+      const url = URL.createObjectURL(blob);
+      return loadImage(url).then(img => { const src = toJpeg(img, { maxSide, quality }); URL.revokeObjectURL(url); return src; },
+                                 err => { URL.revokeObjectURL(url); throw err; });
+    }
+
+    // ---- one modal mechanism for the three dialogs (the application's
+    // useModalDialog): remembers the opener, locks the .main scroll container,
+    // moves focus inside, keeps Tab inside, closes the topmost on Escape and
+    // gives focus back when it closes.
+    const stack = [];
+    let locked = null;
+    function focusables(root) {
+      return [...root.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')]
+        .filter(node => !node.disabled && node.offsetParent !== null);
+    }
+    document.addEventListener('keydown', (e) => {
+      const top = stack[stack.length - 1];
+      if (!top) return;
+      if (e.key === 'Escape') { e.preventDefault(); top.onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const items = focusables(top.card);
+      if (!items.length) { e.preventDefault(); return; }
+      const first = items[0], last = items[items.length - 1];
+      if (!top.card.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); return; }
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    function mount(html, onClose, prefer) {
+      const overlay = document.createElement('div');
+      overlay.className = 'crop-overlay';
+      overlay.innerHTML = html;
+      const card = overlay.firstElementChild;
+      const entry = { card, onClose, opener: document.activeElement };
+      document.body.appendChild(overlay);
+      stack.push(entry);
+      const main = document.querySelector('.main');
+      if (!locked && main) { locked = { el: main, previous: main.style.overflow }; main.style.overflow = 'hidden'; }
+      overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) entry.onClose(); });
+      // The preferred control may still be disabled (Starting camera…), so
+      // keep trying it for a few frames before settling for the first one.
+      let tries = 0;
+      const attempt = () => {
+        if (!document.contains(card)) return;
+        const preferred = prefer ? card.querySelector(prefer) : null;
+        const target = preferred && !preferred.disabled ? preferred : (!preferred || tries >= 30 ? focusables(card)[0] : null);
+        if (target) target.focus();
+        if (!card.contains(document.activeElement) && tries++ < 30) requestAnimationFrame(attempt);
+      };
+      requestAnimationFrame(() => requestAnimationFrame(attempt));
+      function unmount() {
+        const index = stack.indexOf(entry);
+        if (index < 0) return;
+        stack.splice(index, 1);
+        overlay.remove();
+        if (!stack.length && locked) { locked.el.style.overflow = locked.previous; locked = null; }
+        if (entry.opener && document.contains(entry.opener) && entry.opener.focus) entry.opener.focus();
+      }
+      return { card, unmount };
+    }
+
+    // ---- the circular crop editor ---------------------------------------
+    // The person moves and zooms the picture inside a square frame whose
+    // inscribed circle IS the avatar. What is saved is the square in the
+    // picture's own pixels: { x, y, size }. Moving: drag (mouse, touch, pen),
+    // two-finger pinch, the wheel, the zoom slider and its buttons, or the
+    // keyboard on the focused frame (arrows move, + and - zoom, 0 resets).
+    // opts: { src, initial, title, saveLabel, primaryClass, secondaryClass,
+    //         onSave(crop) -> Promise (reject with an Error to show its message),
+    //         onCancel() }
+    function openCropEditor(opts) {
+      const saveLabel = opts.saveLabel || 'Save picture';
+      const { card, unmount } = mount(`
+        <div class="crop-card" role="dialog" aria-modal="true" aria-labelledby="avatarCropTitle" aria-describedby="avatarCropHelp" data-testid="crop-dialog">
+          <h2 class="crop-title" id="avatarCropTitle">${escapeHtml(opts.title || 'Crop your picture')}</h2>
+          <p class="crop-sub" id="avatarCropHelp">Drag to move the picture and zoom to fit. The circle is exactly how your picture will appear.</p>
+          <div class="crop-stage">
+            <div class="crop-frame" data-crop-frame tabindex="0" role="group" aria-label="Picture position. Use the arrow keys to move it, plus and minus to zoom." data-testid="crop-frame" data-crop="">
+              <img class="crop-image" alt="" draggable="false" style="opacity:0">
+              <span class="crop-mask" aria-hidden="true"></span>
+            </div>
+            <div class="crop-previews" aria-hidden="true">
+              <span class="crop-preview-label">Preview</span>
+              <span class="crop-preview" data-preview="96" data-testid="crop-preview"></span>
+              <span class="crop-preview" data-preview="40"></span>
+            </div>
+          </div>
+          <div class="crop-zoom">
+            <button type="button" class="crop-zoom-btn" aria-label="Zoom out" data-zoom="out" disabled>&minus;</button>
+            <input type="range" min="1" max="1" step="0.01" value="1" aria-label="Zoom" disabled data-testid="crop-zoom">
+            <button type="button" class="crop-zoom-btn" aria-label="Zoom in" data-zoom="in" disabled>+</button>
+          </div>
+          <p class="crop-hint">Only this square is used for your picture; the photo you chose is kept so you can adjust it later.</p>
+          <p class="crop-error" role="alert" data-crop-error hidden></p>
+          <div class="crop-actions">
+            <button type="button" class="${opts.secondaryClass}" data-crop-cancel>Cancel</button>
+            <button type="button" class="${opts.primaryClass}" data-crop-save data-testid="crop-save" disabled>${escapeHtml(saveLabel)}</button>
+          </div>
+        </div>`, () => cancel(), '[data-crop-frame]');
+      const frameEl = card.querySelector('[data-crop-frame]');
+      const img = frameEl.querySelector('img');
+      const range = card.querySelector('input[type="range"]');
+      const zoomOut = card.querySelector('[data-zoom="out"]'), zoomIn = card.querySelector('[data-zoom="in"]');
+      const previews = [...card.querySelectorAll('[data-preview]')];
+      const errorEl = card.querySelector('[data-crop-error]');
+      const cancelBtn = card.querySelector('[data-crop-cancel]'), saveBtn = card.querySelector('[data-crop-save]');
+      // State lives in the PICTURE's pixels: the crop square's side follows
+      // from the zoom, and (cx, cy) is its centre.
+      let natural = null, frame = 300, zoom = 1, centre = null, busy = false, unreadable = false;
+      const minSide = () => (natural ? Math.min(natural.w, natural.h) : 1);
+      const maxZoom = () => (natural ? clamp(minSide() / Math.min(MIN_CROP_SIDE, minSide()), 1, MAX_ZOOM) : 1);
+      const side = () => minSide() / zoom;
+      const keepInside = (cx, cy, s) => (natural ? { cx: clamp(cx, s / 2, natural.w - s / 2), cy: clamp(cy, s / 2, natural.h - s / 2) } : { cx, cy });
+      // The square that will be saved: integers, inside the picture.
+      function crop() {
+        if (!natural || !centre) return null;
+        const size = Math.min(Math.round(side()), natural.w, natural.h);
+        return { size, x: clamp(Math.round(centre.cx - size / 2), 0, natural.w - size), y: clamp(Math.round(centre.cy - size / 2), 0, natural.h - size) };
+      }
+      function paint() {
+        const square = crop();
+        frameEl.setAttribute('data-crop', square ? square.x + ',' + square.y + ',' + square.size : '');
+        if (natural && centre) {
+          const scale = frame / side();
+          img.style.opacity = '';
+          img.style.width = natural.w * scale + 'px';
+          img.style.height = natural.h * scale + 'px';
+          img.style.left = frame / 2 - centre.cx * scale + 'px';
+          img.style.top = frame / 2 - centre.cy * scale + 'px';
+        }
+        // The previews show the integer square that will be saved, not the
+        // live one, so they are exactly the avatar.
+        previews.forEach(p => {
+          const px = Number(p.dataset.preview);
+          p.style.width = p.style.height = px + 'px';
+          if (!square || !natural) return;
+          const k = px / square.size;
+          p.style.backgroundSize = natural.w * k + 'px ' + natural.h * k + 'px';
+          p.style.backgroundPosition = -square.x * k + 'px ' + -square.y * k + 'px';
+        });
+        const most = maxZoom();
+        range.max = String(most);
+        range.value = String(zoom);
+        range.disabled = !natural || most <= 1;
+        zoomOut.disabled = zoom <= 1 || !natural;
+        zoomIn.disabled = zoom >= most || !natural;
+        cancelBtn.disabled = busy;
+        saveBtn.disabled = busy || !square || unreadable;
+      }
+      function setZoomKeeping(next) {
+        zoom = clamp(next, 1, maxZoom());
+        if (centre) centre = keepInside(centre.cx, centre.cy, minSide() / zoom);
+        paint();
+      }
+      function panBy(dx, dy) {
+        if (!centre) return;
+        const s = side(), scale = frame / s;   // CSS px per picture px
+        centre = keepInside(centre.cx - dx / scale, centre.cy - dy / scale, s);
+        paint();
+      }
+      function showUnreadable() {
+        if (unreadable) return;
+        unreadable = true;
+        const note = document.createElement('p');
+        note.className = 'crop-error';
+        note.setAttribute('role', 'alert');
+        note.textContent = 'That file could not be read as an image. Please choose a JPG, PNG or WebP picture.';
+        card.querySelector('.crop-stage').replaceWith(note);
+        card.querySelector('.crop-zoom').remove();
+        card.querySelector('.crop-hint').remove();
+        paint();
+        cancelBtn.focus();
+      }
+      img.addEventListener('load', () => {
+        const w = img.naturalWidth, h = img.naturalHeight;
+        if (!w || !h) { showUnreadable(); return; }
+        natural = { w, h };
+        const least = Math.min(w, h);
+        const start = opts.initial;
+        if (start && start.size > 0 && start.x + start.size <= w && start.y + start.size <= h) {
+          zoom = clamp(least / start.size, 1, clamp(least / Math.min(MIN_CROP_SIDE, least), 1, MAX_ZOOM));
+          centre = { cx: start.x + start.size / 2, cy: start.y + start.size / 2 };
+        } else {
+          zoom = 1;
+          centre = { cx: w / 2, cy: h / 2 };
+        }
+        previews.forEach(p => { p.style.backgroundImage = 'url("' + opts.src + '")'; });
+        paint();
+      });
+      img.addEventListener('error', showUnreadable);
+      img.src = opts.src;
+
+      // The frame is responsive: measure it, so dragging maps CSS px to pixels.
+      const measure = () => { frame = frameEl.clientWidth || 300; paint(); };
+      const observer = 'ResizeObserver' in window ? new ResizeObserver(measure) : null;
+      if (observer) observer.observe(frameEl);
+      measure();
+
+      // pointers: drag with one, pinch with two
+      const pointers = new Map();
+      let pinch = null;
+      const spread = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+      frameEl.addEventListener('pointerdown', (e) => {
+        frameEl.setPointerCapture(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 2) pinch = { distance: spread(), zoom };
+      });
+      frameEl.addEventListener('pointermove', (e) => {
+        const previous = pointers.get(e.pointerId);
+        if (!previous) return;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size >= 2 && pinch) {
+          const now = spread();
+          if (pinch.distance > 0) setZoomKeeping(pinch.zoom * (now / pinch.distance));
+        } else {
+          panBy(e.clientX - previous.x, e.clientY - previous.y);
+        }
+      });
+      const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null; };
+      frameEl.addEventListener('pointerup', up);
+      frameEl.addEventListener('pointercancel', up);
+      // The wheel zooms (not passive, so the page behind does not scroll).
+      frameEl.addEventListener('wheel', (e) => { e.preventDefault(); setZoomKeeping(zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08)); }, { passive: false });
+      frameEl.addEventListener('keydown', (e) => {
+        const step = e.shiftKey ? KEY_STEP * 4 : KEY_STEP;
+        // The arrows move the PICTURE, as a drag does.
+        const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+        if (Object.prototype.hasOwnProperty.call(moves, e.key)) { e.preventDefault(); panBy(moves[e.key][0], moves[e.key][1]); return; }
+        if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoomKeeping(zoom * 1.1); return; }
+        if (e.key === '-' || e.key === '_') { e.preventDefault(); setZoomKeeping(zoom / 1.1); return; }
+        if (e.key === '0') { e.preventDefault(); setZoomKeeping(1); }
+      });
+      zoomOut.addEventListener('click', () => setZoomKeeping(zoom / 1.15));
+      zoomIn.addEventListener('click', () => setZoomKeeping(zoom * 1.15));
+      range.addEventListener('input', () => setZoomKeeping(Number(range.value)));
+
+      function finish() { if (observer) observer.disconnect(); unmount(); }
+      function cancel() {
+        if (busy) return;
+        finish();
+        if (opts.onCancel) opts.onCancel();
+      }
+      cancelBtn.addEventListener('click', cancel);
+      saveBtn.addEventListener('click', () => {
+        const square = crop();
+        if (!square || busy) return;
+        busy = true;
+        errorEl.hidden = true;
+        saveBtn.textContent = 'Saving…';
+        paint();
+        Promise.resolve().then(() => opts.onSave(square)).then(() => { busy = false; finish(); }, (reason) => {
+          busy = false;
+          errorEl.textContent = reason && reason.message ? reason.message : 'The picture could not be saved.';
+          errorEl.hidden = false;
+          saveBtn.textContent = saveLabel;
+          paint();
+        });
+      });
+    }
+
+    // ---- "Snap a photo" on a computer: the webcam in a dialog -----------
+    // Take photo, then Use photo or Retake. A phone does not come here: its
+    // camera opens straight from the file input (capture). The camera is
+    // switched off whenever the dialog closes, however it closes.
+    // opts: { onUse(blob), onCancel(), onChooseFile() }
+    function openCamera(opts) {
+      let stream = null, phase = 'starting', shot = null, closed = false, wantPrimary = false;
+      const { card, unmount } = mount(`
+        <div class="crop-card" role="dialog" aria-modal="true" aria-labelledby="cameraTitle" data-testid="camera-dialog">
+          <h2 class="crop-title" id="cameraTitle">Snap a photo of your meal</h2>
+          <p class="crop-sub">Take the photo, then use it &mdash; it is added when you save the meal.</p>
+          <div class="cam-stage">
+            <video playsinline muted aria-label="Camera preview" data-testid="camera-preview"></video>
+            <img alt="The photo you took" hidden>
+          </div>
+          <p class="crop-error" role="alert" hidden></p>
+          <div class="crop-actions"></div>
+        </div>`, () => close(), '[data-camera-primary]');
+      const video = card.querySelector('video');
+      const still = card.querySelector('.cam-stage img');
+      const message = card.querySelector('.crop-error');
+      const actions = card.querySelector('.crop-actions');
+      const say = (text) => { message.textContent = text; message.hidden = !text; };
+      const stop = () => { if (stream) stream.getTracks().forEach(track => track.stop()); stream = null; };
+      function draw() {
+        video.hidden = phase === 'taken';
+        still.hidden = !shot;
+        if (shot) still.src = shot.url;
+        const held = document.activeElement;
+        const was = held && actions.contains(held) ? held.getAttribute('data-cam') : (held === document.body ? 'primary' : '');
+        actions.innerHTML = '<button type="button" class="btn-ghost" data-cam="cancel">Cancel</button>' + (
+          phase === 'blocked'
+            ? '<button type="button" class="btn-primary" data-cam="file" data-camera-primary data-testid="camera-choose-file">Choose a file instead</button>'
+          : phase === 'taken'
+            ? '<button type="button" class="btn-ghost" data-cam="retake">Retake</button><button type="button" class="btn-primary" data-cam="use" data-camera-primary data-testid="camera-use">Use photo</button>'
+            : '<button type="button" class="btn-primary" data-cam="take" data-camera-primary data-testid="camera-take"' + (phase === 'live' ? '' : ' disabled') + '>' +
+              (phase === 'starting' ? 'Starting camera…' : 'Take photo') + '</button>');
+        // Rebuilding the buttons must not drop the keyboard: when the focused
+        // button has gone (Take photo, Retake, Use photo), focus moves to the
+        // main button as soon as it can take it, Cancel meanwhile.
+        const primary = actions.querySelector('[data-camera-primary]:not([disabled])');
+        const same = was && was !== 'primary' ? actions.querySelector('[data-cam="' + was + '"]:not([disabled])') : null;
+        if (was && !same) wantPrimary = true;
+        if (wantPrimary && primary) { primary.focus(); wantPrimary = false; }
+        else if (same) same.focus();
+        else if (was) actions.querySelector('[data-cam="cancel"]').focus();
+      }
+      async function start() {
+        phase = 'starting';
+        say('');
+        draw();
+        try {
+          const media = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1600 }, height: { ideal: 1200 } }, audio: false });
+          if (closed) { media.getTracks().forEach(track => track.stop()); return; }
+          stream = media;
+          video.srcObject = media;
+          await video.play().catch(() => undefined);
+          phase = 'live';
+        } catch (reason) {
+          if (closed) return;
+          const name = reason && reason.name ? reason.name : '';
+          say(name === 'NotAllowedError' || name === 'SecurityError'
+            ? 'Camera access was blocked. Allow the camera for this site in your browser, or choose a file instead.'
+            : name === 'NotFoundError' || name === 'OverconstrainedError'
+              ? 'No camera was found on this device. Choose a file instead.'
+              : 'The camera could not be started. Choose a file instead.');
+          phase = 'blocked';
+        }
+        draw();
+      }
+      function take() {
+        if (!video.videoWidth) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        canvas.toBlob((blob) => {
+          if (closed) return;
+          if (!blob) { say('That photo could not be taken. Try again.'); return; }
+          shot = { blob, url: URL.createObjectURL(blob) };
+          phase = 'taken';
+          stop();
+          draw();
+        }, 'image/jpeg', 0.92);
+      }
+      function finish() {
+        closed = true;
+        stop();
+        if (shot) URL.revokeObjectURL(shot.url);
+        unmount();
+      }
+      function close() { finish(); if (opts.onCancel) opts.onCancel(); }
+      actions.addEventListener('click', (e) => {
+        const button = e.target.closest('[data-cam]');
+        if (!button || button.disabled) return;
+        const act = button.getAttribute('data-cam');
+        if (act === 'cancel') close();
+        else if (act === 'take') take();
+        else if (act === 'retake') { if (shot) URL.revokeObjectURL(shot.url); shot = null; start(); }
+        else if (act === 'use' && shot) { const blob = shot.blob; finish(); opts.onUse(blob); }
+        else if (act === 'file') { finish(); opts.onChooseFile(); }
+      });
+      start();
+    }
+
+    // ---- a meal's photo at full size, over the page ---------------------
+    function openViewer(o) {
+      let handle = null;
+      handle = mount(`
+        <div class="crop-card" role="dialog" aria-modal="true" aria-label="${escapeHtml('Photo of ' + o.alt)}" data-testid="diary-photo-view">
+          <img alt="${escapeHtml(o.alt)}" referrerpolicy="no-referrer" style="width:100%;border-radius:12px;display:block">
+          <p class="crop-sub" style="margin-top:12px;margin-bottom:0">${escapeHtml(o.caption)}</p>
+          <div class="crop-actions"><button type="button" class="btn-primary" data-photo-close>Close</button></div>
+        </div>`, () => handle.unmount(), '[data-photo-close]');
+      handle.card.querySelector('img').src = o.src;
+      handle.card.querySelector('[data-photo-close]').addEventListener('click', () => handle.unmount());
+    }
+
+    return { refusal, prefersNativeCamera, loadImage, toJpeg, shrink, openCropEditor, openCamera, openViewer };
+  })();
+
   // ---------------- Food Diary: daily entries (client, 20 Aug 2026) --------
   // Storage: veye_food_diary version 2 —
   //   { version: 2, days: { 'YYYY-MM-DD': { meals: [...], savedAt } },
@@ -11623,6 +12268,92 @@
     let fdxDay = todayKeyFdx();
     let fdxFeelingsSel = [];
     let fdxEditIndex = null;   // when editing an existing meal
+    // The photo row (owner request, 15 Nov 2026), as the application's
+    // app/app/food-diary/page.tsx: what goes with the entry being written.
+    let fdxPending = null;     // { src, name } — a chosen file or snapshot, already made smaller
+    let fdxDropPhoto = false;  // editing: remove the meal's photo on Update
+    let fdxBusy = false;       // a pasted link is being checked
+
+    // A meal's photo is meal.photo, one of:
+    //   { id }   the picture, kept in this browser under veye_food_photo_<id>.
+    //            PROTOTYPE SIMPLIFICATION: made at most 800 px on its long
+    //            side (JPEG) so a diary of photos fits localStorage; the
+    //            application keeps up to 1600 px plus a 400 px thumbnail in
+    //            object storage. The picture is a key of its own, beside the
+    //            meal rather than inside veye_food_diary, so the diary stays
+    //            small enough for the file:// fragment carrier (it drops keys
+    //            over 30,000 characters, and a diary it had dropped would later
+    //            be overwritten by another page's older copy).
+    //   { link } a pasted link, shown from that address. The prototype has no
+    //            server; the application instead fetches the picture once and
+    //            keeps its own copy, so the browser never loads the link and
+    //            the photo outlives it.
+    const FDX_PHOTO_PREFIX = 'veye_food_photo_';
+    function fdxPhotoSrc(meal) {
+      const photo = meal && meal.photo;
+      if (!photo) return '';
+      if (photo.link) return String(photo.link);
+      try { return photo.id ? localStorage.getItem(FDX_PHOTO_PREFIX + photo.id) || '' : ''; } catch (e) { return ''; }
+    }
+    function fdxKeepPhoto(src) {
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      try { localStorage.setItem(FDX_PHOTO_PREFIX + id, src); }
+      catch (e) { throw new Error('This browser has no room left to keep the photo.'); }
+      return { id };
+    }
+    function fdxForgetPhoto(photo) {
+      if (photo && photo.id) { try { localStorage.removeItem(FDX_PHOTO_PREFIX + photo.id); } catch (e) {} }
+    }
+    // A picture no meal points at any more (its meal was removed or edited
+    // on another page, or it was replaced) is cleared when the diary opens.
+    function fdxSweepPhotos() {
+      try {
+        const used = new Set();
+        const store = loadFdx();
+        Object.keys(store.days).forEach(k => (store.days[k].meals || []).forEach(m => {
+          if (m && m.photo && m.photo.id) used.add(FDX_PHOTO_PREFIX + m.photo.id);
+        }));
+        const stale = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.indexOf(FDX_PHOTO_PREFIX) === 0 && !used.has(k)) stale.push(k);
+        }
+        stale.forEach(k => localStorage.removeItem(k));
+      } catch (e) {}
+    }
+
+    // A pasted link: the application's own refusals for an address it would
+    // not fetch (platform/api app/storage/remote_image.py), then the picture is
+    // loaded once to see that the link leads to one.
+    function fdxLinkRefusal(url) {
+      if (!url || url.length > 2048 || /\s/.test(url)) return 'Paste the address of a picture — it starts with https://.';
+      let u;
+      try { u = new URL(url); } catch (e) { return 'Use a link that starts with https:// (or http://).'; }
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') return 'Use a link that starts with https:// (or http://).';
+      if (u.username || u.password) return 'Links with a user name or password in them are not accepted.';
+      const host = u.hostname.toLowerCase().replace(/\.$/, '');
+      if (!host) return 'That link has no website in it.';
+      if (u.port) return 'Links to unusual ports are not accepted.';
+      if (host === 'localhost' || /\.localhost$/.test(host) || host === '0.0.0.0' || /^\[(::1?|f[cd][0-9a-f:]*)\]$/.test(host) ||
+          /^(127|10)\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+        return 'That link points to a private or local address, which Veye does not fetch.';
+      }
+      return '';
+    }
+    function fdxCheckLink(url) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const timer = setTimeout(() => {
+          img.onload = img.onerror = null;
+          img.src = '';
+          reject(new Error('That website took too long to send the picture.'));
+        }, 15000);
+        img.onload = () => { clearTimeout(timer); if (img.naturalWidth) resolve(); else reject(new Error('That link did not lead to a picture.')); };
+        img.onerror = () => { clearTimeout(timer); reject(new Error('That link did not lead to a picture.')); };
+        img.referrerPolicy = 'no-referrer';
+        img.src = url;
+      });
+    }
 
     function loadFdx() {
       let store = loadQuiz('veye_food_diary');
@@ -11692,6 +12423,7 @@
             <span class="fdx-meal-macros">P ${m.p}g &middot; C ${m.c}g &middot; F ${m.f}g &middot; ${m.k} kcal</span>
           </div>
           <p class="fdx-meal-what">${escapeHtml(m.what)}</p>
+          ${fdxPhotoSrc(m) ? `<button class="fdx-meal-photo" data-fdx-photo="${i}" type="button" aria-label="Open the photo of: ${escapeHtml(m.what)}"><img src="${escapeHtml(fdxPhotoSrc(m))}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>` : ''}
           ${m.feelings && m.feelings.length ? `<div class="fdx-meal-feels">${m.feelings.map(f => '<span>' + escapeHtml(f) + '</span>').join('')}</div>` : ''}
           ${m.notes ? `<p class="fdx-meal-notes">${escapeHtml(m.notes)}</p>` : ''}
           <div class="fdx-meal-actions">
@@ -11708,9 +12440,15 @@
       // wire meal actions
       view.querySelectorAll('[data-fdx-rm]').forEach(b => b.addEventListener('click', () => {
         const st2 = loadFdx();
-        st2.days[fdxDay].meals.splice(parseInt(b.dataset.fdxRm, 10), 1);
+        const at = parseInt(b.dataset.fdxRm, 10);
+        const gone = st2.days[fdxDay].meals.splice(at, 1)[0];
         if (!st2.days[fdxDay].meals.length) delete st2.days[fdxDay];
-        saveFdx(st2); renderFdxDay(); renderFdxHistory();
+        saveFdx(st2);
+        if (gone) fdxForgetPhoto(gone.photo);   // a meal's photo goes with it
+        // The entry being edited is gone, or has moved up one.
+        if (fdxEditIndex === at) { fdxEditIndex = null; fdxDropPhoto = false; el('fdxAdd').textContent = 'Add Entry'; }
+        else if (fdxEditIndex !== null && at < fdxEditIndex) fdxEditIndex--;
+        renderFdxDay(); renderFdxHistory(); renderFdxPhoto();
       }));
       view.querySelectorAll('[data-fdx-edit]').forEach(b => b.addEventListener('click', () => {
         const st2 = loadFdx();
@@ -11723,11 +12461,104 @@
           const on = fdxFeelingsSel.includes(f.dataset.feel);
           f.classList.toggle('on', on); f.setAttribute('aria-pressed', String(on));
         });
+        // A fresh photo row: the meal's own photo shows, ready to replace or remove.
+        fdxPending = null; el('fdxPhotoUrl').value = ''; fdxDropPhoto = false;
+        renderFdxPhoto();
         refreshMacroPreview();
         el('fdxAdd').textContent = 'Update Entry';
         el('fdxWhat').focus();
       }));
+      view.querySelectorAll('[data-fdx-photo]').forEach(b => b.addEventListener('click', () => {
+        const m = ((loadFdx().days[fdxDay] || { meals: [] }).meals || [])[parseInt(b.dataset.fdxPhoto, 10)];
+        const src = fdxPhotoSrc(m);
+        if (src) VeyePhotos.openViewer({ src, alt: m.what, caption: (m.time || '') + ' · ' + m.what });
+      }));
     }
+
+    // --- the photo row -----------------------------------------------------
+    // The preview under the row, as the application draws it: the chosen
+    // photo, else the pasted link, else (editing) the meal's own photo or the
+    // note that it will be removed. Nothing to show, no preview at all.
+    function fdxEditingMeal() {
+      if (fdxEditIndex === null) return null;
+      const day = loadFdx().days[fdxDay];
+      return (day && day.meals && day.meals[fdxEditIndex]) || null;
+    }
+    function renderFdxPhoto() {
+      const box = view.querySelector('.fdx-photo');
+      const old = box.querySelector('.fdx-photo-preview');
+      const hadFocus = !!old && old.contains(document.activeElement);
+      if (old) old.remove();
+      const verb = fdxEditIndex !== null ? 'update' : 'add';
+      const current = fdxPhotoSrc(fdxEditingMeal());
+      let inner = '';
+      if (fdxPending) {
+        inner = `<img src="${escapeHtml(fdxPending.src)}" alt="The photo for this meal"><p>Added when you ${verb} the entry.</p>` +
+          '<button class="fdx-photo-clear" type="button" data-fdx-photo-act="clear">Remove</button>';
+      } else if (el('fdxPhotoUrl').value.trim()) {
+        // The application's words: there the link is fetched and kept on save
+        // (this prototype keeps the link itself — see meal.photo above).
+        inner = `<p>Veye fetches the picture at this link and keeps its own copy when you ${verb} the entry.</p>` +
+          '<button class="fdx-photo-clear" type="button" data-fdx-photo-act="unlink">Remove</button>';
+      } else if (fdxDropPhoto) {
+        inner = '<p>The photo will be removed when you update the entry.</p>' +
+          '<button class="fdx-photo-clear" type="button" data-fdx-photo-act="keep">Keep it</button>';
+      } else if (current) {
+        inner = `<img src="${escapeHtml(current)}" alt="This meal's photo" referrerpolicy="no-referrer"><p>This meal&rsquo;s photo. Choose another to replace it.</p>` +
+          '<button class="fdx-photo-clear" type="button" data-fdx-photo-act="drop">Remove photo</button>';
+      }
+      if (!inner) { if (hadFocus) el('fdxSnap').focus(); return; }
+      const preview = document.createElement('div');
+      preview.className = 'fdx-photo-preview';
+      preview.innerHTML = inner;
+      box.appendChild(preview);
+      if (hadFocus) preview.querySelector('button').focus();
+    }
+    // A file or snapshot: the application's checks, then made smaller
+    // (PROTOTYPE SIMPLIFICATION — see meal.photo above) and shown until saved.
+    function fdxTakePhoto(blob, name) {
+      const err = el('fdxErr');
+      err.hidden = true;
+      const refused = VeyePhotos.refusal(blob);
+      if (refused) { err.textContent = refused; err.hidden = false; return; }
+      VeyePhotos.shrink(blob, 800, 0.85).then(src => {
+        fdxPending = { src, name };
+        el('fdxPhotoUrl').value = '';   // the last thing chosen is the photo
+        fdxDropPhoto = false;
+        renderFdxPhoto();
+      }, () => { err.textContent = 'That file could not be read as an image.'; err.hidden = false; });
+    }
+    function fdxFromInput(input) {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (file) fdxTakePhoto(file, file.name);
+    }
+    el('fdxPhotoFile').addEventListener('change', () => fdxFromInput(el('fdxPhotoFile')));
+    el('fdxPhotoCapture').addEventListener('change', () => fdxFromInput(el('fdxPhotoCapture')));
+    el('fdxPhotoChoose').addEventListener('click', () => el('fdxPhotoFile').click());
+    el('fdxSnap').addEventListener('click', () => {
+      if (VeyePhotos.prefersNativeCamera()) { el('fdxPhotoCapture').click(); return; }
+      VeyePhotos.openCamera({
+        onCancel: () => {},
+        onUse: blob => fdxTakePhoto(blob, 'camera.jpg'),
+        onChooseFile: () => el('fdxPhotoFile').click()
+      });
+    });
+    el('fdxPhotoUrl').addEventListener('input', () => {
+      if (el('fdxPhotoUrl').value.trim()) { fdxPending = null; fdxDropPhoto = false; }
+      renderFdxPhoto();
+    });
+    view.querySelector('.fdx-photo').addEventListener('click', (e) => {
+      const button = e.target.closest('[data-fdx-photo-act]');
+      if (!button) return;
+      const act = button.getAttribute('data-fdx-photo-act');
+      if (act === 'clear') fdxPending = null;
+      else if (act === 'unlink') el('fdxPhotoUrl').value = '';
+      else if (act === 'keep') fdxDropPhoto = false;
+      else if (act === 'drop') fdxDropPhoto = true;
+      renderFdxPhoto();
+      if (act === 'unlink') el('fdxPhotoUrl').focus();
+    });
 
     // --- history -----------------------------------------------------------
     function renderFdxHistory() {
@@ -11770,6 +12601,7 @@
       const err = el('fdxErr');
       if (!what) { err.textContent = 'Describe what you ate first.'; err.hidden = false; el('fdxWhat').focus(); return; }
       if (!time) { err.textContent = 'The time you ate is required.'; err.hidden = false; el('fdxTime').focus(); return; }
+      if (fdxBusy) return;   // a pasted link is still being checked
       err.hidden = true;
       const est = fdxEstimate(what) || { p: 0, c: 0, f: 0, k: 0 };
       const meal = { what, time, p: est.p, c: est.c, f: est.f, k: est.k,
@@ -11777,28 +12609,91 @@
                      added: new Date().toISOString() };
       const store = loadFdx();
       if (!store.days[fdxDay]) store.days[fdxDay] = { meals: [] };
-      if (fdxEditIndex !== null) { store.days[fdxDay].meals[fdxEditIndex] = meal; fdxEditIndex = null; el('fdxAdd').textContent = 'Add Entry'; }
-      else store.days[fdxDay].meals.push(meal);
-      saveFdx(store);
-      // clear the form
+      const meals = store.days[fdxDay].meals;
+      const index = fdxEditIndex !== null ? fdxEditIndex : meals.length;
+      // The meal is saved whatever happens to its photo, and a refused photo
+      // leaves the form on the saved meal so it can be fixed and updated (the
+      // application's order). An edit keeps the meal's own photo unless it is
+      // replaced or removed.
+      const before = fdxEditIndex !== null && meals[index] ? meals[index].photo || null : null;
+      if (before) meal.photo = before;
+      const link = el('fdxPhotoUrl').value.trim();
+      let added = null, refused = '';
+      if (fdxPending) {
+        try { added = meal.photo = fdxKeepPhoto(fdxPending.src); } catch (e) { refused = e.message; }
+      } else if (link) {
+        refused = fdxLinkRefusal(link);
+      } else if (fdxEditIndex !== null && fdxDropPhoto) {
+        delete meal.photo;
+      }
+      meals[index] = meal;
+      let saved = fdxTrySave(store);
+      if (!saved && added) {
+        // No room for the diary beside the new photo: give that room back
+        // and keep the meal without it.
+        fdxForgetPhoto(added);
+        if (before) meal.photo = before; else delete meal.photo;
+        refused = 'This browser has no room left to keep the photo.';
+        saved = fdxTrySave(store);
+      }
+      if (!saved) { err.textContent = 'The entry could not be saved.'; err.hidden = false; return; }
+      if (meal.photo !== before) fdxForgetPhoto(before);   // replaced or removed
+      if (refused) { fdxPhotoRefused(fdxDay, meal.added, refused); return; }
+      if (link) {
+        const day = fdxDay;
+        fdxBusy = true;
+        fdxCheckLink(link).then(() => {
+          fdxBusy = false;
+          const st = loadFdx();
+          const kept = ((st.days[day] || {}).meals || []).find(m => m.added === meal.added);
+          if (kept) {
+            const old = kept.photo || null;
+            kept.photo = { link };
+            if (!fdxTrySave(st)) { fdxPhotoRefused(day, meal.added, 'This browser has no room left to keep the photo.'); return; }
+            fdxForgetPhoto(old);
+          }
+          fdxEntryDone();
+        }, (e) => { fdxBusy = false; fdxPhotoRefused(day, meal.added, e.message); });
+        return;
+      }
+      fdxEntryDone();
+    });
+    function fdxTrySave(store) {
+      try { saveFdx(store); return true; } catch (e) { return false; }
+    }
+    // Saved, photo and all: a clean form for the next entry.
+    function fdxEntryDone() {
+      fdxEditIndex = null;
+      el('fdxAdd').textContent = 'Add Entry';
       el('fdxWhat').value = ''; el('fdxTime').value = ''; el('fdxNotes').value = '';
       fdxFeelingsSel = [];
       view.querySelectorAll('.fdx-feel').forEach(f => { f.classList.remove('on'); f.setAttribute('aria-pressed', 'false'); });
       el('fdxMacros').hidden = true;
-      renderFdxDay(); renderFdxHistory();
-    });
+      fdxPending = null; el('fdxPhotoUrl').value = ''; fdxDropPhoto = false;
+      renderFdxDay(); renderFdxHistory(); renderFdxPhoto();
+    }
+    // The meal is saved but its photo was refused: the form stays, on that meal.
+    function fdxPhotoRefused(day, stamp, message) {
+      const at = ((loadFdx().days[day] || {}).meals || []).findIndex(m => m.added === stamp);
+      if (day === fdxDay && at >= 0) { fdxEditIndex = at; el('fdxAdd').textContent = 'Update Entry'; }
+      renderFdxDay(); renderFdxHistory(); renderFdxPhoto();
+      const err = el('fdxErr');
+      err.textContent = 'Your meal is saved, but the photo was not added: ' + message;
+      err.hidden = false;
+    }
 
     const shiftDay = delta => {
       const d = new Date(fdxDay + 'T12:00:00');
       d.setDate(d.getDate() + delta);
       fdxDay = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       fdxEditIndex = null; el('fdxAdd').textContent = 'Add Entry';
-      renderFdxDay();
+      fdxDropPhoto = false;
+      renderFdxDay(); renderFdxPhoto();
     };
     el('fdxPrevDay').addEventListener('click', () => shiftDay(-1));
     el('fdxNextDay').addEventListener('click', () => shiftDay(1));
     el('fdxDate').addEventListener('change', () => {
-      if (el('fdxDate').value) { fdxDay = el('fdxDate').value; fdxEditIndex = null; el('fdxAdd').textContent = 'Add Entry'; renderFdxDay(); }
+      if (el('fdxDate').value) { fdxDay = el('fdxDate').value; fdxEditIndex = null; el('fdxAdd').textContent = 'Add Entry'; fdxDropPhoto = false; renderFdxDay(); renderFdxPhoto(); }
     });
 
     el('fdxSaveDay').addEventListener('click', () => {
@@ -11849,9 +12744,12 @@
     window.initFoodDiaryX = function () {
       fdxDay = todayKeyFdx();
       fdxEditIndex = null;
+      fdxDropPhoto = false;
       el('fdxAdd').textContent = 'Add Entry';
+      fdxSweepPhotos();
       renderFdxDay();
       renderFdxHistory();
+      renderFdxPhoto();
     };
     // first paint (the view exists on load even when inactive)
     window.initFoodDiaryX();
@@ -11863,9 +12761,9 @@
     goTo('settings');
   });
   // Your details. The note under the card and the toast are the application's
-  // ("Profile saved." / "Profile photo updated."). The photo keeps the
-  // prototype's behaviour — it is kept in this browser — and the hint's limit
-  // (JPG, PNG or WebP up to 2 MB) holds here as it does in the application.
+  // ("Profile saved." / "Profile photo updated."). The photo is kept in this
+  // browser, and the hint's limit (JPG, PNG or WebP up to 10 MB) holds here as
+  // it does in the application.
   function showProfileNote(text, isError) {
     const note = document.getElementById('settingsProfileNote');
     if (!note) return;
@@ -11879,25 +12777,85 @@
   }
   ['settingsFirstName', 'settingsLastName', 'settingsPhone', 'settingsPostal'].forEach(fieldId =>
     document.getElementById(fieldId)?.addEventListener('input', () => setProfileDirty(true)));
+  // The photo (owner request, 15 Nov 2026): a chosen file opens the circular
+  // crop editor first and nothing is kept until the square is saved; Adjust
+  // photo reopens the kept original at the saved square — the application's
+  // flow (app/app/settings/page.tsx). Kept in this browser:
+  //   veye_profile_photo           the avatar every screen shows: the saved
+  //                                square, cut at up to 512 px (JPEG data URL)
+  //   veye_profile_photo_original  { src, crop: { x, y, size }, avatar }: the
+  //                                kept original — PROTOTYPE SIMPLIFICATION: at
+  //                                most 1600 px on its long side (JPEG) so it
+  //                                fits localStorage, where the application
+  //                                keeps the upload itself — the square in its
+  //                                pixels, and a fingerprint of the avatar cut
+  //                                from it (only that avatar can be adjusted)
+  const PROFILE_ORIGINAL_KEY = 'veye_profile_photo_original';
+  const avatarStamp = data => data.length + ':' + data.slice(-24);
+  function profileOriginal() {
+    let rec = null, photo = '';
+    try { rec = JSON.parse(localStorage.getItem(PROFILE_ORIGINAL_KEY) || 'null'); photo = localStorage.getItem('veye_profile_photo') || ''; } catch (e) {}
+    return rec && rec.src && rec.crop && photo && rec.avatar === avatarStamp(photo) ? rec : null;
+  }
+  function syncPhotoAdjust() {
+    const adjust = document.getElementById('settingsPhotoAdjust');
+    if (adjust) adjust.hidden = !profileOriginal();
+  }
+  function hideProfileNote() {
+    const note = document.getElementById('settingsProfileNote');
+    if (note) note.hidden = true;
+  }
+  // Both keys change together, or neither does.
+  function keepProfilePhoto(src, crop, img) {
+    const avatar = VeyePhotos.toJpeg(img, { crop, side: Math.min(512, crop.size), quality: 0.88 });
+    const record = JSON.stringify({ src, crop, avatar: avatarStamp(avatar) });
+    const before = {};
+    [PROFILE_ORIGINAL_KEY, 'veye_profile_photo'].forEach(k => { before[k] = localStorage.getItem(k); });
+    try {
+      localStorage.removeItem(PROFILE_ORIGINAL_KEY);
+      localStorage.removeItem('veye_profile_photo');
+      localStorage.setItem(PROFILE_ORIGINAL_KEY, record);
+      localStorage.setItem('veye_profile_photo', avatar);
+    } catch (e) {
+      Object.keys(before).forEach(k => {
+        try { if (before[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, before[k]); } catch (err) {}
+      });
+      throw new Error('This browser has no room left to keep the photo.');
+    }
+  }
+  function cropProfilePhoto(src, initial, fresh) {
+    VeyePhotos.openCropEditor({
+      src, initial,
+      title: fresh ? 'Crop your new photo' : 'Adjust your photo',
+      saveLabel: 'Save photo', primaryClass: 'btn-primary', secondaryClass: 'btn-ghost',
+      onCancel: () => { if (src.indexOf('blob:') === 0) URL.revokeObjectURL(src); },
+      onSave: crop => VeyePhotos.loadImage(src).then(img => {
+        keepProfilePhoto(src, crop, img);
+        applyProfileIdentity();
+        syncPhotoAdjust();
+        showProfileNote('Profile photo updated.');
+        flashToast('Profile photo updated');
+      })
+    });
+  }
   document.getElementById('settingsPhotoInput')?.addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 2000000) {
-      showProfileNote('The photo is too large. Please use an image under 2 MB.', true);
-      e.target.value = '';
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const data = String(reader.result || '');
-      localStorage.setItem('veye_profile_photo', data);
-      applyProfileIdentity();
-      showProfileNote('Profile photo updated.');
-      flashToast('Profile photo updated');
-      e.target.value = '';
-    };
-    reader.readAsDataURL(file);
+    hideProfileNote();
+    const refused = VeyePhotos.refusal(file);
+    if (refused) { showProfileNote(refused, true); return; }
+    // A file that cannot be read still opens the editor, which says so.
+    VeyePhotos.shrink(file, 1600, 0.92).then(src => cropProfilePhoto(src, null, true),
+                                             () => cropProfilePhoto(URL.createObjectURL(file), null, true));
   });
+  document.getElementById('settingsPhotoAdjust')?.addEventListener('click', () => {
+    const rec = profileOriginal();
+    if (!rec) { syncPhotoAdjust(); return; }
+    hideProfileNote();
+    cropProfilePhoto(rec.src, rec.crop, false);
+  });
+  syncPhotoAdjust();
   document.getElementById('settingsProfileForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
     let user = {};
@@ -11975,10 +12933,10 @@
   const SHARING_LABELS = { not_requested: 'Not requested', requested: 'Awaiting your decision',
     granted: 'Shared with the Veye team', declined: 'Declined', revoked: 'Withdrawn' };
   const SHARING_EXPLANATION = 'Sharing lets the Veye team open your saved results — your Health Number, body ' +
-    'composition, blood markers, questionnaires, moods and food diary — when they are helping you, and lets ' +
+    'composition, blood markers, questionnaires and moods — when they are helping you, and lets ' +
     'Veye Companion use them to answer you about your own progress. Until you share them, nobody at Veye can see ' +
-    'them and Sprout answers without them. Your name, email and the messages you send are not covered by this and ' +
-    'stay visible to the team so they can answer you. You can withdraw sharing at any time, and it stops at once.';
+    'them and Sprout answers without them. Your name, email, the messages you send and your food diary are not ' +
+    'covered by this and stay visible to the team so they can help you. You can withdraw sharing at any time, and it stops at once.';
   const SHARING_RECIPIENT = 'The Veye team — the people who run your Veye account';
   const SHARING_AUTOMATIC = 'Veye (automatic)';
   let consentForRequest = false;  // opened from "Review the request" (the application's ?request=<ref>)

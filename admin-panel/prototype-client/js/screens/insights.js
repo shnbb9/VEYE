@@ -34,6 +34,41 @@ function monthBars(series) {
   </div>`).join('')}</div>`;
 }
 
+/* Overall member retention and how long members stay (Cara, 25 Nov 2026).
+   Every figure carries its definition. Program retention, correlations and
+   the chart builder are Phase 2. */
+const BUCKETS = [['Same day', 0, 0], ['1–7 days', 1, 7], ['8–30 days', 8, 30], ['1–3 months', 31, 90], ['3–6 months', 91, 180], ['6–12 months', 181, 365], ['Over a year', 366, Infinity]];
+function retention(people) {
+  const DAY = 864e5, now = Date.now();
+  const days = (iso) => Math.floor((now - Date.parse(iso)) / DAY);
+  const share = (part, whole) => `${Math.round((part / whole) * 100)}%`;
+  const active = (n) => people.filter((m) => m.lastActiveAt && days(m.lastActiveAt) <= n).length;
+  const back = (n) => { const eligible = people.filter((m) => days(m.joinedAt) >= n); return { eligible: eligible.length, returned: eligible.filter((m) => m.firstReturnDay && m.firstReturnDay <= n).length }; };
+  const judged = people.filter((m) => days(m.joinedAt) >= 30);
+  const stayed = judged.map((m) => (m.lastActiveAt ? Math.max(0, Math.floor((Date.parse(m.lastActiveAt) - Date.parse(m.joinedAt)) / DAY)) : 0)).sort((a, b) => a - b);
+  const bars = BUCKETS.map(([label, lo, hi]) => ({ label, members: stayed.filter((d) => d >= lo && d <= hi).length }));
+  const tallest = Math.max(1, ...bars.map((b) => b.members));
+  const median = stayed.length ? stayed[Math.floor(stayed.length / 2)] : 0;
+  const steps = [['Joined', people.length], ['Verified their email', people.filter((m) => m.emailVerified).length], ['Took the Health Number quiz', people.filter((m) => m.onboarding === 'Complete').length], ['Chose foods', people.filter((m) => m.choseFoods).length]];
+  return `<section data-testid="retention" aria-labelledby="retentionTitle" style="margin-top:var(--s-6)">
+    <h2 class="card__title" id="retentionTitle">Retention</h2>
+    <p class="t-support">From the days members opened Veye. Sample data.</p>
+    <div class="kpis kpis--quad" style="margin-top:var(--s-4)">
+      <div class="kpi"><span class="kpi__label">Joined</span><span class="kpi__value">${people.filter((m) => days(m.joinedAt) <= 30).length}</span><span class="kpi__note">in the last 30 days, of ${people.length} members</span></div>
+      <div class="kpi"><span class="kpi__label">Active</span><span class="kpi__value">${active(30)}</span><span class="kpi__note">opened Veye in the last 30 days · ${active(7)} in the last 7</span></div>
+      ${[7, 30].map((n) => { const r = back(n); return `<div class="kpi"><span class="kpi__label">Came back within ${n} days</span><span class="kpi__value">${r.eligible ? share(r.returned, r.eligible) : '—'}</span><span class="kpi__note">${r.returned} of ${r.eligible} who joined at least ${n} days ago opened it again on a later day</span></div>`; }).join('')}
+    </div>
+    <div class="grid grid--2" style="margin-top:var(--s-5)">
+      <div class="card"><div class="card__head"><div><h3 class="card__title">How long members stay</h3><p class="t-support">Days from joining to the last day a member opened Veye, for members who joined at least 30 days ago.</p></div></div>
+        <div class="card__body"><ul class="histogram" aria-label="How long ${stayed.length} members stayed">${bars.map((b) => `<li><span class="histogram__n">${b.members}</span><span class="histogram__bar" style="height:${Math.max(b.members ? 6 : 0, Math.round((b.members / tallest) * 100))}%" aria-hidden="true"></span><span class="histogram__label">${b.label}</span></li>`).join('')}</ul>
+          <p class="t-support" style="margin-top:var(--s-3)">${stayed.length} members · half stayed ${median} days or longer.</p>
+          <p class="t-support" style="margin-top:var(--s-3)">Inactive: ${people.length - active(30)} member${people.length - active(30) === 1 ? ' has' : 's have'} not opened Veye in the last 30 days.</p></div></div>
+      <div class="card" data-testid="getting-started"><div class="card__head"><div><h3 class="card__title">Getting started</h3><p class="t-support">How far members have got after joining, and where they stopped.</p></div></div>
+        <div class="card__body"><div class="bars bars--wide">${steps.map(([label, n]) => `<div class="bar"><span class="bar__label">${label}</span><span class="bar__track"><span class="bar__fill bar__fill--deep" style="width:${share(n, people.length)}"></span></span><span class="bar__n">${n}<span class="t-muted"> · ${people.length - n} not yet</span></span></div>`).join('')}</div></div></div>
+    </div>
+  </section>`;
+}
+
 function render(outlet) {
   const st = S.get();
   const KEYS = window.Veye.TRACKER_KEYS;
@@ -62,9 +97,11 @@ function render(outlet) {
   st.requests.forEach((r) => { reqByKind[r.kind] = (reqByKind[r.kind] || 0) + 1; reqByStatus[r.status] = (reqByStatus[r.status] || 0) + 1; });
   const moodEntries = allowed.reduce((t, m) => t + m.mood.length, 0);
   const moodMembers = allowed.filter((m) => m.mood.length).length;
-  const diaryEntries = allowed.reduce((t, m) => t + m.diary.length, 0);
-  const diaryMembers = allowed.filter((m) => m.diary.length).length;
-  const total = st.members.length;
+  const people = st.members.filter((m) => !m.archivedAt);
+  // The food diary is not part of the sharing choice (Cara, 25 Nov 2026).
+  const diaryEntries = people.reduce((t, m) => t + m.diary.length, 0);
+  const diaryMembers = people.filter((m) => m.diary.length).length;
+  const total = people.length;
   const results = KEYS.reduce((t, k) => t + attempts[k], 0);
 
   outlet.innerHTML = `
@@ -77,6 +114,8 @@ function render(outlet) {
       <div class="kpi"><span class="kpi__label">${icon('messages', { size: 16 })} Sprout conversations</span><span class="kpi__value">${st.conversations.length}</span><span class="kpi__note">${messages} messages · ${helpful} helpful / ${notHelpful} not helpful</span></div>
     </div>
 
+    ${retention(people)}
+
     <div class="grid grid--2" style="margin-top:var(--s-6)">
       <div class="card">
         <div class="card__head"><div><h2 class="card__title">New members by month</h2><p class="t-support">Member profiles created, last twelve months.</p></div></div>
@@ -84,7 +123,7 @@ function render(outlet) {
       </div>
       <div class="card">
         <div class="card__head"><div><h2 class="card__title">Tracker usage</h2><p class="t-support">Members with at least one saved result. The bar is their share of all ${total} members.</p></div></div>
-        <div class="card__body"><div class="bars">
+        <div class="card__body"><div class="bars bars--wide">
           ${KEYS.map((k) => {
             const members = membersCompleted[k];
             const pct = total ? Math.round((members / total) * 100) : 0;
@@ -139,7 +178,7 @@ function render(outlet) {
         </div>
       </div>
     </div>
-    <p class="t-support" style="margin-top:var(--s-4)">Generated ${esc(H.fmtDate(new Date().toISOString()))} from the local database. Synthetic demonstration data.</p>
+    <p class="t-support" style="margin-top:var(--s-4)">Generated ${esc(H.fmtDate(new Date().toISOString()))}. Synthetic demonstration data.</p>
   </div>`;
 }
 

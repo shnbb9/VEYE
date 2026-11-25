@@ -260,11 +260,11 @@ const CTA_LABEL = 'Review sharing request';
 const STATUS = 'Engineering draft wording, pending owner and counsel approval. Whether VEYE needs a formal authorization rather than this consent is a legal question nobody has answered yet.';
 const BACKFILL = 'Automatic mode asks members whose address is verified AFTER it is switched on. It never emails existing members in bulk.';
 const LOCKED = {
-  categories: ['Your Health Number and its history', 'Body composition results', 'Blood marker results', 'Your Health Assessment and Simple Quiz answers and results', 'Mood entries and their notes', 'Food diary entries'],
-  companion_use: 'Veye Companion (Sprout) may use summaries of the same records to answer you about your own progress. It never receives your notes or meal descriptions word for word.',
+  categories: ['Your Health Number and its history', 'Body composition results', 'Blood marker results', 'Your Health Assessment and Simple Quiz answers and results', 'Mood entries and their notes'],
+  companion_use: 'Veye Companion (Sprout) may use summaries of these records and of your food diary to answer you about your own progress. It never receives your notes or meal descriptions word for word.',
   expiry_rule: 'Until you withdraw it.',
   withdrawal: 'You can withdraw at any time in Settings, and it stops at once: from that moment the team and Sprout no longer see your records. Withdrawing cannot undo what was already seen while sharing was on.',
-  not_covered: 'Your name, email address and the messages you send to Veye are not covered by this choice and stay visible to the team so they can answer you.',
+  not_covered: 'Your name, email address, the messages you send to Veye, and your food diary with its photos are not covered by this choice and stay visible to the team so they can help you.',
 };
 const SHARING_LINK_NOTE = 'This button opens the Veye app. Opening it does not share anything: you decide there, after signing in.';
 const clone = (v) => JSON.parse(JSON.stringify(v));

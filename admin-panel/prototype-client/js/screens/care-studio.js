@@ -44,7 +44,7 @@ function render(outlet, route) {
       crumbs: [{ label: 'Home', route: '/home' }, { label: 'Care Studio' }],
       actions: `<button class="btn btn--primary" type="button" id="newItem">${icon('plus', { size: 18 })} New ${ITEM_LABELS[kind]} item</button>` })}
     ${H.errorbar(error)}
-    ${H.subnav(KINDS.map((k) => ({ key: k, label: KIND_LABELS[k], route: '/care/' + k, count: count(k, 'Published') })), kind)}
+    ${H.subnav([...KINDS.map((k) => ({ key: k, label: KIND_LABELS[k], route: '/care/' + k, count: count(k, 'Published') })), { key: 'library', label: 'Fitness library', route: '/care/fitness-library' }], kind)}
 
     <div class="kpis" style="margin-bottom:var(--s-5)">
       <div class="kpi"><span class="kpi__label">${icon('check-circle', { size: 16 })} Published</span><span class="kpi__value">${count(kind, 'Published')}</span><span class="kpi__note">visible to members now</span></div>

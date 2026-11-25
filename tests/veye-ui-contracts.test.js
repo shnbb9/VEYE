@@ -270,11 +270,15 @@ group('D+E · Food Diary', () => {
     assert.ok(/Time you ate/.test(HTML.dashboard), 'the "Time you ate (required)" label is missing');
     assert.ok(/choose all that apply/.test(HTML.dashboard), 'the multi-select feelings prompt is missing');
   });
-  check('the photo controls are honest In-Development placeholders', () => {
+  // Owner request, 15 Nov 2026: the photo row works as the application's does, so it is no longer an In-Development placeholder.
+  check('the photo row is live: Snap a photo, a pasted link and Choose file', () => {
     const photo = HTML.dashboard.match(/<div class="fdx-photo">[\s\S]*?<\/div>\s*<\/div>/);
     assert.ok(photo, 'the photo block is missing');
-    assert.ok(/disabled/.test(photo[0]), 'the photo controls must be disabled');
-    assert.ok(/In Development/.test(photo[0]), 'the photo controls must say In Development');
+    assert.ok(!/disabled/.test(photo[0]), 'the photo controls must not be disabled');
+    assert.ok(!/In Development/.test(photo[0]), 'the photo row must not say In Development');
+    assert.ok(/Snap a photo/.test(photo[0]) && /Choose file/.test(photo[0]) &&
+      /placeholder="Paste a link to a picture"/.test(photo[0]), "the photo row lost the application's controls");
+    assert.ok(/capture="environment"/.test(photo[0]), 'Snap a photo must open the camera on a phone');
   });
   check('the macro estimate is labelled as a prototype estimate, never AI', () => {
     assert.ok(/Prototype estimate from your description/.test(HTML.dashboard),
@@ -731,10 +735,28 @@ group('J · Correction pass — consumer', () => {
       'Other Supplements can collapse back into the empty image column');
     assert.ok(/\.sup-other \.sup-card__body \{[^}]*column-count:\s*2/.test(DASH_STYLE),
       'the long vitamin overview is no longer presented as readable columns');
-    assert.ok(/Static preview/.test(HTML.dashboard) && /Video coming later/.test(HTML.dashboard),
+    // Owner request, 15 Nov 2026: the Fitness library plays in the application's frame; with no video supplied, playing shows a static placeholder ("Video coming later" went with the old preview).
+    assert.ok(/Static preview/.test(DASH_SCRIPT) && /The video plays here once the Veye team adds it\./.test(DASH_SCRIPT),
       'Fitness no longer identifies the still artwork as a static preview');
+    const lib = DASH_SCRIPT.match(/function renderFitnessLibrary\([\s\S]*?\n  \}/);
+    assert.ok(lib && !/<iframe/.test(lib[0]), 'the prototype Fitness library must not embed a video');
     assert.ok(!/data-fit-preview=/.test(HTML.dashboard),
       'a static Fitness image is still presented as an interactive video control');
+  });
+  check("the Fitness library has the application's frame and empty state", () => {
+    // Owner request, 15 Nov 2026 (platform/web components/member/fitness-library.tsx).
+    assert.ok(/<h2 class="fit-lib-title">Fitness library<\/h2>/.test(HTML.dashboard), 'the library heading is missing');
+    assert.ok(/<section class="fit-card" aria-label="Fitness library">/.test(HTML.dashboard), 'the library frame is missing');
+    assert.ok(/<div id="fitLibraryPanel" role="tabpanel"/.test(HTML.dashboard), 'the goal panel is missing');
+    assert.strictEqual((HTML.dashboard.match(/class="fit-tab[^"]*"[^>]*aria-controls="fitLibraryPanel"/g) || []).length, 4,
+      'all four goal tabs must control the panel');
+    assert.ok(/No videos in \$\{escapeHtml\(label\)\} yet &mdash; they will appear here as the Veye team adds them\./.test(DASH_SCRIPT),
+      "the empty goal must use the application's wording");
+    assert.ok(/const FIT_PAGE_SIZE = 9;/.test(DASH_SCRIPT) && /class="fit-pages"/.test(DASH_SCRIPT), 'paging (nine to a page) is missing');
+    assert.ok(/fit-thumb__playing">Now Playing</.test(DASH_SCRIPT) && /aria-pressed="\$\{now\}"/.test(DASH_SCRIPT),
+      'the playing card must say Now Playing and be pressed');
+    assert.ok(/\.fit-empty \{/.test(DASH_STYLE) && /\.fit-hero--video \.fit-hero__image \{/.test(DASH_STYLE),
+      "the application's library rules are missing from the stylesheet");
   });
 });
 
@@ -816,6 +838,26 @@ group('K · Admin prototype — the console, 1:1', () => {
       "Sprout's conversation card must say Not shared unless the member shares (as the console does since 15 Nov 2026)");
     assert.ok(/\$\{shares \?[^}]*: 'Not shared'\}/.test(screenSrc['member-360.js']),
       'Member 360 must withhold the Health Number unless the member shares');
+  });
+  check('the food diary is outside the sharing choice, and the member is told so (Cara, 25 Nov 2026)', () => {
+    const cards = screenSrc['settings-cards.js'];
+    const listed = cards.slice(cards.indexOf('  categories: ['), cards.indexOf('],', cards.indexOf('  categories: [')));
+    assert.ok(!/diary/i.test(listed), 'the console prototype still lists the food diary as shared');
+    assert.ok(/your food diary with its photos are not covered/.test(cards), 'the not-covered sentence lost the food diary');
+    const consent = HTML.dashboard.slice(HTML.dashboard.indexOf('id="consentCard"'), HTML.dashboard.indexOf('id="consentDecision"'));
+    assert.ok(!/<li>Food diary/i.test(consent), 'the member is still asked to share the food diary');
+    assert.ok(/food diary with its photos are not covered/.test(consent), 'the member is not told who sees the diary');
+    assert.ok(/The Veye team can see your food diary/.test(HTML.dashboard), 'the Food Diary no longer says who sees it');
+  });
+  check('Finance carries its Illustrative data label on every screen', () => {
+    assert.ok(/data-testid="finance-illustrative"/.test(screenSrc['finance.js']), 'the label is gone');
+    assert.ok(/Planned for Phase 2/.test(screenSrc['finance.js']), 'the Phase 2 chip is gone');
+  });
+  check('the Members table shows Health sharing, not Trackers; Home has no View all members', () => {
+    const cells = readA(path.join('js', 'components', 'member-cells.js'));
+    assert.ok(/'Health sharing'/.test(cells) && !/>Trackers</.test(cells), 'the Trackers column is back');
+    assert.ok(!/View all members/.test(screenSrc['home.js']), 'View all members is back');
+    assert.ok(/Questions awaiting a reply/.test(screenSrc['home.js']), 'Questions awaiting a reply is missing');
   });
   check('the sample people are invented; only the client’s published support addresses are real', () => {
     const allowed = /@(demo\.veye\.test|bounces\.demo\.veye\.test|veye\.example)$/;

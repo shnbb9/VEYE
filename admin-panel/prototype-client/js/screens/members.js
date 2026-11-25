@@ -1,15 +1,10 @@
 /* ============================================================================
-   Members — the directory
+   Members — the directory, Progress & trends, and Invitations
    ----------------------------------------------------------------------------
-   The console's directory (platform/web app/admin/members/page.tsx): a table,
-   because density is the point. Search across name, email and member id;
-   three filters; sortable columns; Open → Member 360. Members · Prospects ·
-   Deletions are the three views of the Members area.
-
-   The Health Number column is the record only when the member shares their
-   health records with the Veye team. The API withholds it otherwise — before
-   filtering and sorting, so neither can be used to infer it — and the console
-   then shows "Not completed", exactly as here.
+   The console's three member lists (platform/web app/admin/members, /trends,
+   /invitations). The strip above the directory finds people who started and
+   did not finish — different groups, kept apart. The table is shared
+   (components/member-cells.js).
    ============================================================================ */
 
 (function () {
@@ -18,187 +13,166 @@ const { icon } = window.Veye;
 const R = window.Veye.R;
 const S = window.Veye.S;
 const H = window.Veye.H;
-const esc = window.Veye.UI.esc;
+const M = window.Veye.MC;
+const UI = window.Veye.UI;
+const esc = UI.esc;
 
 const MEMBER_VIEWS = [
   { key: 'members', label: 'Members', route: '/members' },
+  { key: 'trends', label: 'Progress & trends', route: '/members/trends' },
+  { key: 'invitations', label: 'Invitations', route: '/members/invitations' },
   { key: 'prospects', label: 'Prospects', route: '/members/prospects' },
   { key: 'deletions', label: 'Deletions', route: '/members/deletions' },
 ];
-const STATUS = [['any', 'Any status'], ['active', 'Active'], ['inactive', 'Inactive'], ['unverified', 'Email unverified']];
-const ONBOARDING = [['any', 'Any onboarding'], ['complete', 'Complete'], ['not_started', 'Not started']];
-const ACTIVE = [['any', 'Any time'], ['week', 'This week'], ['month', 'This month'], ['longer', 'Longer ago'], ['never', 'Never']];
-const DEFAULT = { q: '', status: 'any', onboarding: 'any', active: 'any', sort: 'name', direction: 'asc', page: 1 };
-const PAGE_SIZE = 25;
-let query = { ...DEFAULT };
+const DEFAULTS = { q: '', status: 'any', onboarding: 'any', active: 'any', sharing: 'any', trend: 'any', within: '', archived: 'exclude', sort: 'name', direction: 'asc', page: 1 };
+const TREND_DEFAULTS = { ...DEFAULTS, sort: 'trend', direction: 'desc' };
+const CRUMBS = [{ label: 'Home', route: '/home' }, { label: 'Members', route: '/members' }];
+const addButton = `<button class="btn btn--primary" type="button" data-testid="add-member">${icon('plus', { size: 18 })} Add a member</button>`;
 
-/** A directory row as the API's MemberRow carries it, sharing applied. */
-function row(m) {
-  const shares = S.shares(m);
-  const latest = m.records.health_number[0] || null;
-  return {
-    member_id: m.id, name: m.name, email: m.email, initials: m.initials, photo: m.photo, admin_access: m.adminAccess,
-    joined_at: m.joinedAt, email_verified: m.emailVerified, is_active: m.isActive, last_active_at: m.lastActiveAt,
-    onboarding: m.onboarding,
-    trackers_completed: ['health_number', 'body_composition', 'blood_markers', 'health_assessment', 'simple_quiz'].filter((k) => m.records[k].length).length,
-    health_number: shares && latest ? Number(latest.displayed_score) : null,
-    health_number_status: shares && latest ? latest.status : null,
-  };
-}
-
-function rows() {
-  const now = Date.now();
-  let out = S.get().members.map(row);
-  const needle = query.q.trim().toLowerCase();
-  if (needle) out = out.filter((r) => r.name.toLowerCase().includes(needle) || r.email.toLowerCase().includes(needle) || r.member_id.includes(needle));
-  if (query.status === 'active') out = out.filter((r) => r.is_active);
-  else if (query.status === 'inactive') out = out.filter((r) => !r.is_active);
-  else if (query.status === 'unverified') out = out.filter((r) => !r.email_verified);
-  if (query.onboarding === 'complete') out = out.filter((r) => r.onboarding === 'Complete');
-  else if (query.onboarding === 'not_started') out = out.filter((r) => r.onboarding !== 'Complete');
-  const age = (r) => (r.last_active_at ? now - Date.parse(r.last_active_at) : null);
-  if (query.active === 'week') out = out.filter((r) => age(r) !== null && age(r) <= 7 * 864e5);
-  else if (query.active === 'month') out = out.filter((r) => age(r) !== null && age(r) <= 30 * 864e5);
-  else if (query.active === 'longer') out = out.filter((r) => age(r) !== null && age(r) > 30 * 864e5);
-  else if (query.active === 'never') out = out.filter((r) => r.last_active_at === null);
-  const key = {
-    name: (r) => r.name.toLowerCase(),
-    joined: (r) => r.joined_at,
-    health_number: (r) => (r.health_number === null ? [1, 0] : [0, r.health_number]),
-    last_active: (r) => r.last_active_at || '1970-01-01T00:00:00.000Z',
-  }[query.sort];
-  out.sort((a, b) => {
-    const x = key(a), y = key(b);
-    const c = Array.isArray(x) ? (x[0] - y[0]) || (x[1] - y[1]) : (x < y ? -1 : x > y ? 1 : 0);
-    return query.direction === 'asc' ? c : -c;
-  });
-  return out;
-}
-
-function render(outlet) {
-  const total = S.get().members.length;
+/* ------------------------------------------------------------- directory -- */
+function directory(outlet) {
+  const st = S.get();
+  const people = st.members.filter((m) => !m.archivedAt);
+  const state = { query: { ...DEFAULTS } };
+  const mini = (value, label, attrs, tag = 'button') => `<${tag} class="mini" ${attrs}><span class="mini__n">${value}</span><span class="mini__l">${label}</span></${tag}>`;
   outlet.innerHTML = `
   <div class="page">
-    ${H.pageHead({ title: 'Members', desc: `Everyone using Veye — ${total} member${total === 1 ? '' : 's'}.`,
-      crumbs: [{ label: 'Home', route: '/home' }, { label: 'Members' }] })}
+    ${H.pageHead({ title: 'Members', desc: `Everyone using Veye — ${people.length} member${people.length === 1 ? '' : 's'}.`, crumbs: [CRUMBS[0], { label: 'Members' }], actions: addButton })}
     ${H.subnav(MEMBER_VIEWS, 'members')}
+    <div class="minirow minirow--links" data-testid="unfinished" role="group" aria-label="Started and not finished">
+      ${mini(st.prospects.filter((p) => ['unverified', 'verified', 'pending_claim'].includes(p.status)).length, 'Took the quiz, no account', `href="${R.href('/members/prospects')}" style="text-decoration:none;color:inherit"`, 'a')}
+      ${mini(people.filter((m) => !m.emailVerified).length, 'Registered, email not verified', 'type="button" data-testid="show-unverified"')}
+      ${mini(people.filter((m) => m.emailVerified && m.onboarding !== 'Complete').length, 'Verified, quiz not taken', 'type="button" data-testid="show-incomplete"')}
+      ${mini(st.memberInvitations.filter((i) => M.statusOf(i) === 'pending').length, 'Invited, not joined yet', `href="${R.href('/members/invitations')}" style="text-decoration:none;color:inherit"`, 'a')}
+    </div>
+    <div id="memberTable"></div>
+  </div>`;
+  const list = M.table(outlet.querySelector('#memberTable'), state, { defaults: DEFAULTS });
+  outlet.querySelector('[data-testid="show-unverified"]').addEventListener('click', () => list.set({ status: 'unverified', onboarding: 'any' }));
+  outlet.querySelector('[data-testid="show-incomplete"]').addEventListener('click', () => list.set({ status: 'any', onboarding: 'not_started' }));
+  outlet.querySelector('[data-testid="add-member"]').addEventListener('click', () => M.invite(sent));
+}
+
+/* ----------------------------------------------------- progress & trends -- */
+const CARDS = [
+  { key: 'improved', label: 'Improved', note: 'The latest number is lower', icon: 'check-circle' },
+  { key: 'unchanged', label: 'No change', note: 'The latest two are the same', icon: 'activity' },
+  { key: 'worsened', label: 'Increased (worse)', note: 'The latest number is higher', icon: 'alert-circle' },
+];
+
+function trends(outlet) {
+  const state = { query: { ...TREND_DEFAULTS } };
+  const counts = {};
+  S.get().members.filter((m) => !m.archivedAt).forEach((m) => { const t = M.trendOf(m).state; counts[t] = (counts[t] || 0) + 1; });
+  const n = (key) => counts[key] || 0;
+  outlet.innerHTML = `
+  <div class="page">
+    ${H.pageHead({ title: 'Member progress and trends', desc: 'How each member’s Health Number changed between their two latest dated results.', crumbs: [...CRUMBS, { label: 'Progress & trends' }] })}
+    ${H.subnav(MEMBER_VIEWS, 'trends')}
+    <div class="notice notice--quiet">${icon('info', { size: 18 })}<div>On the Health Number <b>lower is better</b>. A trend describes that number only — it is not a medical conclusion. It shows only for members who share their health records, and only when both results were scored by the same version of the calculation.</div></div>
+    <div class="kpis kpis--quad" data-testid="trend-cards" style="margin-block:var(--s-5)">
+      ${CARDS.map((c) => `<button class="kpi kpi--button" type="button" aria-pressed="false" data-trend-card="${c.key}" data-testid="trend-${c.key}">
+        <span class="kpi__label">${icon(c.icon, { size: 16 })} ${c.label}</span><span class="kpi__value">${n(c.key)}</span><span class="kpi__note">${c.note}</span></button>`).join('')}
+      <div class="kpi" data-testid="trend-unknown"><span class="kpi__label">${icon('users', { size: 16 })} No comparison</span>
+        <span class="kpi__value">${n('first') + n('none') + n('not_comparable')}</span>
+        <span class="kpi__note">${n('first')} with one result · ${n('none')} with none · ${n('not_shared')} more not shared</span></div>
+    </div>
+    <div id="memberTable"></div>
+  </div>`;
+  const pressed = () => outlet.querySelectorAll('[data-trend-card]').forEach((b) => b.setAttribute('aria-pressed', String(state.query.trend === b.dataset.trendCard)));
+  const list = M.table(outlet.querySelector('#memberTable'), state, { trendsView: true, defaults: TREND_DEFAULTS, onChange: pressed });
+  outlet.querySelectorAll('[data-trend-card]').forEach((b) => b.addEventListener('click', () => list.set({ trend: state.query.trend === b.dataset.trendCard ? 'any' : b.dataset.trendCard })));
+}
+
+/* ----------------------------------------------------------- invitations -- */
+const INV_STATUS = [['any', 'Any status'], ['pending', 'Pending'], ['accepted', 'Accepted'], ['expired', 'Expired'], ['revoked', 'Withdrawn']];
+const INV_SORT = [['newest', 'Newest first'], ['oldest', 'Oldest first']];
+const INV_LABEL = Object.fromEntries(INV_STATUS);
+const INV_TONE = { pending: 'info', accepted: 'live', expired: 'archived', revoked: 'archived' };
+const DELIVERY = { sent: 'Email accepted by the mail server', failed: 'The email was not sent' };
+let inv = { q: '', status: 'any', sort: 'newest', notice: '' };
+
+function sent(invitation) {
+  inv.notice = invitation.delivery === 'sent' ? `Invitation sent to ${invitation.email}.`
+    : `The invitation to ${invitation.email} was saved, but the email was not sent${invitation.delivery_error ? `: ${invitation.delivery_error}` : ''}.`;
+  if (R.currentRoute().path === '/members/invitations') invitations(document.getElementById('main-content'));
+  else R.navigate('/members/invitations?sent=1');
+}
+
+function invitations(outlet) {
+  const all = S.get().memberInvitations;
+  const q = inv.q.trim().toLowerCase();
+  const list = all.filter((i) => inv.status === 'any' || M.statusOf(i) === inv.status)
+    .filter((i) => !q || `${i.email} ${i.name}`.toLowerCase().includes(q))
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1) * (inv.sort === 'newest' ? 1 : -1));
+  const select = (id, label, options, value) => `<div class="field" style="margin:0"><label class="sr-only" for="${id}">${label}</label>
+    <select class="select input--sm" id="${id}">${options.map(([v, l]) => `<option value="${v}" ${v === value ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
+  outlet.innerHTML = `
+  <div class="page">
+    ${H.pageHead({ title: 'Invitations', desc: 'People invited to become members, and what became of each invitation.', crumbs: [...CRUMBS, { label: 'Invitations' }], actions: addButton })}
+    ${H.subnav(MEMBER_VIEWS, 'invitations')}
+    ${inv.notice ? `<p class="notice notice--quiet" role="status" data-testid="invitations-notice">${esc(inv.notice)}</p>` : ''}
+    <div class="minirow minirow--figures" data-testid="invitation-counts">
+      ${['pending', 'accepted', 'expired', 'revoked'].map((k) => `<div class="mini"><span class="mini__n">${all.filter((i) => M.statusOf(i) === k).length}</span><span class="mini__l">${INV_LABEL[k]}</span></div>`).join('')}
+    </div>
     <div class="card">
       <div class="findbar">
         <div class="search" style="flex:1 1 260px;max-width:360px;position:relative">
-          <span class="search__icon">${icon('search', { size: 18 })}</span>
-          <label class="sr-only" for="mSearch">Search members</label>
-          <input class="search__input" id="mSearch" type="search" placeholder="Search by name, email or member id" value="${esc(query.q)}">
-        </div>
-        <div class="findbar__filters">
-          ${select('fStatus', 'Member status', STATUS, query.status)}
-          ${select('fOnboarding', 'Onboarding status', ONBOARDING, query.onboarding)}
-          ${select('fActive', 'Last activity', ACTIVE, query.active)}
-        </div>
-        <span class="findbar__spacer"></span>
-        <span class="filtercount" id="fCount" hidden></span>
-        <button class="btn btn--ghost btn--sm" type="button" id="clearBtn" hidden>Clear</button>
+          <span class="search__icon">${icon('search', { size: 18 })}</span><label class="sr-only" for="invSearch">Search invitations</label>
+          <input class="search__input" id="invSearch" type="search" placeholder="Search by email or name" value="${esc(inv.q)}"></div>
+        <div class="findbar__filters">${select('invStatus', 'Status', INV_STATUS, inv.status)}${select('invSort', 'Order', INV_SORT, inv.sort)}</div>
       </div>
-      <div id="mResults"></div>
+      ${list.length ? '' : `<div class="card__body">${H.emptyState({ icon: 'mail', title: 'No invitations here', msg: inv.q || inv.status !== 'any' ? 'Try another search or status.' : 'Add a member to send the first one.' })}</div>`}
+      <div class="rows" data-testid="invitations-list">
+        ${list.map((i) => {
+          const status = M.statusOf(i);
+          const open = status === 'pending' || status === 'expired';
+          return `<div class="rowitem" data-testid="invitation-row" style="grid-template-columns:auto minmax(0,1fr) auto">
+            <span class="rowitem__icon">${icon('mail', { size: 18 })}</span>
+            <div style="min-width:0">
+              <div class="rowitem__title">${esc(i.name || i.email)} ${H.chip(INV_LABEL[status], INV_TONE[status])}</div>
+              ${i.name ? `<div class="rowitem__meta">${esc(i.email)}</div>` : ''}
+              <div class="rowitem__meta">Invited by ${esc(i.invited_by)} · ${esc(H.fmtDate(i.created_at))}${i.sent_count > 1 ? ` · sent ${i.sent_count} times` : ''}${status === 'pending' ? ` · works until ${esc(H.fmtDate(i.expires_at))}` : ''}${i.accepted_at ? ` · accepted ${esc(H.fmtDate(i.accepted_at))}` : ''}</div>
+              ${status === 'pending' ? `<div class="rowitem__meta">${DELIVERY[i.delivery] || esc(i.delivery)}${i.delivery_error ? ' · ' + esc(i.delivery_error) : ''}</div>` : ''}
+            </div>
+            <div class="rowitem__side row gap-2 wrap" style="justify-content:flex-end">
+              ${i.member_id && S.member(i.member_id) ? `<a class="btn btn--secondary btn--sm" href="${R.href('/members/' + i.member_id)}">Open member<span class="sr-only"> ${esc(i.email)}</span></a>` : ''}
+              ${open ? `<button class="btn btn--secondary btn--sm" type="button" data-resend="${i.id}" aria-label="Send the invitation to ${esc(i.email)} again">Send again</button>
+                <button class="btn btn--danger-quiet btn--sm" type="button" data-revoke="${i.id}" aria-label="Withdraw the invitation to ${esc(i.email)}">Withdraw</button>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
     </div>
   </div>`;
 
-  const set = (patch) => { query = { ...query, ...patch, page: 1 }; paint(outlet); };
-  outlet.querySelector('#mSearch').addEventListener('input', (e) => set({ q: e.target.value }));
-  outlet.querySelector('#fStatus').addEventListener('change', (e) => set({ status: e.target.value }));
-  outlet.querySelector('#fOnboarding').addEventListener('change', (e) => set({ onboarding: e.target.value }));
-  outlet.querySelector('#fActive').addEventListener('change', (e) => set({ active: e.target.value }));
-  outlet.querySelector('#clearBtn').addEventListener('click', () => { query = { ...DEFAULT }; render(outlet); });
-  paint(outlet);
-}
-
-function select(id, label, options, value) {
-  return `<div class="field" style="margin:0">
-    <label class="sr-only" for="${id}">${label}</label>
-    <select class="select input--sm" id="${id}">${options.map(([v, l]) => `<option value="${v}" ${v === value ? 'selected' : ''}>${l}</option>`).join('')}</select>
-  </div>`;
-}
-
-function paint(outlet) {
-  const all = rows();
-  const host = outlet.querySelector('#mResults');
-  const filters = (query.status !== 'any' ? 1 : 0) + (query.onboarding !== 'any' ? 1 : 0) + (query.active !== 'any' ? 1 : 0) + (query.q.trim() ? 1 : 0);
-  const count = outlet.querySelector('#fCount');
-  count.hidden = outlet.querySelector('#clearBtn').hidden = filters === 0;
-  count.textContent = `${filters} filter${filters === 1 ? '' : 's'} active`;
-
-  if (!all.length) {
-    host.innerHTML = `<div class="card__body">${H.emptyState({ icon: 'search', title: 'No members match those filters',
-      msg: 'Try a shorter search, or clear one of the three filters above.',
-      action: '<button class="btn btn--secondary" type="button" id="emptyClear">Clear all filters</button>' })}</div>`;
-    host.querySelector('#emptyClear').addEventListener('click', () => { query = { ...DEFAULT }; render(outlet); });
-    return;
-  }
-
-  const pageRows = all.slice((query.page - 1) * PAGE_SIZE, query.page * PAGE_SIZE);
-  const th = (key, label, priority) => `
-    <th scope="col" ${priority ? `data-col-priority="${priority}"` : ''} ${query.sort === key ? `aria-sort="${query.direction === 'asc' ? 'ascending' : 'descending'}"` : ''}>
-      <button class="th-sort" type="button" data-sort="${key}" aria-label="Sort by ${label}">${label} ${query.sort === key ? icon(query.direction === 'asc' ? 'chevron-right' : 'chevron-left', { size: 14 }) : ''}</button>
-    </th>`;
-
-  host.innerHTML = `
-    <div class="table-wrap table-wrap--sticky">
-      <table class="table table--rows" data-testid="members-table">
-        <caption class="sr-only">Members, ${pageRows.length} of ${all.length} shown</caption>
-        <thead><tr>
-          ${th('name', 'Member')}
-          ${th('health_number', 'Health Number')}
-          <th scope="col" data-col-priority="medium">Trackers</th>
-          <th scope="col" data-col-priority="low">Onboarding</th>
-          ${th('last_active', 'Last active', 'medium')}
-          ${th('joined', 'Joined', 'low')}
-          <th scope="col">Status</th>
-          <th scope="col"><span class="sr-only">Open</span></th>
-        </tr></thead>
-        <tbody>
-          ${pageRows.map((m) => `<tr>
-            <td>
-              <div class="person">
-                ${H.avatar(m, 'sm')}
-                <div style="min-width:0">
-                  <div class="cell-primary">${esc(m.name)}${m.admin_access ? '<span class="tag" style="margin-left:8px">admin access</span>' : ''}</div>
-                  <div class="cell-sub">${esc(m.email)}</div>
-                </div>
-              </div>
-            </td>
-            <td>${m.health_number === null ? '<span class="t-muted">Not completed</span>'
-              : `<span class="t-num">${m.health_number.toFixed(1)}</span> <span class="cell-sub">${esc(m.health_number_status)}</span>`}</td>
-            <td data-col-priority="medium">${m.trackers_completed} of 5</td>
-            <td data-col-priority="low">${esc(m.onboarding)}</td>
-            <td data-col-priority="medium">${m.last_active_at ? esc(H.fmtDate(m.last_active_at)) : '<span class="t-muted">Never</span>'}</td>
-            <td data-col-priority="low">${esc(H.fmtDate(m.joined_at))}</td>
-            <td>${H.chip(m.is_active ? (m.email_verified ? 'Active' : 'Unverified') : 'Inactive', m.is_active ? (m.email_verified ? 'live' : 'draft') : 'archived')}</td>
-            <td style="text-align:right"><a class="btn btn--secondary btn--sm" href="${R.href('/members/' + m.member_id)}">Open<span class="sr-only"> ${esc(m.name)}</span></a></td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-    <div class="pager">
-      <span class="pager__info">Showing ${pageRows.length} of ${all.length} members</span>
-      <span class="t-support">A lower Health Number is better.</span>
-      ${all.length > PAGE_SIZE ? `<span class="row gap-2">
-        <button class="btn btn--ghost btn--sm" type="button" id="prevPage" ${query.page <= 1 ? 'disabled' : ''}>Previous</button>
-        <button class="btn btn--ghost btn--sm" type="button" id="nextPage" ${query.page * PAGE_SIZE >= all.length ? 'disabled' : ''}>Next</button>
-      </span>` : ''}
-    </div>`;
-
-  host.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => {
-    const sort = b.dataset.sort;
-    query = { ...query, sort, direction: query.sort === sort && query.direction === 'asc' ? 'desc' : 'asc', page: 1 };
-    paint(outlet);
+  const update = (id, fn) => S.set({ memberInvitations: S.get().memberInvitations.map((i) => (i.id === id ? fn({ ...i }) : i)) }, { silent: true });
+  outlet.querySelector('[data-testid="add-member"]').addEventListener('click', () => M.invite(sent));
+  outlet.querySelector('#invSearch').addEventListener('input', (e) => { inv.q = e.target.value; invitations(outlet); const el = outlet.querySelector('#invSearch'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); });
+  outlet.querySelector('#invStatus').addEventListener('change', (e) => { inv.status = e.target.value; invitations(outlet); });
+  outlet.querySelector('#invSort').addEventListener('change', (e) => { inv.sort = e.target.value; invitations(outlet); });
+  outlet.querySelectorAll('[data-resend]').forEach((b) => b.addEventListener('click', () => H.busy(b, 'Sending…', () => {
+    const invitation = all.find((i) => i.id === b.dataset.resend);
+    const result = S.deliver(invitation.email);
+    update(invitation.id, (i) => ({ ...i, sent_count: i.sent_count + 1, expires_at: new Date(Date.now() + 7 * M.DAY).toISOString(), delivery: result.status, delivery_error: result.detail }));
+    S.audit('member_invitation.resent', 'member_invitation', invitation.id, { delivery: result.status });
+    sent({ ...invitation, delivery: result.status, delivery_error: result.detail });
+  })));
+  outlet.querySelectorAll('[data-revoke]').forEach((b) => b.addEventListener('click', async () => {
+    const invitation = all.find((i) => i.id === b.dataset.revoke);
+    const r = await UI.confirm({ title: 'Withdraw this invitation?', message: `The link sent to ${esc(invitation.email)} stops working.`, reversible: 'You can invite them again.', confirmLabel: 'Withdraw', danger: true });
+    if (!r.ok) return;
+    update(invitation.id, (i) => ({ ...i, revoked_at: S.now() }));
+    S.audit('member_invitation.revoked', 'member_invitation', invitation.id, {});
+    inv.notice = `The invitation to ${invitation.email} was withdrawn.`;
+    invitations(outlet);
   }));
-  const prev = host.querySelector('#prevPage');
-  if (prev) prev.addEventListener('click', () => { query.page -= 1; paint(outlet); });
-  const next = host.querySelector('#nextPage');
-  if (next) next.addEventListener('click', () => { query.page += 1; paint(outlet); });
 }
 
 window.Veye.MEMBER_VIEWS = MEMBER_VIEWS;
 window.Veye.screens = window.Veye.screens || {};
-window.Veye.screens.members = { render };
+window.Veye.screens.members = { render: directory };
+window.Veye.screens['member-trends'] = { render: trends };
+window.Veye.screens['member-invitations'] = { render: (outlet, route) => { inv = { q: '', status: 'any', sort: 'newest', notice: route.query.sent ? inv.notice : '' }; invitations(outlet); } };
 
 })();
