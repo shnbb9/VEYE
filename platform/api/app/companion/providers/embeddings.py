@@ -23,6 +23,12 @@ have sent a member's question to a third party in the clear.
 passage and a search query are embedded differently by Google's models
 (RETRIEVAL_DOCUMENT against RETRIEVAL_QUERY), and using one for the other
 measurably costs recall.
+
+**`index` names what a vector may be compared with.** Two vectors mean nothing
+to each other unless the same model wrote them, at the same width, through the
+same door. The knowledge base writes it beside every vector and only ever
+searches its own, so a change of provider never mixes two kinds: it asks for an
+index that has not been built yet, and says so.
 """
 
 from __future__ import annotations
@@ -30,13 +36,18 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Literal, Protocol
 
-from app.companion.providers.llm import DataClassification
+from app.companion.providers.google_backend import DEVELOPER, EMBEDS_FROM, VERTEX, Refused, choose_backend
+from app.companion.providers.llm import ClientContentNotAllowed, DataClassification, MemberDataNotCleared, ProviderNotConfigured
 from app.core.config import reveal
 
 # A corpus passage, or a member's search query.
 Purpose = Literal["document", "query"]
+
+# However long an answer may take.
+MOST_SECONDS = 12.0
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 _STOPWORDS = frozenset(
@@ -48,10 +59,12 @@ _STOPWORDS = frozenset(
 class EmbeddingProvider(Protocol):
     name: str
     model: str
+    index: str          # what its vectors may be compared with; at most 64 characters
     dimensions: int
 
     def embed(self, texts: list[str], *, purpose: Purpose = "document",
-              classification: DataClassification = DataClassification.REAL_MEMBER) -> list[list[float]]: ...
+              classification: DataClassification = DataClassification.REAL_MEMBER,
+              client_content: bool = False) -> list[list[float]]: ...
 
     def describe(self) -> dict[str, object]: ...
 
@@ -75,12 +88,13 @@ class HashingEmbeddingProvider:
 
     def __init__(self, dimensions: int = 256) -> None:
         self.dimensions = dimensions
-        self.model = f"veye-hashing-{dimensions}"
+        self.model = self.index = f"veye-hashing-{dimensions}"
 
     def embed(self, texts: list[str], *, purpose: Purpose = "document",
-              classification: DataClassification = DataClassification.REAL_MEMBER) -> list[list[float]]:
+              classification: DataClassification = DataClassification.REAL_MEMBER,
+              client_content: bool = False) -> list[list[float]]:
         # Local and deterministic: nothing leaves this process, so neither the
-        # purpose nor the classification changes what it computes. Both are
+        # purpose nor whose text it is changes what it computes. All are
         # accepted so that swapping in an external provider is a configuration
         # change and not a change to every caller.
         return [self._embed_one(text) for text in texts]
@@ -107,142 +121,155 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
+class UnconfiguredEmbeddingProvider:
+    """Explicit absence: the API boots, and whatever needs an embedding is told
+    why there is none instead of being answered without one."""
+
+    name = "unconfigured"
+    model = index = "none"
+
+    def __init__(self, reason: str, dimensions: int = 0) -> None:
+        self.reason, self.dimensions = reason, dimensions
+
+    def embed(self, texts: list[str], *, purpose: Purpose = "document",
+              classification: DataClassification = DataClassification.REAL_MEMBER,
+              client_content: bool = False) -> list[list[float]]:
+        raise ProviderNotConfigured(self.reason)
+
+    def describe(self) -> dict[str, object]:
+        return {"provider": self.name, "model": None, "configured": False, "external": False, "reason": self.reason}
+
+
 class GoogleEmbeddingProvider:
-    """Google's text embeddings on Vertex AI.
+    """Google's text embeddings, through whichever door VEYE_GEMINI_BACKEND names.
 
-    The same two decisions as the language provider shape this one.
-
-    **Vertex AI with Application Default Credentials**, not a personal API
-    key: the running service's own identity is what Google sees, and it can be
-    rotated and audited. An API key is accepted for local experimentation and
-    refused in production.
+    The same decisions as the language provider shape this one, and the same
+    code makes them (`google_backend`).
 
     **Member data does not reach it by accident.** Retrieval embeds the
     member's question before the outbound privacy filter has run, so that text
-    is their raw words. This provider refuses it unless the deployment has
-    declared the same clearance the language model requires. The refusal is a
-    hard failure: silently embedding it would be the disclosure the clearance
-    exists to govern, and silently skipping retrieval would answer the member
-    from nothing.
+    is their raw words. This provider refuses it on a developer key, always,
+    and on Vertex AI unless the deployment has declared the same clearance the
+    language model requires. The refusal is a hard failure: silently embedding
+    it would be the disclosure the clearance exists to govern, and silently
+    skipping retrieval would answer the member from nothing.
 
     **The vector has to fit the column.** `knowledge_chunks.embedding` is
     `vector(n)`, fixed at migration time, so the requested dimensionality is
     the deployment's configured one and a mismatch in Google's answer is a
     hard failure rather than a database error deep inside ingestion.
 
-    Switching an existing deployment to this provider does not convert what is
-    already stored: retrieval filters on `embedding_model`, so previously
-    ingested documents simply stop matching until they are re-ingested. That
-    is the safe failure, but it is a silent one, so it is said here and in the
-    deployment notes.
+    **What is already stored is not converted.** See `index` above, and
+    `python -m app.jobs run reindex-knowledge`, which writes the new vectors
+    beside the old ones so that going back is going back.
     """
 
     name = "google"
 
-    # Checked against Google's Vertex AI "Get text embeddings" documentation on
-    # 14 Nov 2026, which uses this model in its current Python example and
-    # documents `task_type` and `output_dimensionality` on EmbedContentConfig.
-    # Its native width is 3072 and it may be asked for fewer.
-    #
-    # gemini-embedding-2 went GA on Vertex AI on 22 April 2026 and is the
-    # newer, multimodal model. Moving to it is a configuration change, not a
-    # code one, but confirm the exact id against the project's model garden
-    # first and re-ingest: changing the model changes every stored vector.
+    # Checked against Google's documentation on 25 Nov 2026: 128 to 3072
+    # dimensions, 2,048 tokens a text, task types, and a shutdown on
+    # 14 May 2028. Its successor, gemini-embedding-2, is not a change of
+    # configuration: it takes no `task_type` (the task is written into the
+    # text) and its vectors cannot be compared with these.
     DEFAULT_MODEL = "gemini-embedding-001"
-    SUPPORTED_LOCATIONS = ("global", "us", "eu")
-    DEFAULT_LOCATION = "us"
+    # Served from single regions only. `us`, which serves the language model,
+    # does not serve this one.
+    DEFAULT_LOCATION = "us-central1"
+    NARROWEST, WIDEST = 128, 3072
 
-    # A corpus passage and a search query are embedded differently by these
-    # models, and using one for the other costs recall.
+    # A corpus passage and a search query are embedded differently by this
+    # model, and using one for the other costs recall.
     TASK_TYPES = {"document": "RETRIEVAL_DOCUMENT", "query": "RETRIEVAL_QUERY"}
 
-    def __init__(self, *, dimensions: int, project: str = "", location: str = "", model: str = "",
-                 member_data_cleared: bool = False, api_key: str | None = None,
-                 production: bool = False, client=None) -> None:
-        from app.companion.providers.llm import ProviderNotConfigured
+    # Texts in one request. Vertex AI: "each request can only include a single
+    # input text" for this model. And requests at once, so that a document is a
+    # matter of seconds all the same.
+    TOGETHER = {VERTEX: 1, DEVELOPER: 32}
+    AT_ONCE = {VERTEX: 8, DEVELOPER: 2}
 
+    def __init__(self, *, backend: str, dimensions: int, project: str = "", location: str = "", model: str = "",
+                 api_key: str | None = None, member_data_cleared: bool = False, local: bool = False,
+                 timeout_seconds: float = 30.0, **extra) -> None:
         self.dimensions = dimensions
         self.model = model or self.DEFAULT_MODEL
-        self.location = location or self.DEFAULT_LOCATION
-        self.project = project
         self.member_data_cleared = bool(member_data_cleared)
-        self._api_key = api_key or None
-        self._client = client
-
-        if self._api_key and production:
+        if self.model != self.DEFAULT_MODEL:
             raise ProviderNotConfigured(
-                "An API key is a developer convenience, not a production identity. Production uses "
-                "Vertex AI with VEYE_GCP_PROJECT and Application Default Credentials.")
-        if not self._api_key and not project:
-            raise ProviderNotConfigured("VEYE_GCP_PROJECT is required for the Google embedding provider.")
-        if not self._api_key and self.location not in self.SUPPORTED_LOCATIONS:
-            raise ProviderNotConfigured(
-                f"Google embeddings are not served from '{self.location}'. VEYE_GCP_LOCATION must be "
-                f"one of: {', '.join(self.SUPPORTED_LOCATIONS)}.")
-        if self._api_key and self.member_data_cleared:
-            raise ProviderNotConfigured(
-                "Member data is never sent through a personal API key. Use Vertex AI with a service "
-                "identity, or leave VEYE_GEMINI_MEMBER_DATA_CLEARED off.")
-
-    def _ensure_client(self):
-        from app.companion.providers.llm import ProviderNotConfigured
-
-        if self._client is not None:
-            return self._client
-        try:  # pragma: no cover - depends on the optional extra
-            from google import genai
-        except ImportError as exc:  # pragma: no cover
-            raise ProviderNotConfigured(
-                "The 'google-genai' package is not installed (pip install 'veye-api[gemini]').") from exc
-        if self._api_key:
-            self._client = genai.Client(api_key=self._api_key)
-        else:
-            self._client = genai.Client(vertexai=True, project=self.project, location=self.location)
-        return self._client
+                f"VEYE_EMBEDDING_MODEL '{self.model}' is not one VEYE embeds with. {self.DEFAULT_MODEL} is: retrieval relies on its "
+                "task types, and another model's vectors cannot be compared with it.")
+        if not self.NARROWEST <= dimensions <= self.WIDEST:
+            raise ProviderNotConfigured(f"{self.model} gives {self.NARROWEST} to {self.WIDEST} dimensions, not {dimensions} (VEYE_EMBEDDING_DIMENSIONS).")
+        self.backend = choose_backend(
+            backend, model=self.model, project=project, location=location or self.DEFAULT_LOCATION, api_key=api_key, local=local,
+            member_data_cleared=self.member_data_cleared, timeout_seconds=timeout_seconds,
+            places=EMBEDS_FROM, location_setting="VEYE_EMBEDDING_LOCATION", **extra)
+        self.index = f"{self.model}@{dimensions}/{self.backend.kind}"
 
     def embed(self, texts: list[str], *, purpose: Purpose = "document",
-              classification: DataClassification = DataClassification.REAL_MEMBER) -> list[list[float]]:
-        from app.companion.providers.gemini import MemberDataNotCleared
-
+              classification: DataClassification = DataClassification.REAL_MEMBER,
+              client_content: bool = False) -> list[list[float]]:
         if not texts:
             return []
-        if classification is DataClassification.REAL_MEMBER and not self.member_data_cleared:
+        if classification is DataClassification.REAL_MEMBER and (self.backend.is_developer or not self.member_data_cleared):
             raise MemberDataNotCleared(
                 "That text is a member's own words, and this deployment has not been cleared to send "
                 "member data to Google. Nothing was sent.")
-
-        client = self._ensure_client()
-        response = client.models.embed_content(
-            model=self.model, contents=list(texts), config=self._config(purpose))
-        vectors = [list(item.values) for item in response.embeddings]
-
-        if len(vectors) != len(texts):
-            raise ValueError(f"Google returned {len(vectors)} embeddings for {len(texts)} inputs.")
-        for vector in vectors:
-            if len(vector) != self.dimensions:
-                raise ValueError(
-                    f"Google returned a {len(vector)}-dimension vector but this deployment stores "
-                    f"vector({self.dimensions}). Change VEYE_EMBEDDING_DIMENSIONS and migrate the "
-                    f"column together, then re-ingest every source.")
+        if client_content and self.backend.is_developer:
+            raise ClientContentNotAllowed(
+                "That document is not marked synthetic, and this deployment is using a developer API key. "
+                "The client's own documents go only through Vertex AI. Nothing was sent.")
+        together = self.TOGETHER[self.backend.kind]
+        requests = [list(texts[start:start + together]) for start in range(0, len(texts), together)]
+        vectors: list[list[float]] = []
+        if len(requests) == 1:
+            vectors = self._embed_some(requests[0], purpose)
+        else:
+            with ThreadPoolExecutor(max_workers=self.AT_ONCE[self.backend.kind]) as pool:
+                asked = [pool.submit(self._embed_some, request, purpose) for request in requests]
+                try:
+                    for answer in asked:        # in the order they were asked for
+                        vectors += answer.result()
+                except BaseException:
+                    for answer in asked:
+                        answer.cancel()
+                    raise
         # A truncated embedding is not unit length, and a corpus of mixed
         # magnitudes makes the PostgreSQL and Python ranking paths disagree.
         # Both are cosine, so normalising costs nothing and removes the doubt.
         return [_unit(v) for v in vectors]
 
-    def _config(self, purpose: Purpose):
-        from google.genai import types  # pragma: no cover - optional extra
+    def _embed_some(self, texts: list[str], purpose: Purpose) -> list[list[float]]:
+        response, _ = self.backend.call(lambda client, timeout_ms: client.models.embed_content(
+            model=self.model, contents=texts, config=self._config(purpose, timeout_ms)))
+        answered = list(getattr(response, "embeddings", None) or [])
+        counted = [getattr(getattr(item, "statistics", None), "token_count", None) for item in answered]
+        if any(getattr(getattr(item, "statistics", None), "truncated", None) for item in answered):
+            # The end of it would never be found, and nothing would say so.
+            raise Refused(f"A text is too long for {self.model}, which read only the beginning of it.")
+        self.backend.spent(int(sum(counted)) if answered and all(c is not None for c in counted) else None, None)
+        vectors = [list(getattr(item, "values", None) or []) for item in answered]
+        if len(vectors) != len(texts):
+            raise Refused(f"Google returned {len(vectors)} embeddings for {len(texts)} inputs.")
+        for vector in vectors:
+            if len(vector) != self.dimensions:
+                raise Refused(
+                    f"Google returned a {len(vector)}-dimension vector but this deployment stores "
+                    f"vector({self.dimensions}). Change VEYE_EMBEDDING_DIMENSIONS and migrate the "
+                    f"column together, then re-ingest every source.")
+        return vectors
 
-        return types.EmbedContentConfig(
-            task_type=self.TASK_TYPES[purpose],
-            output_dimensionality=self.dimensions,
-        )
+    def _config(self, purpose: Purpose, timeout_ms: int) -> dict:
+        config = {"task_type": self.TASK_TYPES[purpose], "output_dimensionality": self.dimensions, "http_options": {"timeout": timeout_ms}}
+        # Refused, rather than read as far as it fits. (The other door takes no
+        # such instruction; what it answers is looked at above.)
+        return config if self.backend.is_developer else config | {"auto_truncate": False}
 
     def describe(self) -> dict[str, object]:
         return {
             "provider": self.name, "model": self.model, "configured": True, "external": True,
-            "project": self.project or None, "location": self.location,
-            "dimensions": self.dimensions, "member_data_cleared": self.member_data_cleared,
-            "auth": "api-key" if self._api_key else "application-default-credentials",
+            "dimensions": self.dimensions, "index": self.index,
+            **self.backend.describe(),
+            "member_data_cleared": self.member_data_cleared,
         }
 
 
@@ -257,14 +284,20 @@ def build_embedding_provider(kind: str, *, dimensions: int, settings=None) -> Em
     if kind == "google":
         if settings is None:
             raise ValueError("The Google embedding provider needs the application settings.")
-        return GoogleEmbeddingProvider(
-            dimensions=dimensions,
-            project=getattr(settings, "gcp_project", "") or "",
-            location=getattr(settings, "gcp_location", "") or "",
-            model=getattr(settings, "embedding_model", "") or "",
-            member_data_cleared=bool(getattr(settings, "gemini_member_data_cleared", False)),
-            api_key=reveal(getattr(settings, "gemini_api_key", None)),
-            production=bool(getattr(settings, "is_production", False)),
-        )
+        try:
+            return GoogleEmbeddingProvider(
+                backend=settings.gemini_backend,
+                dimensions=dimensions,
+                project=settings.gcp_project or "",
+                location=settings.embedding_location or "",
+                model=settings.embedding_model or "",
+                api_key=reveal(settings.gemini_api_key),
+                member_data_cleared=settings.gemini_member_data_cleared,
+                local=settings.is_local,
+                # A member waits for this and then for the answer.
+                timeout_seconds=min(settings.llm_timeout_seconds, MOST_SECONDS),
+            )
+        except ProviderNotConfigured as exc:
+            return UnconfiguredEmbeddingProvider(str(exc), dimensions)
     raise ValueError(
-        f"Unknown embedding provider '{kind}'. Supported: hashing (local), google (Vertex AI).")
+        f"Unknown embedding provider '{kind}'. Supported: hashing (local), google (through VEYE_GEMINI_BACKEND).")

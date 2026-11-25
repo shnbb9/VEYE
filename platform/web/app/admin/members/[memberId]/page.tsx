@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import { ask } from "@/components/confirm-dialog";
 import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
 import { TrendCell } from "@/components/admin/member-cells";
 import {
@@ -461,7 +462,7 @@ function ArchiveCard({ member, onChanged }: { member: Member360; onChanged: () =
             <div className="field"><label htmlFor="archiveReason">Reason <span className="t-muted">(optional, kept with the record)</span></label>
               <input className="input" id="archiveReason" maxLength={300} value={reason} onChange={(event) => setReason(event.target.value)} /></div>
             <div><button className="btn btn--danger-quiet btn--sm" type="button" disabled={busy} data-testid="member-archive"
-                         onClick={() => { if (window.confirm(`Archive ${profile.name}? They are signed out of the member application and leave the directory. You can restore them later.`)) void run(() => archiveMember(profile.member_id, reason.trim())); }}>{busy ? "Working…" : "Archive member"}</button></div>
+                         onClick={() => void ask({ title: `Archive ${profile.name}?`, text: "They are signed out of the member application and leave the directory. You can restore them later.", confirm: "Archive", danger: true }).then((yes) => { if (yes) void run(() => archiveMember(profile.member_id, reason.trim())); })}>{busy ? "Working…" : "Archive member"}</button></div>
           </>
         )}
       </div>
@@ -481,7 +482,7 @@ function AccountActions({ member, onChanged }: { member: Member360; onChanged: (
   const name = member.profile.name;
 
   async function run(action: MemberAccountAction, confirmText?: string) {
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (confirmText && !(await ask({ title: confirmText.split("? ")[0] + "?", text: confirmText.split("? ").slice(1).join("? "), confirm: "Continue", danger: true }))) return;
     setBusy(action); setNotice(""); setError("");
     try {
       const result = await memberAccountAction(member.profile.member_id, action);

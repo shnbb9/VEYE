@@ -1,15 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useToast } from "@/components/member/member-chrome";
 import { useSession } from "@/components/session";
-import { askSprout, clearConversation, getCompanionSession, sendFeedback, type CompanionSession, type Message, type Source } from "@/lib/companion-api";
+import { askSprout, clearConversation, getCompanionSession, sendFeedback, type AskResponse, type CompanionSession, type Message, type Source } from "@/lib/companion-api";
 import {
   FIRST_TIME_FLOW, PROGRESS_GUIDE_FLOW, answerFlow, askInFlow, getFlowSession, getGuidedOverview, pauseFlow, restartFlow, routeForAction,
   skipFlow, startFlow, type FlowSummary, type GuidedOverview, type Step,
 } from "@/lib/guided-flows-api";
 import { prefersReducedMotion } from "@/lib/member-format";
+import { soundsUrgent, URGENT_UNREACHABLE } from "@/lib/urgent";
 
 /* The approved Veye Companion view (build/dashboard.html, #view-bot): hero
    with the status pill, the full-width chat panel, quick replies, and the
@@ -20,7 +22,7 @@ import { prefersReducedMotion } from "@/lib/member-format";
    offers the step's options as buttons, and performs only the structured UI
    actions the server names. */
 
-type Row = Message & { pending?: boolean; typed?: boolean; guided?: boolean };
+type Row = Message & { pending?: boolean; typed?: boolean; guided?: boolean; withoutHealth?: boolean };
 
 const OUTCOME_NOTE: Record<string, string> = {
   prohibited: "Sprout does not give amounts or medical answers — a coach confirms those.",
@@ -35,6 +37,18 @@ let rowSeq = 0;
 const localId = (prefix: string) => `${prefix}-${Date.now()}-${++rowSeq}`;
 const sproutRow = (content: string, extra: Partial<Row> = {}): Row =>
   ({ id: localId("sprout"), role: "sprout", content, outcome: null, sources: [], feedback: null, created_at: new Date().toISOString(), typed: false, guided: true, ...extra });
+const replyRow = (reply: AskResponse): Row => ({
+  id: reply.reply_message_id, role: "sprout", content: reply.reply, outcome: reply.outcome, sources: reply.sources, feedback: null,
+  created_at: new Date().toISOString(),
+  // Words somebody may need now are not typed out a letter at a time.
+  typed: reply.safety_level !== null && reply.safety_level !== "feelings",
+  withoutHealth: reply.health_context === "off",
+});
+/** What a failed send says. Somebody who may not be safe is not left with "try again". */
+const sendProblem = (reason: unknown, text: string, fallback: string) => {
+  const message = reason instanceof Error ? reason.message : fallback;
+  return soundsUrgent(text) && !message.includes("emergency services") ? `${message} ${URGENT_UNREACHABLE}` : message;
+};
 const memberRow = (content: string): Row =>
   ({ id: localId("member"), role: "member", content, outcome: null, sources: [], feedback: null, created_at: new Date().toISOString(), typed: true, guided: true });
 
@@ -70,7 +84,11 @@ function CompanionView() {
       if (cancelled) return;
       setSession(data);
       setRows(data.conversation.messages.map((m) => ({ ...m, typed: true })));
-    }).catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Sprout is not available right now."); });
+    }).catch((reason) => {
+      if (cancelled) return;
+      const message = reason instanceof Error ? reason.message : "Sprout is not available right now.";
+      setError(`${message} If you need urgent help, please contact your local emergency services.`);
+    });
     void refreshGuided();
     return () => { cancelled = true; };
   }, [refreshGuided]);
@@ -102,6 +120,11 @@ function CompanionView() {
   /* ---------------- guided experiences ---------------- */
   function applyStep(next: Step, echo?: string) {
     const additions: Row[] = [];
+    if (next.reply) {  // it was not an answer to the step: Sprout answers, and the step waits
+      setRows((current) => [...current, { ...memberRow(echo ?? ""), id: next.reply!.member_message_id, guided: false }, replyRow(next.reply!)]);
+      setStep(next);
+      return;
+    }
     if (echo) additions.push(memberRow(echo));
     next.messages.forEach((text) => additions.push(sproutRow(text)));
     if (next.clarification) additions.push(sproutRow(next.clarification));
@@ -164,7 +187,12 @@ function CompanionView() {
   /* ---------------- free conversation ---------------- */
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || thinking || !session) return;
+    if (!trimmed || thinking) return;
+    if (!session) {  // not here yet, or it could not be reached: nothing typed is lost, and nobody is left with silence
+      setError(sendProblem(null, trimmed, "Sprout is not ready yet. Please try again in a moment."));
+      setInput((typed) => typed || trimmed);
+      return;
+    }
     setError("");
     // A step is waiting: a question (ends with ?) goes to Sprout and the step stays; anything else answers the step.
     if (awaiting && step) {
@@ -172,7 +200,7 @@ function CompanionView() {
       if (!isQuestion) {
         setFlowBusy(true);
         try { applyStep(await answerFlow(step.flow_key, { text: trimmed }), trimmed); }
-        catch (reason) { setError(reason instanceof Error ? reason.message : "Sprout could not read that reply."); }
+        catch (reason) { setError(sendProblem(reason, trimmed, "Sprout could not read that reply.")); setInput((typed) => typed || trimmed); }
         finally { setFlowBusy(false); }
         return;
       }
@@ -184,13 +212,14 @@ function CompanionView() {
         setRows((current) => [
           ...current.filter((row) => row.id !== optimistic.id),
           { ...optimistic, id: reply.member_message_id, pending: false },
-          { id: reply.reply_message_id, role: "sprout", content: reply.reply, outcome: reply.outcome, sources: reply.sources, feedback: null, created_at: new Date().toISOString(), typed: false },
-          sproutRow(`Back to where we were: ${same.node?.text ?? ""}`),
+          replyRow(reply),
+          ...(reply.safety_level && reply.safety_level !== "feelings" ? [] : [sproutRow(`Back to where we were: ${same.node?.text ?? ""}`)]),
         ]);
         setStep(same);
       } catch (reason) {
         setRows((current) => current.filter((row) => row.id !== optimistic.id));
-        setError(reason instanceof Error ? reason.message : "Sprout could not answer just now.");
+        setError(sendProblem(reason, trimmed, "Sprout could not answer just now."));
+        setInput((typed) => typed || trimmed);
       } finally { setThinking(false); }
       return;
     }
@@ -202,12 +231,13 @@ function CompanionView() {
       setRows((current) => [
         ...current.filter((row) => row.id !== optimistic.id),
         { ...optimistic, id: reply.member_message_id, pending: false },
-        { id: reply.reply_message_id, role: "sprout", content: reply.reply, outcome: reply.outcome, sources: reply.sources, feedback: null, created_at: new Date().toISOString(), typed: false },
+        replyRow(reply),
       ]);
       setSession((current) => current ? { ...current, conversation: { ...current.conversation, id: reply.conversation_id, message_count: current.conversation.message_count + 2 } } : current);
     } catch (reason) {
       setRows((current) => current.filter((row) => row.id !== optimistic.id));
-      setError(reason instanceof Error ? reason.message : "Sprout could not answer just now.");
+      setError(sendProblem(reason, trimmed, "Sprout could not answer just now."));
+      setInput((typed) => typed || trimmed);  // what they wrote is not lost with it
     } finally { setThinking(false); }
   }
 
@@ -290,9 +320,11 @@ function CompanionView() {
             {session && rows.length === 0 && !thinking && (
               <BotRow content={session.welcome} typed={false} onTypingChange={setSpeaking} />
             )}
-            {rows.map((row) => row.role === "member"
+            {rows.map((row, index) => row.role === "member"
               ? <UserRow key={row.id} row={row} initial={initial} onCopy={copy} />
               : <BotRow key={row.id} row={row} content={row.content} typed={row.typed !== false} onTypingChange={setSpeaking}
+                        // Said once, not under every answer in a run of them.
+                        withoutHealth={row.withoutHealth === true && rows.slice(0, index).reverse().find((r) => r.role === "sprout")?.withoutHealth !== true}
                         onRate={row.guided ? undefined : (rating, reason) => void rate(row, rating, reason)} onCopy={copy} />)}
             {thinking && (
               <div className="msg-row bot msg-typing" id="typingIndicator">
@@ -301,7 +333,7 @@ function CompanionView() {
               </div>
             )}
             {error && <p className="chat-error" role="alert">{error}</p>}
-            {session && !session.enabled && <p className="chat-error" role="status">Sprout is switched off at the moment.</p>}
+            {session && !session.enabled && <p className="chat-error" role="status">Sprout is switched off at the moment. If you need urgent help, please contact your local emergency services.</p>}
           </div>
 
           {/* Step options: Cara's decision trees are yes/no by design, so the branches are explicit buttons. */}
@@ -394,8 +426,8 @@ function UserRow({ row, initial, onCopy }: { row: Row; initial: string; onCopy: 
   );
 }
 
-function BotRow({ row, content, typed, onTypingChange, onRate, onCopy }: {
-  row?: Row; content: string; typed: boolean; onTypingChange: (typing: boolean) => void;
+function BotRow({ row, content, typed, withoutHealth = false, onTypingChange, onRate, onCopy }: {
+  row?: Row; content: string; typed: boolean; withoutHealth?: boolean; onTypingChange: (typing: boolean) => void;
   onRate?: (rating: "helpful" | "not_helpful", reason?: string) => void; onCopy?: (text: string) => void;
 }) {
   const [shown, setShown] = useState(typed ? content : "");
@@ -429,6 +461,11 @@ function BotRow({ row, content, typed, onTypingChange, onRate, onCopy }: {
       <div className="msg-content">
         <div className="msg-bubble"><span className="msg-typewriter">{shown}</span></div>
         {note && <p className="msg-note">{note}</p>}
+        {withoutHealth && (
+          <p className="msg-note" data-testid="without-health">
+            Answered without your health information. <Link href="/app/settings?section=privacy">Turn on personalization</Link> if you want Sprout to use it.
+          </p>
+        )}
         {sources.length > 0 && (
           <div className="msg-sources">
             <button type="button" className="msg-action msg-sources__toggle" aria-expanded={sourcesOpen} onClick={() => setSourcesOpen((open) => !open)}>

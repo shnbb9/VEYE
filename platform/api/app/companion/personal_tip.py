@@ -39,8 +39,8 @@ from app.auth.principal import CurrentPrincipal
 from app.companion.context import MemberContext, MemberContextService
 from app.companion.models import MemberPersonalTip
 from app.companion.policy import POLICY_VERSION, PolicyDecision
-from app.companion.providers.llm import DataClassification, LLMMessage, LLMRequest, classify_for
-from app.health_permission.service import HealthPermissionService
+from app.companion.providers.llm import DataClassification, LLMMessage, LLMRequest, classify_for, leaves_veye
+from app.sprout_permission.service import SproutPermissionService
 
 log = logging.getLogger("veye.companion.tip")
 
@@ -92,7 +92,8 @@ FALLBACK = "Your Personal tip appears once Sprout has a little of your own histo
 # Different reason, different sentence. A member with months of entries should
 # not be told to come back when they have some.
 FALLBACK_NO_TIP = "Sprout has not written you a note yet. One appears here when there is something useful to say."
-FALLBACK_NOT_SHARED = "Share your results with Veye and Sprout can write you a personal note here."
+FALLBACK_OFF = "Turn on Sprout personalization in Settings and Sprout can write you a personal note here."
+FALLBACK_RESTRICTED = "Sprout can't write you a personal note just now."
 
 GREETING = re.compile(r"^\s*(hi|hey|hello|good (morning|afternoon|evening))\b", re.I)
 
@@ -158,25 +159,30 @@ class PersonalTipService:
         member_id = principal.member_id
         if member_id is None:
             return self._fallback()
-        # A tip is built from the member's own records, so it needs the same
-        # permission everything else does.
-        if not HealthPermissionService(self.db).shares_health_data(member_id):
-            return self._fallback(FALLBACK_NOT_SHARED)
+        # A tip is written from the member's own records, so it answers to
+        # their Sprout choice, and nothing written while it was on stays.
+        permission = SproutPermissionService(self.db)
+        if not permission.personalizes(member_id):
+            permission.forget_kept(member_id)
+            return self._fallback(FALLBACK_OFF)
 
+        contexts = MemberContextService(self.db, outside=leaves_veye(self.llm))
+        if not contexts.may_use(principal):
+            return self._fallback(FALLBACK_RESTRICTED)
         context = self._context(principal)
         if not self._has_material(context):
             return self._fallback()
 
         stamp = fingerprint(context)
-        row = (self.db.query(MemberPersonalTip)
-               .filter(MemberPersonalTip.member_id == member_id).one_or_none())
+        kept = (self.db.query(MemberPersonalTip)
+                .filter(MemberPersonalTip.member_id == member_id).populate_existing())
+        row = kept.one_or_none()
         if row is not None and not self._acceptable(row.text):
             # A tip stored before a rule existed must not keep being served
             # because the fingerprint happens to match. The rules are applied
             # on the way out as well as on the way in, so tightening them
             # takes effect for tips already in the database.
             log.info("cached personal tip no longer passes the current rules; regenerating")
-            row.context_fingerprint = ""
         elif row is not None and not force and row.context_fingerprint == stamp and not self._stale(row):
             return PersonalTip(text=row.text, generated=True, generated_at=row.generated_at,
                                context_version=row.tip_version, source="companion")
@@ -192,7 +198,13 @@ class PersonalTipService:
                 return self._fallback(FALLBACK_NO_TIP)
             self.limiter.record("personal_tip", subject=self.subject)
 
+        self.db.commit()                                # no connection is held while a model is asked
         text = self._write(context, classify_for(principal))
+        # Asked again after the model answered, and held until this is saved.
+        if not permission.personalizes(member_id, hold=True):
+            permission.forget_kept(member_id)
+            return self._fallback(FALLBACK_OFF)
+        row = kept.one_or_none()  # switched off and on again meanwhile: the old one is gone
         if text is None:
             # Keep the previous tip rather than replacing a good one with a
             # fallback because today's attempt did not work — but only if it
@@ -215,15 +227,12 @@ class PersonalTipService:
             # Every column is set before the flush: `text` is NOT NULL, so a
             # bare row would hit a constraint on the way in and the recovery
             # path would swallow it as though the race had happened.
-            row = MemberPersonalTip(member_id=member_id, text=text, context_fingerprint=stamp,
-                                    tip_version=TIP_VERSION, provider=provider, generated_at=now)
-            self.db.add(row)
             try:
-                self.db.flush()
+                with self.db.begin_nested():
+                    self.db.add(MemberPersonalTip(member_id=member_id, text=text, context_fingerprint=stamp,
+                                                  tip_version=TIP_VERSION, provider=provider, generated_at=now))
             except IntegrityError:
-                self.db.rollback()
-                row = (self.db.query(MemberPersonalTip)
-                       .filter(MemberPersonalTip.member_id == member_id).one_or_none())
+                row = kept.one_or_none()
                 if row is None:  # pragma: no cover - the row must exist for the constraint to have fired
                     return self._fallback(FALLBACK_NO_TIP)
                 if self._acceptable(row.text):
@@ -245,7 +254,7 @@ class PersonalTipService:
         decision = PolicyDecision(outcome="allow", category=None, matched_rule="personal_tip",
                                   reason="dashboard personal tip", retrieval_scopes=(),
                                   member_data_scopes=TIP_SCOPES, policy_version=POLICY_VERSION)
-        return MemberContextService(self.db).build(principal, TIP_SCOPES, decision)
+        return MemberContextService(self.db, outside=leaves_veye(self.llm)).build(principal, TIP_SCOPES, decision)
 
     @staticmethod
     def _has_material(context: MemberContext) -> bool:
@@ -282,6 +291,7 @@ class PersonalTipService:
             messages=(LLMMessage(role="user", content=f"Summary of this member:\n{lines}"),),
             max_tokens=120, temperature=0.4,
             metadata={"topic": "personal_tip", "tip_version": TIP_VERSION},
+            client_content=False,
             classification=classification,
         )
         try:

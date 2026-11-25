@@ -7,6 +7,9 @@ Deterministic rules only:
 - a reply that tells the member they have a condition, or to change a medicine,
   is blocked the same way: the prompt forbids it, and a rule the prompt alone
   keeps is a request, not a gate;
+- a reply that gives a telephone number to call, says it is a clinician, or
+  says anybody is watching or on their way is blocked: help that does not exist
+  is worse than none;
 - any direct identifier pattern in the reply is redacted."""
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from app.observability.masking import KnownIdentifiers, scrub_text
 RESULT_PASS = "pass"
 RESULT_BLOCKED_DOSAGE = "blocked_dosage"
 RESULT_BLOCKED_MEDICAL = "blocked_medical"
+RESULT_BLOCKED_HELP = "blocked_help_claim"
 RESULT_BLOCKED_EMPTY = "blocked_empty"
 RESULT_REDACTED_IDENTIFIER = "redacted_identifier"
 RESULT_TRUNCATED = "truncated"
@@ -47,6 +51,12 @@ _MEDICINE_RE = re.compile(
     r"(?: taking| using)?(?: (?:your|the|any|all|his|her))?(?: \w+){0,2}? (?:medications?|medicines?|meds|insulin|metformin|statins?|prescriptions?|pills?|tablets?|dosage|dose)\b",
     re.IGNORECASE)
 _CAUTION_RE = re.compile(r"\b(?:do not|don't|never|should not|shouldn't|must not|avoid|before|without|ask|talk to|speak (?:to|with)|check with|consult|whether|if you)\b", re.IGNORECASE)
+_HELP_RE = re.compile(
+    r"\b(?:call|dial|ring|phone|text)(?: (?:us|them|it|the|a|your|local|at|on|to|number|line|hotline|helpline|lifeline|emergency|services?|crisis|suicide|prevention|home|hello|for|help|free|toll-free|now|straight|right|away|immediately|doctor|nurse|clinic|or|and))*"
+    r"[ :]{1,2}\(?\+?\d[\d() -]{2,}(?!\s?(?:g|mg|grams?|minutes?|mins?|cal\w*|kcal|steps?|words?|days?|hours?|weeks?|ml|cups?|times?)\b)"
+    r"|\bI(?:'m| am)(?! not)(?: (?:a|an|your|the))?(?: \w+){0,2}? (?:doctor|physician|nurse|therapist|psychologist|psychiatrist|counsell?or|clinician|dietitian|nutritionist|crisis (?:line|service))\b"
+    r"|\b(?:someone|somebody|a person|the team|our team|a clinician|a nurse|our staff|help) (?:is|are|will be) (?:monitoring|watching|reading this now|with you|on (?:the|their|its) way|contacting you (?:now|right away|immediately))\b"
+    r"|\b(?:24/7|24 hours a day|around[- ]the[- ]clock)\b(?=[^.!?]{0,40}\b(?:support|help|monitor\w*|care|clinicians?|team|available|line)\b)", re.IGNORECASE)
 _MAX_CHARS = 1600
 
 
@@ -92,6 +102,8 @@ class OutputSafety:
             return SafetyResult(self.safe_response, RESULT_BLOCKED_DOSAGE, ("reply stated an amount",))
         if gives_medical_direction(candidate):
             return SafetyResult(self.safe_response, RESULT_BLOCKED_MEDICAL, ("reply diagnosed, or directed a medicine",))
+        if _HELP_RE.search(candidate.replace("\u2019", "'")):
+            return SafetyResult(self.fallback, RESULT_BLOCKED_HELP, ("reply claimed help that does not exist",))
         reasons: list[str] = []
         result = RESULT_PASS
         scrubbed = scrub_text(candidate, self.known)

@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -44,6 +45,7 @@ from app.guided_flows.routes import router as guided_flows_router
 from app.health_permission.routes import admin_router as health_permission_admin_router
 from app.health_permission.routes import settings_router as health_sharing_settings_router
 from app.health_permission.routes import member_router as health_permission_member_router
+from app.sprout_permission.routes import router as sprout_permission_router
 from app.erasure.routes import (
     admin_router as admin_erasure_router,
     member_router as member_erasure_router,
@@ -73,11 +75,35 @@ from app.progress.simple_quiz.routes import (
 )
 
 
+def _say_if_knowledge_cannot_be_searched() -> None:
+    """A change of embedding provider leaves approved knowledge in an index the
+    new one does not search. Sprout will not answer without it; whoever made
+    the change is told now rather than by a member."""
+    from app.db.session import SessionLocal
+    from app.knowledge.service import IndexNotReady, KnowledgeService
+
+    runtime = get_runtime()
+    try:
+        with SessionLocal() as db:
+            service = KnowledgeService(db, runtime.object_store, runtime.embeddings)
+            missing = service.not_searchable() if runtime.embeddings.index != "none" else []
+    except Exception as exc:  # no tables yet, or no database: not what this is about
+        log.info("the knowledge index was not looked at: %s", type(exc).__name__)
+        return
+    if missing:
+        log.warning("%s", IndexNotReady(runtime.embeddings.index, missing).detail)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Provider absence never stops the API: an unconfigured LLM or a missing
     # Langfuse key becomes an honest status, not a boot failure.
     get_runtime()
+    # Said at once if the database answers at once, and not waited for: the API
+    # starts, and says "not available right now", when it does not.
+    looking = threading.Thread(target=_say_if_knowledge_cannot_be_searched, name="veye-index", daemon=True)
+    looking.start()
+    looking.join(3)
     # The local stand-in for Cloud Scheduler (retention purge, outbox retries,
     # erasure processing). Off unless VEYE_JOBS_INTERVAL_SECONDS is set.
     loop = None
@@ -175,6 +201,7 @@ app.include_router(admin_peer_photos_router)
 app.include_router(health_permission_member_router)
 app.include_router(health_permission_admin_router)
 app.include_router(health_sharing_settings_router)
+app.include_router(sprout_permission_router)
 app.include_router(admin_care_router)
 app.include_router(care_router)
 app.include_router(admin_fitness_router)

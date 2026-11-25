@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ADMIN, freshMember } from "../fixtures/accounts";
-import { adminSignIn, expectAdminHome, expectNoHorizontalOverflow, linkFrom, memberApi, memberSignIn, open, portalSessions, signUpMember, toPath, waitForMail } from "../fixtures/helpers";
+import { confirmDialog, adminSignIn, expectAdminHome, expectNoHorizontalOverflow, linkFrom, memberApi, memberSignIn, open, portalSessions, signUpMember, toPath, waitForMail } from "../fixtures/helpers";
 
 /* What Cara confirmed on 25 Nov 2026, driven as she would: health sharing and
    trends in the directory, archiving, questions awaiting a reply, importance,
@@ -77,8 +77,8 @@ test("the directory shows sharing, withholds the number and the trend, and opens
 
   // Withdrawn: closed on the very next look.
   await open(mine, "/app/settings?section=privacy");
-  mine.once("dialog", (dialog) => void dialog.accept());
   await mine.getByTestId("health-sharing-revoke").click();
+  await confirmDialog(mine);
   await expect.poll(async () => (await memberApi<{ state: string }>(mine, "/api/v1/members/me/health-permission")).state).toBe("revoked");
   row = await find(page, person.email);
   await expect(row.locator("[data-sharing]")).toHaveText("Revoked");
@@ -104,8 +104,8 @@ test("archiving signs the member out and hides them; restoring brings them back"
   await (await find(page, person.email)).getByRole("link", { name: /Open/ }).click();
   await page.locator(".subnav").getByRole("link", { name: "Account" }).click();
   await page.getByLabel(/^Reason/).fill("Asked to pause");
-  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByTestId("member-archive").click();
+  await confirmDialog(page);
   await expect(page.getByTestId("archived-banner")).toContainText("Asked to pause");
 
   await mine.goto("/app");

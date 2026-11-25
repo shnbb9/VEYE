@@ -15,7 +15,7 @@ from app.companion.models import MemberPersonalTip
 from app.companion.personal_tip import (
     FALLBACK,
     FALLBACK_NO_TIP,
-    FALLBACK_NOT_SHARED,
+    FALLBACK_OFF,
     MAX_CHARS,
     TIP_VERSION,
     PersonalTipService,
@@ -24,10 +24,10 @@ from app.companion.personal_tip import (
 from app.companion.providers.llm import LLMResponse
 from app.core.runtime import configure_runtime, get_runtime
 from app.db.session import SessionLocal
-from tests.conftest import decide_sharing
+from tests.conftest import decide_sharing, turn_on_sprout
 
 TIP = "/api/v1/companion/personal-tip"
-GRANT = "/api/v1/members/me/health-permission/grant"
+SPROUT_OFF = "/api/v1/members/me/sprout-permission/revoke"
 
 
 class Scripted:
@@ -47,7 +47,7 @@ class Scripted:
         return LLMResponse(text=self.text, provider=self.name, model="scripted", finish_reason="stop")
 
     def describe(self):
-        return {"provider": self.name}
+        return {"provider": self.name, "external": False}
 
 
 @pytest.fixture
@@ -68,13 +68,13 @@ def _with_history(member_client):
                           json={"entry_date": day, "mood": "calm"})
         member_client.post("/api/v1/members/me/food-diary",
                            json={"entry_date": day, "meal_time": "08:00", "description": "Porridge"})
-    assert decide_sharing(member_client).status_code == 200
+    assert turn_on_sprout(member_client).status_code == 200
 
 
 # ---- when there is nothing to say -------------------------------------------
 
 def test_a_member_with_no_history_gets_the_fallback_not_an_invention(member_client, scripted):
-    assert decide_sharing(member_client).status_code == 200
+    assert turn_on_sprout(member_client).status_code == 200
     body = member_client.get(TIP).json()
     assert body["generated"] is False
     assert body["source"] == "fallback"
@@ -83,13 +83,87 @@ def test_a_member_with_no_history_gets_the_fallback_not_an_invention(member_clie
     assert scripted.calls == 0
 
 
-def test_without_sharing_the_tip_says_so_rather_than_using_the_records(member_client, scripted):
+def test_switched_off_the_tip_says_so_rather_than_using_the_records(member_client, scripted):
     _with_history(member_client)
-    assert member_client.post("/api/v1/members/me/health-permission/revoke").status_code == 200
+    assert member_client.post(SPROUT_OFF).status_code == 200
     body = member_client.get(TIP).json()
     assert body["generated"] is False
-    assert "Share your results" in body["text"]
+    assert body["text"] == FALLBACK_OFF
     assert scripted.calls == 0
+
+
+def test_sharing_with_the_team_does_not_write_a_tip(member_client, scripted):
+    _with_history(member_client)
+    assert member_client.post(SPROUT_OFF).status_code == 200
+    assert decide_sharing(member_client).status_code == 200
+    assert member_client.get(TIP).json()["text"] == FALLBACK_OFF
+    assert scripted.calls == 0
+
+
+def test_switching_off_removes_the_tip_already_written(member_client, scripted):
+    """A cached tip is health information written down once and read many
+    times: it goes with the choice it was written under."""
+    _with_history(member_client)
+    written = member_client.get(TIP).json()
+    assert written["generated"] is True and scripted.calls == 1
+    assert member_client.post(SPROUT_OFF).status_code == 200
+    db = SessionLocal()
+    try:
+        assert db.query(MemberPersonalTip).count() == 0
+    finally:
+        db.close()
+    assert member_client.get(TIP).json()["text"] == FALLBACK_OFF
+    # On again: written afresh, not brought back.
+    assert turn_on_sprout(member_client).status_code == 200
+    assert member_client.get(TIP).json()["generated"] is True
+    assert scripted.calls == 2
+
+
+def test_a_tip_left_behind_by_anything_else_is_not_shown_and_is_removed(member_client, scripted):
+    """An older revision, a restored backup: a kept tip answers to the choice
+    as it is now, not to how it got there."""
+    _with_history(member_client)
+    member_client.get(TIP)
+    from app.sprout_permission.models import MemberSproutPermission
+
+    db = SessionLocal()
+    try:
+        db.query(MemberSproutPermission).update({"state": "turned_off"})
+        db.commit()
+        assert db.query(MemberPersonalTip).count() == 1
+    finally:
+        db.close()
+    assert member_client.get(TIP).json()["text"] == FALLBACK_OFF
+    db = SessionLocal()
+    try:
+        assert db.query(MemberPersonalTip).count() == 0
+    finally:
+        db.close()
+
+
+def test_a_tip_finished_after_the_member_switched_off_is_thrown_away(member_client, scripted, monkeypatch):
+    """The member switches off while the model is writing. (A real second
+    connection does this on PostgreSQL in test_sprout_permission.py.)"""
+    from app.sprout_permission.service import SproutPermissionService
+
+    _with_history(member_client)
+    answers = iter([True, True, True, False])
+    seen = []
+
+    def personalizes(self, member_id, *, hold=False, under=None):
+        seen.append(hold)
+        return next(answers)
+
+    monkeypatch.setattr(SproutPermissionService, "personalizes", personalizes)
+    body = member_client.get(TIP).json()
+    assert scripted.calls == 1, "the model had to be asked for this to mean anything"
+    assert seen[-1] is True, "the last look has to hold the answer until the tip is saved"
+    assert body["generated"] is False and body["text"] == FALLBACK_OFF
+    db = SessionLocal()
+    try:
+        assert db.query(MemberPersonalTip).count() == 0
+    finally:
+        db.close()
 
 
 # ---- caching ------------------------------------------------------------------
@@ -259,14 +333,14 @@ def test_the_tip_belongs_to_one_member(member_client, scripted):
     from fastapi.testclient import TestClient
 
     from app.main import app
-    from tests.conftest import sign_up, decide_sharing
+    from tests.conftest import sign_up
 
     _with_history(member_client)
     mine = member_client.get(TIP).json()["text"]
 
     other = TestClient(app)
     assert sign_up(other, email="tipless@demo.veye.test", first_name="Tipless").status_code == 201
-    assert decide_sharing(other).status_code == 200
+    assert turn_on_sprout(other).status_code == 200
     theirs = other.get(TIP).json()
     assert theirs["generated"] is False
     assert theirs["text"] != mine
@@ -293,10 +367,10 @@ def test_a_provider_that_ignores_the_prompt_does_not_reach_the_dashboard(member_
 
 
 def test_the_fallback_matches_the_reason_rather_than_guessing(member_client, scripted):
-    from app.companion.personal_tip import FALLBACK, FALLBACK_NO_TIP, FALLBACK_NOT_SHARED
+    from app.companion.personal_tip import FALLBACK, FALLBACK_NO_TIP, FALLBACK_OFF
 
     # No history at all.
-    assert decide_sharing(member_client).status_code == 200
+    assert turn_on_sprout(member_client).status_code == 200
     assert member_client.get(TIP).json()["text"] == FALLBACK
 
     # History, but the provider produced nothing usable. Telling a member with
@@ -305,9 +379,9 @@ def test_the_fallback_matches_the_reason_rather_than_guessing(member_client, scr
     scripted.text = "NOTHING_TO_SAY"
     assert member_client.get(TIP).json()["text"] == FALLBACK_NO_TIP
 
-    # History, but not shared.
-    assert member_client.post("/api/v1/members/me/health-permission/revoke").status_code == 200
-    assert member_client.get(TIP).json()["text"] == FALLBACK_NOT_SHARED
+    # History, but Sprout personalization is off.
+    assert member_client.post(SPROUT_OFF).status_code == 200
+    assert member_client.get(TIP).json()["text"] == FALLBACK_OFF
 
 
 def test_a_tip_stored_before_a_rule_existed_is_not_served_forever(member_client, scripted):

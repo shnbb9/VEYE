@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from app.core.rate_limit import LIMITS, RateLimitEvent, RateLimiter, prune_rate_limit_events
 from app.db.session import SessionLocal
 from app.main import app
-from tests.conftest import sign_up, decide_sharing
+from tests.conftest import sign_up, turn_on_sprout
 
 TIP = "/api/v1/companion/personal-tip"
 ASK = "/api/v1/companion/messages"
@@ -106,7 +106,7 @@ def test_a_cached_personal_tip_costs_nothing_against_the_limit(member_client):
     """Reading a tip is free; only writing one is limited. A dashboard refresh
     must not burn a member's allowance."""
     _clear("personal_tip")
-    assert decide_sharing(member_client).status_code == 200
+    assert turn_on_sprout(member_client).status_code == 200
     for _ in range(LIMITS["personal_tip"].per_subject + 5):
         assert member_client.get(TIP).status_code == 200
 
@@ -198,7 +198,7 @@ def test_an_unknown_bucket_is_not_silently_unlimited():
     behaviour only because adding a limit is a deliberate act. The test exists
     so that a typo in a bucket name is visible here rather than in production."""
     assert set(LIMITS) == {
-        "companion_message", "personal_tip", "signup", "forgot_password",
+        "companion_message", "companion_safety", "personal_tip", "signup", "forgot_password",
         "resend_verification", "public_request", "photo_upload",
         # Food Diary photos (15 Nov 2026): uploads, and links the API fetches.
         "meal_photo", "meal_photo_link",

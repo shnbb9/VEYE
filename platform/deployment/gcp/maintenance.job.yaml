@@ -61,6 +61,16 @@ spec:
                   value: veye-${ENV}-knowledge
                 - name: VEYE_GCP_PROJECT
                   value: ${PROJECT_ID}
+                # For run,reindex-knowledge, before the service is moved to
+                # another embedding provider: give the JOB the new one first,
+                # run it, then change the service. The service answers from the
+                # index it has all the while.
+                - name: VEYE_GEMINI_BACKEND
+                  value: vertex
+                - name: VEYE_EMBEDDING_PROVIDER
+                  value: hashing
+                - name: VEYE_EMBEDDING_LOCATION
+                  value: us-central1
                 - name: VEYE_DATABASE_URL
                   valueFrom: {secretKeyRef: {name: veye-database-url, key: latest}}
                 - name: VEYE_SMTP_USERNAME

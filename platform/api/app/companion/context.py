@@ -19,8 +19,11 @@ from app.assessments.repository import health_number_history
 from app.auth.principal import CurrentPrincipal
 from app.companion.personalization import MEMBER_FIRST_NAME_TOKEN
 from app.companion.policy import MEMBER_DATA_SCOPES, PolicyDecision
+from app.companion.providers.llm import DataClassification, classify_for
 from app.progress.blood_markers.repository import blood_markers_history
 from app.progress.body_composition.repository import body_composition_history
+from app.sprout_permission.service import SproutPermissionService
+from app.sprout_permission.terms import COVERS_OUTSIDE_AI, POLICY_VERSION
 
 
 class _Summary(BaseModel):
@@ -95,7 +98,10 @@ class UnavailableSummary(_Summary):
 
 class MemberContext(_Summary):
     """Everything the prompt may know about the member. Note what is absent:
-    no name, email, phone, birth date, address, account or member id."""
+    no name, email, phone, birth date, address, account or member id.
+
+    `scopes` are the ones whose records were opened, so it is empty when the
+    member's Sprout choice is off, whatever the topic would have allowed."""
 
     scopes: tuple[str, ...]
     personalization_token: str = MEMBER_FIRST_NAME_TOKEN
@@ -166,8 +172,25 @@ def _month(value: datetime) -> str:
 
 
 class MemberContextService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, *, outside: bool = False) -> None:
         self.db = db
+        # The prompt this context goes into leaves Veye (an outside AI company).
+        self.outside = outside
+
+    def may_use(self, principal: CurrentPrincipal, *, hold: bool = False) -> bool:
+        """The member's own Sprout choice, read now and never cached. Sharing
+        with the Veye team is a different choice and is not looked at here.
+
+        While the words they agreed to do not cover an outside AI company, a
+        real member's information is kept out of a prompt that goes to one,
+        whatever the provider has been configured or cleared for."""
+        if principal.member_id is None:
+            return False
+        outside = self.outside and classify_for(principal) is DataClassification.REAL_MEMBER
+        if outside and not COVERS_OUTSIDE_AI:
+            return False
+        # Agreed to earlier words, which said it was not covered: not covered.
+        return SproutPermissionService(self.db).personalizes(principal.member_id, hold=hold, under=POLICY_VERSION if outside else None)
 
     def build(self, principal: CurrentPrincipal, requested_scopes: list[str] | tuple[str, ...], decision: PolicyDecision) -> MemberContext:
         if not principal.is_member or principal.member_id is None:
@@ -176,16 +199,10 @@ class MemberContextService:
         context: dict = {"scopes": tuple(allowed)}
         member_id = principal.member_id
 
-        # The same records reaching a language model is the same disclosure as
-        # the Veye team opening them, so it answers to the same decision. A
-        # member who has not shared gets a Sprout that works without their
-        # history rather than one that quietly uses it. Read per build, never
-        # cached, so withdrawing takes effect on the next message.
-        from app.health_permission.service import HealthPermissionService
-
-        if not HealthPermissionService(self.db).shares_health_data(member_id):
+        if not self.may_use(principal):
+            context["scopes"] = ()
             withheld = UnavailableSummary(
-                reason="the member has not shared their health records, so Sprout answers without them")
+                reason="the member has not turned on Sprout personalization, so Sprout answers without their health information")
             for scope, field in (("health_number_summary", "health_number"),
                                  ("body_composition_summary", "body_composition"),
                                  ("blood_marker_summary", "blood_markers"),

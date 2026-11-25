@@ -61,7 +61,9 @@ class KnowledgeSource(Base):
     approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    is_synthetic: Mapped[bool] = mapped_column(nullable=False, default=True)
+    # Written for demonstration. Once any document attached to it is not, it is
+    # the client's, for good.
+    is_synthetic: Mapped[bool] = mapped_column(nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

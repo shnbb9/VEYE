@@ -2,8 +2,8 @@
 
 The pipeline these tests pin down:
 
-    raw rows -> VEYE arithmetic -> a short structured summary -> the sharing
-    gate -> the model
+    raw rows -> VEYE arithmetic -> a short structured summary -> the member's
+    Sprout choice -> the model
 
 Nothing skips a step. In particular the model never receives a row, a note, a
 meal description, a date finer than a month, or anything a member typed.
@@ -24,6 +24,8 @@ from app.companion.context import (
 from app.companion.policy import PolicyDecision
 from app.db.session import SessionLocal
 from app.health_permission.service import HealthPermissionService
+from app.sprout_permission.service import SproutPermissionService
+from app.sprout_permission.terms import current_terms
 
 ALL_SCOPES = ("health_number_summary", "body_composition_summary", "blood_marker_summary",
               "mood_summary", "food_pattern_summary")
@@ -57,7 +59,8 @@ def _build(principal):
 def _grant(principal):
     db = SessionLocal()
     try:
-        HealthPermissionService(db).grant(principal.member_id, by_user_id=principal.user_id, by_name="Member")
+        SproutPermissionService(db).grant(principal.member_id, by_user_id=principal.user_id, by_name="Member",
+                                          terms=current_terms())
         db.commit()
     finally:
         db.close()
@@ -73,21 +76,37 @@ def _log_moods(member_client, moods: list[tuple[int, str]]) -> None:
         assert answer.status_code == 200, answer.text
 
 
-# ---- the sharing gate ------------------------------------------------------
+# ---- the member's Sprout choice -------------------------------------------
 
-def test_without_sharing_sprout_gets_no_history_at_all(member_client):
+def test_switched_off_sprout_gets_no_history_at_all(member_client):
     _log_moods(member_client, [(0, "happy"), (1, "calm")])
     context = _build(_principal(member_client))
-    assert set(context.scopes) == set(ALL_SCOPES)
+    assert context.scopes == (), "no record was opened, so no scope may be reported as used"
     for field in ("health_number", "body_composition", "blood_markers", "mood", "food_pattern"):
         summary = getattr(context, field)
         assert isinstance(summary, UnavailableSummary), f"{field} reached the model without permission"
-        assert "not shared" in summary.reason
+        assert "not turned on Sprout personalization" in summary.reason
     # And the prompt says so plainly rather than silently omitting the line.
     assert all("not available" in line for line in context.lines())
 
 
-def test_withdrawing_stops_it_on_the_very_next_message(member_client):
+def test_sharing_with_the_team_is_not_a_yes_to_sprout(member_client):
+    """The two choices used to be one. A member who shares with the team, and
+    has said nothing about Sprout, gets a Sprout that does not know them."""
+    _log_moods(member_client, [(0, "happy"), (1, "calm"), (2, "calm")])
+    principal = _principal(member_client)
+    db = SessionLocal()
+    try:
+        HealthPermissionService(db).grant(principal.member_id, by_user_id=principal.user_id, by_name="Member")
+        db.commit()
+        assert HealthPermissionService(db).shares_health_data(principal.member_id)
+    finally:
+        db.close()
+    context = _build(principal)
+    assert context.scopes == () and isinstance(context.mood, UnavailableSummary)
+
+
+def test_switching_off_stops_it_on_the_very_next_message(member_client):
     _log_moods(member_client, [(0, "happy"), (1, "calm"), (2, "calm")])
     principal = _principal(member_client)
     _grant(principal)
@@ -95,7 +114,7 @@ def test_withdrawing_stops_it_on_the_very_next_message(member_client):
 
     db = SessionLocal()
     try:
-        HealthPermissionService(db).revoke(principal.member_id, by_user_id=principal.user_id, by_name="Member")
+        SproutPermissionService(db).revoke(principal.member_id, by_user_id=principal.user_id, by_name="Member")
         db.commit()
     finally:
         db.close()

@@ -99,6 +99,13 @@ export async function signUpMember(page: Page, member: { email: string; password
   await expect(page).toHaveURL(/\/(app|onboarding)/);
 }
 
+/** Prove a member's address: the link in their own mailbox, opened in this page. */
+export async function verifyAddress(page: Page, email: string) {
+  const mail = await waitForMail(email, "Verify your Veye email address");
+  await open(page, toPath(linkFrom(mail.text, "verify-email")));
+  await expect(page.getByText("Your email address is verified.")).toBeVisible();
+}
+
 /** The signed-in member's own view of a slice, through the API (read-back assertions). */
 export async function memberApi<T>(page: Page, path: string): Promise<T> {
   return page.evaluate(async ({ api, path }) => {
@@ -106,6 +113,19 @@ export async function memberApi<T>(page: Page, path: string): Promise<T> {
     if (!response.ok) throw new Error(`${path} → ${response.status}`);
     return response.json();
   }, { api: API_URL, path }) as Promise<T>;
+}
+
+/** A state-changing call as the person signed in here, with the CSRF token the
+ *  application's own client would send. Returns the status and the answer. */
+export async function sendAs<T = unknown>(page: Page, method: string, path: string, body?: unknown): Promise<{ status: number; body: T }> {
+  return page.evaluate(async ({ api, method, path, body }) => {
+    const token = decodeURIComponent(document.cookie.match(/(?:^|; )veye_csrf=([^;]+)/)?.[1] ?? "");
+    const response = await fetch(`${api}${path}`, {
+      method, credentials: "include", headers: { "Content-Type": "application/json", "X-Veye-Csrf": token },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json().catch(() => null) };
+  }, { api: API_URL, method, path, body }) as Promise<{ status: number; body: T }>;
 }
 
 /** WebKit reports a route prefetch it cancelled because the page moved on as a
@@ -119,6 +139,16 @@ export function cancelledPrefetch(page: Page, text: string): boolean {
 /** No horizontal page overflow at the current viewport (the acceptance rule for every width). */
 export async function expectNoHorizontalOverflow(page: Page) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+}
+
+/** Answer the application's own "are you sure?", and say what it asked. */
+export async function confirmDialog(page: Page, yes = true): Promise<string> {
+  const dialog = page.getByTestId("confirm-dialog");
+  await expect(dialog).toBeVisible();
+  const asked = (await dialog.innerText()).replace(/\s+/g, " ");
+  await dialog.getByTestId(yes ? "confirm-yes" : "confirm-no").click();
+  await expect(dialog).toHaveCount(0);
+  return asked;
 }
 
 /* ---- Mailpit ------------------------------------------------------------ */

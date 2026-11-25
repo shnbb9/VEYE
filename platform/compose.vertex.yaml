@@ -1,0 +1,28 @@
+# Vertex AI from this machine, for the API container only.
+#
+# Added on top of compose.local.yaml by `scripts/local-up.ps1 -Vertex`. It lends
+# the container the Google identity of whoever is signed in here, read-only and
+# as one file. Nothing else about the stack changes, and starting it without
+# -Vertex takes the identity away again.
+#
+# The file is the one `gcloud auth application-default login` writes. Sign in
+# AS the service, so that what is tested is what will be deployed:
+#
+#   gcloud auth application-default login --impersonate-service-account=veye-api@<VEYE_GCP_PROJECT>.iam.gserviceaccount.com
+#
+# Signed in again while it is running? The container still has the file it was
+# started with: `docker compose ... restart api`.
+#
+# Never a downloaded service-account key: the API refuses one, and one that is
+# wrapped in another account's credentials.
+services:
+  api:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/veye/google-identity.json
+    volumes:
+      - type: bind
+        source: ${VEYE_GOOGLE_IDENTITY_FILE:?start the stack with scripts/local-up.ps1 -Vertex}
+        target: /run/veye/google-identity.json
+        read_only: true
+        bind:
+          create_host_path: false

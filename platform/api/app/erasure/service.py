@@ -88,6 +88,7 @@ from app.progress.health_assessment.models import HealthAssessmentAttempt
 from app.progress.simple_quiz.models import SimpleQuizAttempt
 from app.prospects.models import ProspectAssessment, ProspectEvent, ProspectToken
 from app.requests.models import MemberRequest, MemberRequestReply
+from app.sprout_permission.models import MemberSproutPermission, MemberSproutPermissionEvent
 from app.storage.media_changes import sweep_prefix
 from app.storage.object_storage import ObjectStorage
 
@@ -312,7 +313,11 @@ class ErasureService:
         m = self._members(request)
         events = self.db.query(MemberHealthPermissionEvent).filter(MemberHealthPermissionEvent.member_id == m).delete(synchronize_session=False)
         self.db.query(MemberHealthPermission).filter(MemberHealthPermission.member_id == m).delete(synchronize_session=False)
-        return {"sharing_events": int(events or 0)}
+        sprout = self.db.query(MemberSproutPermissionEvent).filter(MemberSproutPermissionEvent.member_id == m).delete(synchronize_session=False)
+        self.db.query(MemberSproutPermission).filter(MemberSproutPermission.member_id == m).delete(synchronize_session=False)
+        # A tip written while the purge was running answers to this choice too.
+        self.db.query(MemberPersonalTip).filter(MemberPersonalTip.member_id == m).delete(synchronize_session=False)
+        return {"sharing_events": int(events or 0), "sprout_permission_events": int(sprout or 0)}
 
     def _stage_prospects(self, request: ErasureRequest) -> dict:
         m = self._members(request)
@@ -374,7 +379,7 @@ class ErasureService:
         if member is not None:
             # Anything a concurrent request managed to write after the first
             # stages ran is caught by this second sweep before the row goes.
-            for stage in ("assessments", "journals", "guided_flows", "sharing"):
+            for stage in ("companion", "assessments", "journals", "guided_flows", "sharing"):
                 getattr(self, f"_stage_{stage}")(request)
             self.db.delete(member)
             out["member_profile"] = 1

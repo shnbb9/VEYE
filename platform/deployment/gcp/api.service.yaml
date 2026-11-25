@@ -30,7 +30,8 @@ spec:
     spec:
       # Its own identity, least privilege: Cloud SQL Client, Secret Manager
       # Secret Accessor on the secrets below, Storage Object Admin on the media
-      # bucket ONLY, Vertex AI User only once Gemini is cleared. No JSON keys.
+      # bucket ONLY, Vertex AI User once Gemini is to be tested (synthetic members
+      # only, until VEYE_GEMINI_MEMBER_DATA_CLEARED below). No JSON keys.
       serviceAccountName: veye-api@${PROJECT_ID}.iam.gserviceaccount.com
       containerConcurrency: 80
       timeoutSeconds: 60
@@ -75,6 +76,18 @@ spec:
               value: ${PROJECT_ID}
             - name: VEYE_LLM_PROVIDER
               value: mock             # gemini only after the BAA question is answered in writing
+            # Vertex AI with this service's own identity. The Developer API and
+            # its key are refused in a deployment whatever is set here.
+            - name: VEYE_GEMINI_BACKEND
+              value: vertex
+            - name: VEYE_GEMINI_MODEL
+              value: gemini-3.8-flash
+            - name: VEYE_GCP_LOCATION
+              value: us               # served from multi-regions
+            - name: VEYE_EMBEDDING_PROVIDER
+              value: hashing          # google only once its index is built: run,reindex-knowledge
+            - name: VEYE_EMBEDDING_LOCATION
+              value: us-central1      # served from single regions
             - name: VEYE_GEMINI_MEMBER_DATA_CLEARED
               value: "false"          # stays false until counsel clears it
             - name: VEYE_AUTH_PROVIDER

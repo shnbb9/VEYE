@@ -124,6 +124,7 @@ test.describe("member dialogs", () => {
 
   test("closing a stacked dialog gives the page its scrolling back", async ({ page }) => {
     await open(page, "/app/mood");
+    await expect(page.locator(".main")).toBeVisible();
     const overflow = () => page.evaluate(() => getComputedStyle(document.querySelector(".main")!).overflow);
     const before = await overflow();
 

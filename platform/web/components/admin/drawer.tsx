@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, type ReactNode } from "react";
+import { useExitGhost } from "@/components/use-exit-ghost";
 import { useModalDialog } from "@/components/use-modal-dialog";
 
 /* The prototype's side drawer (components/drawer): scrim + right-hand panel
@@ -11,6 +12,9 @@ export function Drawer({ eyebrow, title, desc, children, foot, onClose }: {
 }) {
   const id = useId();
   const panel = useRef<HTMLElement>(null);
+  const scrim = useRef<HTMLDivElement>(null);
+  useExitGhost(scrim);
+  useExitGhost(panel, "translateX(20px)");
   // Escape, the focus trap, the scroll lock and returning focus to whatever
   // opened the drawer. Escape alone used to be all of it, so Tab out of an
   // open editor landed on Unpublish in the row behind the scrim.
@@ -18,7 +22,7 @@ export function Drawer({ eyebrow, title, desc, children, foot, onClose }: {
 
   return (
     <>
-      <div className="drawer-scrim" onClick={onClose} />
+      <div className="drawer-scrim" ref={scrim} onClick={onClose} />
       <aside className="drawer" ref={panel} role="dialog" aria-modal="true" aria-labelledby={id}>
         <div className="drawer__head">
           <div style={{ minWidth: 0 }}>

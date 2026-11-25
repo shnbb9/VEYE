@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session, selectinload
 
@@ -31,7 +31,7 @@ from app.companion.settings import get_or_create_settings
 from app.core.config import Settings, reveal
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
-from app.knowledge.service import KnowledgeService
+from app.knowledge.service import SEARCH_FAILED, IndexNotReady, KnowledgeService
 from app.observability.models import AiTraceEvent
 
 router = APIRouter(prefix="/api/v1/admin/companion/advanced", tags=["admin-advanced"], dependencies=[Depends(require_admin)])
@@ -90,7 +90,13 @@ def retrieval_diagnostics(db: Session = Depends(get_db), runtime: Runtime = Depe
 def retrieval_query(payload: DiagnosticQueryIn, db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)) -> list[DiagnosticHitOut]:
     """Run a synthetic query against the approved index (administrator text only, never member data)."""
     service = KnowledgeService(db, runtime.object_store, runtime.embeddings)
-    hits = service.search(payload.query, scopes=payload.scopes or None, limit=payload.limit)
+    try:
+        # Meant for an administrator's own test words. What was typed is not
+        # known to be that, so an outside provider is asked as if it were a
+        # member's: it refuses unless the deployment is cleared.
+        hits = service.search(payload.query, scopes=payload.scopes or None, limit=payload.limit)
+    except SEARCH_FAILED as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
     return [DiagnosticHitOut(source_id=h.source_id, document_id=h.document_id, chunk_id=h.chunk_id, title=h.source_title,
                              source_version=h.source_version, scope_key=h.scope_key, heading=h.heading, score=round(h.score, 4),
                              excerpt=h.text[:280]) for h in hits]
@@ -150,6 +156,13 @@ def _email_status(runtime: Runtime, settings: Settings) -> dict:
     }
 
 
+def _embeddings_status(db: Session, runtime: Runtime) -> dict:
+    """And whether what it searches is all there, when it is not."""
+    described = runtime.embeddings.describe()
+    missing = KnowledgeService(db, runtime.object_store, runtime.embeddings).not_searchable() if described["configured"] else []
+    return described | ({"index_warning": IndexNotReady(runtime.embeddings.index, missing).detail} if missing else {})
+
+
 @router.get("/provider-status", response_model=ProviderStatusOut)
 def provider_status(db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)) -> ProviderStatusOut:
     bind = db.get_bind()
@@ -162,7 +175,7 @@ def provider_status(db: Session = Depends(get_db), runtime: Runtime = Depends(ge
         environment=settings.environment,
         auth_provider=_auth_status(runtime, settings),
         email=_email_status(runtime, settings),
-        llm=runtime.llm.describe(), embeddings=runtime.embeddings.describe(),
+        llm=runtime.llm.describe(), embeddings=_embeddings_status(db, runtime),
         object_store=runtime.object_store.describe() | {"production_target": "Google Cloud Storage"},
         telemetry=runtime.telemetry.describe(),
         langfuse={"status": runtime.langfuse_status, "enabled": settings.langfuse_enabled, "base_url": settings.langfuse_base_url if settings.langfuse_enabled else None,

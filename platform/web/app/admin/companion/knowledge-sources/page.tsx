@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { ask } from "@/components/confirm-dialog";
 import { Chip, Icon, fmtDate } from "@/components/admin/admin-chrome";
 import { CompanionPage } from "@/components/admin/companion-page";
 import {
@@ -41,7 +42,7 @@ export default function KnowledgeSourcesPage() {
   }
 
   async function transition(source: KnowledgeSource, action: "activate" | "deactivate" | "archive" | "restore") {
-    if (action === "archive" && !window.confirm(`Archive "${source.title}"? It is retained as an archived record and is never permanently deleted.`)) return;
+    if (action === "archive" && !(await ask({ title: `Archive "${source.title}"?`, text: "It is retained as an archived record and is never permanently deleted.", confirm: "Archive" }))) return;
     setBusy(source.id); setError("");
     try {
       const updated = await transitionKnowledgeSource(source.id, action);

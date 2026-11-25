@@ -27,7 +27,7 @@ export type AskResponse = {
   member_message_id: string;
   reply_message_id: string;
   reply: string;
-  outcome: "answered" | "prohibited" | "escalated" | "off_topic" | "unavailable";
+  outcome: "answered" | "prohibited" | "escalated" | "off_topic" | "unavailable" | "support" | "safety";
   policy_outcome: string;
   policy_category: string | null;
   sources: Source[];
@@ -37,6 +37,10 @@ export type AskResponse = {
   safety_result: string | null;
   trace_id: string | null;
   personalized: boolean;
+  /** What happened to the member's health information: their Sprout choice is off, or this environment may not use it. */
+  health_context: "used" | "off" | "restricted" | "none";
+  /** How worried the fixed rules were about the message, if at all. */
+  safety_level: string | null;
 };
 
 export const getCompanionSession = () => apiJson<CompanionSession>("/api/v1/companion/session");

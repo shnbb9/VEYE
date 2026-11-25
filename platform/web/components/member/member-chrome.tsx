@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Fragment, createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { MemberAvatar } from "@/components/member/member-avatar";
 import { MEMBER_NAV, activeNavKey, type NavKey } from "@/components/member/member-nav";
 import { NavIcon } from "@/components/member/nav-icons";
 import { ScreenStyles } from "@/components/screen-styles";
 import { MemberSkeleton } from "@/components/skeleton";
 import { RequirePortal, useSession } from "@/components/session";
+import { usePageFade } from "@/components/use-page-fade";
 import { recordActivity } from "@/lib/member-api";
 
 /* Member application chrome, ported from the approved consumer prototype
@@ -45,6 +46,13 @@ export function useToast(): ToastApi {
 }
 
 function Toast({ message }: { message: string }) {
+  // The words stay while the toast fades: it used to empty first and fade a blank pill.
+  const [words, setWords] = useState("");
+  useEffect(() => {
+    if (message) { setWords(message); return; }
+    const timer = setTimeout(() => setWords(""), 200);
+    return () => clearTimeout(timer);
+  }, [message]);
   return (
     <div
       id="veyeToast"
@@ -54,10 +62,11 @@ function Toast({ message }: { message: string }) {
         position: "fixed", bottom: 24, right: 24, background: "var(--brand-green)", color: "white",
         padding: "10px 18px", borderRadius: 8, fontFamily: "Nunito Sans, sans-serif", fontSize: 13,
         fontWeight: 700, boxShadow: "0 10px 24px rgba(141,196,18,0.36)", zIndex: 300,
-        opacity: message ? 1 : 0, transition: "opacity .25s ease", pointerEvents: "none",
+        opacity: message ? 1 : 0, transform: message ? "none" : "translateY(6px)",
+        transition: "opacity .18s ease, transform .18s ease", pointerEvents: "none",
       }}
     >
-      {message}
+      {message || words}
     </div>
   );
 }
@@ -90,6 +99,9 @@ function MemberFrame({ children }: { children: ReactNode }) {
   const toast = useToastState();
   const session = useSession();
   useEffect(() => { void recordActivity(); }, []);
+
+  const view = useRef<HTMLDivElement>(null);
+  usePageFade(view, pathname ?? "");
 
   async function logOut() {
     // End the MEMBER session on the server, then a full navigation to the
@@ -152,7 +164,7 @@ function MemberFrame({ children }: { children: ReactNode }) {
                 `.view.view-bot.active` (the Companion fills the content area so
                 the chat fits without page scroll); the wrapper carries
                 view-bot there so that rule applies. */}
-            <div className={`view active${pathname?.startsWith("/app/companion") ? " view-bot" : ""}`}>{children}</div>
+            <div ref={view} className={`view active${pathname?.startsWith("/app/companion") ? " view-bot" : ""}`}>{children}</div>
           </section>
         </main>
       </div>

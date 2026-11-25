@@ -3,7 +3,10 @@ param(
   [switch]$Build,
   # Kept for older notes; Mailpit now starts by default. -NoMail leaves it out.
   [switch]$Mail,
-  [switch]$NoMail
+  [switch]$NoMail,
+  # Lend the API container this machine's Google identity, for
+  # VEYE_GEMINI_BACKEND=vertex (compose.vertex.yaml). Without it, none.
+  [switch]$Vertex
 )
 
 # The one command that starts VEYE locally: PostgreSQL, the API, the web app
@@ -57,6 +60,19 @@ try {
   }
 
   $arguments = @('compose', '--env-file', '.env.local-docker', '-f', 'compose.local.yaml')
+  if ($Vertex) {
+    if (-not $env:VEYE_GOOGLE_IDENTITY_FILE) {
+      $env:VEYE_GOOGLE_IDENTITY_FILE = Join-Path $env:APPDATA 'gcloud\application_default_credentials.json'
+    }
+    if (-not (Test-Path -PathType Leaf $env:VEYE_GOOGLE_IDENTITY_FILE)) {
+      # The project is the one in .env.local-docker; nothing here names one.
+      $project = if ($localConfig.VEYE_GCP_PROJECT) { $localConfig.VEYE_GCP_PROJECT } else { '<VEYE_GCP_PROJECT>' }
+      Write-Error ("There is no Google identity on this machine to lend the API: $env:VEYE_GOOGLE_IDENTITY_FILE does not exist.`nSign in first:`n  " +
+        "gcloud auth application-default login --impersonate-service-account=veye-api@$project.iam.gserviceaccount.com")
+      exit 2
+    }
+    $arguments += @('-f', 'compose.vertex.yaml')
+  }
   if ($withMail) { $arguments += @('--profile', 'mail') }
   # --wait returns only once every service reports healthy, so "ready" means
   # the web app already answers on its port (its first compile is included).

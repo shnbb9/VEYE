@@ -61,7 +61,9 @@ STATE_LABELS = {
 # new wording. v2 (9 Nov 2026) added Veye Companion: the same records reaching
 # Sprout is the same disclosure, and the member has to have been told that.
 # v3 (25 Nov 2026): the food diary is not part of this choice (Cara, 25 Nov).
-POLICY_VERSION = "health-sharing-2026-11-25-v3"
+# v4 (25 Nov 2026): nor is Sprout, which became its own choice (owner, 25 Nov);
+# a yes given before still stands, for the team only.
+POLICY_VERSION = "health-sharing-2026-11-25-v4"
 
 # Where a decision came from. A permission is never granted by replying to an
 # email: the member has to act in the application, and the source says so.

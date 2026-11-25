@@ -145,7 +145,7 @@ export default function SettingsPage() {
                   <span className="switch__track" /><span className="check__text">{scope.replace(/_/g, " ")}</span>
                 </label>
               ))}
-              <p className="t-support">Mood and food-pattern summaries are built from the member’s own entries as counts and trends — never a note or a meal description. A member who has not shared their health records gets a Sprout that answers without them.</p>
+              <p className="t-support">Mood and food-pattern summaries are built from the member’s own entries as counts and trends — never a note or a meal description. Sprout gets none of this unless the member has turned on Sprout personalization, which is their own choice and separate from sharing with the team.</p>
             </div>
           </div>
 

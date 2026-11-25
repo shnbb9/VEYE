@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, and_, cast, false, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,6 +57,10 @@ class CompanionConversation(Base):
     resolved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     priority: Mapped[str | None] = mapped_column(String(16), nullable=True)  # set by a person (requests.PRIORITIES)
     message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # While this has been waiting: how grave the worst of it is, and what the
+    # team was emailed, {"worst": 7, "sent": {"self": [7, "2026-11-25T..."]}}
+    # (see CompanionService._mark). Never what anybody said.
+    alerted: Mapped[dict] = mapped_column(JsonType, nullable=False, default=dict, server_default="{}")
 
     messages = relationship("CompanionMessage", back_populates="conversation", cascade="all, delete-orphan",
                             order_by="CompanionMessage.created_at")
@@ -77,9 +81,26 @@ class CompanionMessage(Base):
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     safety_result: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # The health topics opened for this reply, and whether the member's health
+    # information was in front of Sprout at all (an earlier answer in the
+    # conversation counts). A personal reply is the member's: the console sees
+    # it only while they share with the team.
     context_scopes: Mapped[list] = mapped_column(JsonType, nullable=False, default=list)
+    personal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    @property
+    def from_records(self) -> bool:
+        """Was it written with their health information in front of Sprout? A
+        revision that does not know the column leaves it false, so a topic that
+        was opened says so as well."""
+        return bool(self.personal or self.context_scopes)
+
+    @classmethod
+    def not_from_records(cls):
+        """The same, where the rows are chosen."""
+        return and_(cls.personal.is_(False), func.coalesce(cast(cls.context_scopes, String), "[]").in_(("[]", "null", "")))
 
     conversation = relationship("CompanionConversation", back_populates="messages")
     sources = relationship("CompanionMessageSource", back_populates="message", cascade="all, delete-orphan",

@@ -13,28 +13,34 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
 from app.auth.principal import CurrentPrincipal
-from app.companion.service import CompanionError, CompanionReply, CompanionService
+from app.companion.distress import DISTRESS, RANK, Assessment
+from app.companion.safety_copy import UNSURE_LINE
+from app.companion.service import CompanionError, CompanionReply, CompanionService, passing
+from app.core.rate_limit import RateLimiter
 from app.core.runtime import Runtime
 from app.guided_flows.catalog import BUILTIN_KEYS
 from app.guided_flows.engine import (
     AI_TASK, CHECK_MEMBER_STATE, CHOICE, COMPLETE, INTERACTIVE, KNOWLEDGE, MESSAGE, NAVIGATION, QUESTION,
     FlowDefinitionError, GuidedFlowDefinition,
 )
-from app.companion.providers.llm import classify_for
+from app.companion.providers.llm import DataClassification, classify_for
 from app.guided_flows.interpreter import interpret
 from app.guided_flows.member_state import MemberStateService
 from app.guided_flows.models import (
     SESSION_COMPLETED, SESSION_IN_PROGRESS, SESSION_PAUSED, SESSION_SKIPPED, STATUS_ACTIVE, STATUS_ARCHIVED, STATUS_DRAFT,
     GuidedFlow, MemberGuidedFlowSession,
 )
-from app.knowledge.service import KnowledgeService
+from app.knowledge.service import SEARCH_FAILED, KnowledgeService
+
+log = logging.getLogger("veye.guides")
 
 FIRST_TIME_FLOW = "first_time_user"
 PROGRESS_GUIDE_FLOW = "progress_tracker_guide"
@@ -61,6 +67,9 @@ class Step:
     node: dict | None = None
     actions: list[dict] = field(default_factory=list)
     clarification: str | None = None
+    # Sprout's answer, when what was typed was not an answer to the step but
+    # somebody saying they may not be all right. The step has not moved.
+    reply: CompanionReply | None = None
     section_title: str = ""
     steps_taken: int = 0
     content_meta: dict = field(default_factory=dict)
@@ -179,7 +188,18 @@ class GuidedFlowService:
             step.messages = [explore]
         return step
 
-    def answer(self, principal: CurrentPrincipal, key: str, *, choice: str | None = None, text: str | None = None) -> Step:
+    def answer(self, principal: CurrentPrincipal, key: str, *, choice: str | None = None, text: str | None = None,
+               companion: CompanionService | None = None) -> Step:
+        # Every typed reply is read for that first, before anything about the
+        # guide: "I can't go on" is not "yes, continue", and a guide that was
+        # finished on another device must not refuse to hear it.
+        unsure = listed = False
+        if text is not None and companion is not None:
+            assessment = self._assess(principal, key, text, companion)
+            # "No" to what Sprout just asked is not "no" to the step.
+            if RANK[assessment.level] >= RANK[DISTRESS] or assessment.steadier:
+                return self._heard(principal, key, text, companion, assessment)
+            unsure, listed = assessment.unsure, companion.hands_over(assessment)
         session = self._open_session(principal, key)
         definition = self.definition_for(session.flow)
         node = definition.node(session.current_node)
@@ -193,8 +213,18 @@ class GuidedFlowService:
                 if choice not in keys:
                     raise GuidedFlowError(422, "That is not one of the options for this step.")
             elif text is not None:
-                result = interpret(text, node.get("choices", []), provider=self.runtime.llm,
-                                   classification=classify_for(principal))
+                asked_at, asked = session.current_node, []
+                result = interpret(text, node.get("choices", []), provider=self.runtime.llm, classification=classify_for(principal),
+                                   may_ask=lambda: self._may_ask(principal, asked))
+                if result.choice_key is None and (unsure or listed):
+                    return self._heard(principal, key, text, companion, assessment)
+                if any(asked):
+                    # A model was waited for, with nothing held. If the guide was
+                    # answered elsewhere meanwhile, this was not its step; what
+                    # was said was said all the same.
+                    self.db.refresh(session)
+                    if session.current_node != asked_at or session.status != SESSION_IN_PROGRESS:
+                        return self._heard(principal, key, text, companion, assessment) if unsure or listed else self._render(session)
                 if result.choice_key is None:
                     step = self._render(session)
                     step.clarification = CLARIFICATION
@@ -203,6 +233,8 @@ class GuidedFlowService:
             else:
                 raise GuidedFlowError(422, "Choose an option or type a reply.")
         elif kind == QUESTION:
+            if listed:  # what the team asked to be handed is, wherever it is said
+                return self._heard(principal, key, text, companion, assessment)
             choice, via = None, "response"  # every response advances; the text itself is not stored
         else:  # MESSAGE / NAVIGATION / CHECK never wait for input; treat as continue
             choice, via = None, "continue"
@@ -214,14 +246,61 @@ class GuidedFlowService:
         history.append({"node": session.current_node, "choice": choice, "via": via, "at": _now().isoformat()})
         session.answers = {**session.answers, "history": history}
         if transition.next_node is None:
-            return self._complete(session)
-        session.current_node = transition.next_node
-        self.db.flush()
-        return self._render(session)
+            step = self._complete(session)
+        else:
+            session.current_node = transition.next_node
+            self.db.flush()
+            step = self._render(session)
+        if unsure:  # it was an answer, so the guide goes on, and this is said as well
+            step.messages = [UNSURE_LINE, *step.messages]
+        return step
+
+    def _may_ask(self, principal: CurrentPrincipal, asked: list[bool]) -> bool:
+        """The same model as the chat's, so the same allowance. Past it nobody
+        is refused: they are asked to choose, as when the model cannot tell."""
+        limiter, subject = RateLimiter(self.db), str(principal.member_id)
+        allowed = limiter.check("companion_message", subject=subject) is None
+        if allowed:
+            limiter.record("companion_message", subject=subject)
+            self.db.commit()    # nothing is held while a model is waited for
+        asked.append(allowed)
+        return allowed
+
+    def _assess(self, principal: CurrentPrincipal, key: str, text: str, companion: CompanionService):
+        """Read as Sprout reads it, except that "yes" after a step of the guide
+        is an answer to the step."""
+        self._require_member(principal)
+        session = self.latest_session(principal, key)
+        return companion.assess(principal, " ".join(text.split()), since=session.updated_at if session is not None else None)
+
+    def _heard(self, principal: CurrentPrincipal, key: str, text: str, companion: CompanionService, assessment: Assessment) -> Step:
+        """It was not an answer to the step: Sprout answers it, and the step
+        waits, if there is one. Nothing that is answered from fixed words, or
+        handed to a person, is ever held to an allowance; an answer the model
+        would write is, as in the chat, and past it they are still told where
+        help is."""
+        reply: CompanionReply | None = None
+        if not companion.asks_a_model(assessment) or self._may_ask(principal, []):
+            try:
+                reply = companion.ask(principal, text)
+            except CompanionError as exc:
+                raise GuidedFlowError(exc.status_code, exc.detail) from exc
+        session = self.latest_session(principal, key)
+        step = (Step(session_id=uuid4(), flow_key=key, flow_title="", flow_version=0, status=SESSION_SKIPPED) if session is None
+                else self._render(session))
+        step.reply = reply
+        if reply is None:
+            step.clarification = f"{UNSURE_LINE} {CLARIFICATION}" if assessment.unsure else CLARIFICATION
+        return step
 
     def ask(self, principal: CurrentPrincipal, key: str, question: str, companion: CompanionService) -> tuple[CompanionReply, Step]:
         """An explanatory question mid-step: the Companion pipeline answers, the
         flow state is untouched, and the same step is returned."""
+        assessment = self._assess(principal, key, question, companion)
+        if RANK[assessment.level] >= RANK[DISTRESS] or assessment.steadier:
+            step = self._heard(principal, key, question, companion, assessment)
+            assert step.reply is not None
+            return step.reply, step
         session = self._open_session(principal, key)
         try:
             reply = companion.ask(principal, question)
@@ -270,7 +349,17 @@ class GuidedFlowService:
                 continue
             if kind == KNOWLEDGE:
                 step.messages.append(node["text"])
-                passages = self.knowledge.search(node["query"], scopes=list(node.get("scopes", [])) or None, limit=2)
+                try:
+                    # The guide's own words, published by the team: nobody's
+                    # personal data.
+                    # Not saved half way: if it cannot be found, the answer that
+                    # led here was not given.
+                    passages = self.knowledge.search(node["query"], scopes=list(node.get("scopes", [])) or None, limit=2,
+                                                     classification=DataClassification.GENERAL)
+                except SEARCH_FAILED as exc:
+                    log.warning("guide stopped: approved knowledge could not be searched (%s): %s", exc.category, exc)
+                    raise GuidedFlowError(503, "This part of the guide is not available just now. Please try again in a moment." if passing(exc)
+                                          else "This part of the guide is not available in this environment yet.") from None
                 step.messages.extend(p.text.strip() for p in passages)
                 session.current_node = node["next"]
                 continue

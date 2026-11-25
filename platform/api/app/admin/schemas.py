@@ -62,6 +62,9 @@ class AdminMessageOut(MessageOut):
     context_scopes: list[str] = []
     trace_id: str | None = None
     policy_decision: PolicyDecisionOut | None = None
+    # Written from health information the member does not share with the team:
+    # `content` is a notice, not the reply.
+    withheld: bool = False
 
 
 class MemberContextCardOut(BaseModel):
@@ -87,6 +90,13 @@ class ConversationPriorityIn(BaseModel):
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     note: str | None = Field(default=None, max_length=500)
+    # The last message that was on screen: what came after it has not been read.
+    seen_message_id: UUID | None = None
+
+
+class ResolveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    seen_message_id: UUID | None = None
 
 
 # ---- feedback ---------------------------------------------------------------------------------------
@@ -102,6 +112,7 @@ class FeedbackRowOut(BaseModel):
     reviewed_at: datetime | None
     reviewed_by: str | None
     reply_excerpt: str
+    reply_withheld: bool = False
 
 
 # ---- knowledge sources --------------------------------------------------------------------------------

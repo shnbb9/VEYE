@@ -72,6 +72,10 @@ LIMITS = {
     # Each of these calls a paid model.
     "companion_message": Limit("companion_message", per_subject=30, window_minutes=10, per_address=120),
     "personal_tip": Limit("personal_tip", per_subject=20, window_minutes=60, per_address=100),
+    # Somebody who may not be safe, and is over the limit above. Answered from
+    # fixed words, so this is about rows and not about a model; past it they
+    # are still given the words, in the refusal.
+    "companion_safety": Limit("companion_safety", per_subject=60, window_minutes=10),
     # Each of these sends email to an address the caller typed. Keyed on the
     # caller's address, and set high enough that an office or a household
     # behind one NAT is not mistaken for an attack.

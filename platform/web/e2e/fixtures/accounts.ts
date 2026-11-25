@@ -6,6 +6,10 @@ export const ADMIN = { email: "cara.hogue@demo.veye.test", password: "CaraAdmin!
 export const ADMIN_TWO = { email: "priya.ops@demo.veye.test", password: "PriyaOps!2026-local", firstName: "Priya" };
 export const ADITYA = { email: "aditya.demo@demo.veye.test", password: "AdityaDemo!2026-local", firstName: "Aditya" };
 export const MAYA = { email: "maya.demo@demo.veye.test", password: "MayaDemo!2026-local", firstName: "Maya" };
+/** The two choices, the four ways they can be set: Aditya both, Maya the team
+ *  only, Tara Sprout only, Noor neither. Never changed by a test. */
+export const TARA = { email: "tara.demo@demo.veye.test", password: "TaraDemo!2026-local", firstName: "Tara" };
+export const NOOR = { email: "noor.demo@demo.veye.test", password: "NoorDemo!2026-local", firstName: "Noor" };
 /** Member profile AND administrator access on one account. */
 export const DUAL = { email: "jordan.dual@demo.veye.test", password: "JordanDual!2026-local", firstName: "Jordan" };
 

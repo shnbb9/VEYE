@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
+import { ask, type Question } from "@/components/confirm-dialog";
 import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
 import { Drawer, Field } from "@/components/admin/drawer";
 import { PrivacyProspectsCard } from "@/components/admin/privacy-prospects-card";
@@ -473,12 +474,12 @@ function AdministratorsSection() {
   }
 
   async function act(row: AdministratorRow, action: AdminAction) {
-    const confirms: Partial<Record<AdminAction, string>> = {
-      "revoke-invitation": `Withdraw the invitation for ${row.email}? The link stops working immediately.`,
-      deactivate: `Deactivate ${row.name}? They are signed out at once and cannot sign in again until reactivated.`,
+    const confirms: Partial<Record<AdminAction, Question>> = {
+      "revoke-invitation": { title: `Withdraw the invitation for ${row.email}?`, text: "The link stops working immediately.", confirm: "Withdraw", cancel: "Keep it", danger: true },
+      deactivate: { title: `Deactivate ${row.name}?`, text: "They are signed out at once and cannot sign in again until reactivated.", confirm: "Deactivate", danger: true },
     };
-    const ask = confirms[action];
-    if (ask && !window.confirm(ask)) return;
+    const question = confirms[action];
+    if (question && !(await ask(question))) return;
     setBusy(`${row.user_id}:${action}`); setNotice(""); setError("");
     try {
       const result = await administratorAction(row.user_id, action);

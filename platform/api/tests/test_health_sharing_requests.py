@@ -323,7 +323,7 @@ def test_new_terms_do_not_rewrite_an_earlier_decision(admin_client):
     assert preview["material_change"] is True
     assert admin_client.post("/api/v1/admin/settings/health-sharing/terms/publish").status_code == 200
     mine = m.get("/api/v1/members/me/health-permission").json()
-    assert mine["current_policy_version"] == "health-sharing-terms-v1-r2"
+    assert mine["current_policy_version"] == "health-sharing-terms-v1-r3"
     assert mine["policy_version"] == old_terms["label"], "the earlier decision keeps the words it was made against"
     [granted] = [e for e in mine["events"] if e["to_state"] == "granted"]
     assert granted["terms_hash"] == old_terms["hash"] and granted["purpose"] == old_terms["purpose"]
@@ -353,15 +353,15 @@ def test_withdrawing_keeps_the_terms_the_decision_was_made_under(admin_client):
     m = member("withdraw.terms@demo.veye.test")
     assert decide_sharing(m).status_code == 200
     shared = m.get("/api/v1/members/me/health-permission").json()
-    assert shared["policy_version"] == shared["current_policy_version"] == "health-sharing-terms-v1-r2"
+    assert shared["policy_version"] == shared["current_policy_version"] == "health-sharing-terms-v1-r3"
 
     assert m.post("/api/v1/members/me/health-permission/revoke").status_code == 200
     after = m.get("/api/v1/members/me/health-permission").json()
     assert after["state"] == "revoked"
-    assert after["policy_version"] == "health-sharing-terms-v1-r2", "the row keeps the terms the member decided under"
+    assert after["policy_version"] == "health-sharing-terms-v1-r3", "the row keeps the terms the member decided under"
     assert after["policy_version"] == after["current_policy_version"], "nothing about older terms to say"
     [withdrawal] = [e for e in after["events"] if e["to_state"] == "revoked"]
-    assert withdrawal["policy_version"] == "health-sharing-terms-v1-r2", "the event names the terms in force"
+    assert withdrawal["policy_version"] == "health-sharing-terms-v1-r3", "the event names the terms in force"
 
 
 def test_locked_elements_cannot_be_edited_away(admin_client):

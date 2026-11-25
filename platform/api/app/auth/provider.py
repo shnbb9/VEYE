@@ -22,6 +22,9 @@ from sqlalchemy.orm import Session
 from app.auth.models import AuthSession, UserAccount
 from app.auth.principal import PORTALS, CurrentPrincipal
 
+# How exact "last seen" is.
+TOUCH_EVERY = timedelta(minutes=1)
+
 
 def hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -101,7 +104,11 @@ class DevelopmentSessionAuthProvider:
             return None
         if portal == "member" and (user.member_id is None or user.member_archived):
             return None
-        session.last_seen_at = now
+        if now - _aware(session.last_seen_at) >= TOUCH_EVERY:
+            # Saved now: a request that waits for a model must not hold this row
+            # while the same person's next message waits for it.
+            session.last_seen_at = now
+            db.commit()
         return session
 
     def revoke(self, db: Session, session_id: UUID) -> None:

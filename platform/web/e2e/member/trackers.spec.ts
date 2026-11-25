@@ -84,6 +84,10 @@ test.describe.serial("Member trackers", () => {
 
   test("Body Composition — measurements are saved and the result comes from the API", async ({ page }) => {
     await open(page, "/app/progress/body-composition");
+    // The figure keeps to its box: where it did not, it lay over the buttons above it.
+    const figure = page.locator(".bmi-figure-img");
+    await expect.poll(async () => (await figure.evaluate((img: HTMLImageElement) => img.complete)) && (await figure.boundingBox())!.height).toBeGreaterThan(300);
+    expect((await figure.boundingBox())!.height).toBeLessThanOrEqual(460.5);
     await page.getByRole("button", { name: "Man", exact: true }).click();
     await page.locator("#bmi_weight").fill("178");
     await page.locator("#bmi_waist").fill("34");

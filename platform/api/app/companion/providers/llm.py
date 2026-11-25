@@ -72,6 +72,10 @@ class LLMRequest:
     max_tokens: int = 400
     temperature: float = 0.3
     metadata: dict[str, str] = field(default_factory=dict)
+    # Does it carry text from the client's own documents, rather than from the
+    # synthetic ones? None means nobody said, and a development adapter then
+    # looks for itself and assumes the worst.
+    client_content: bool | None = field(default=None, kw_only=True)
     # Required and keyword-only: there is deliberately no default, so adding a
     # new caller is a decision about whose data it carries rather than an
     # omission that silently inherits the permissive answer.
@@ -102,6 +106,12 @@ class LLMResponse:
     output_tokens: int | None = None
     latency_ms: int = 0
     finish_reason: str | None = None
+    # Which door it went through, for a provider that has more than one.
+    backend: str | None = None
+    # Part of output_tokens: what the model spent thinking, which is billed.
+    thinking_tokens: int | None = None
+    attempts: int = 1
+    estimated_cost_usd: float | None = None
 
 
 class LLMProvider(Protocol):
@@ -114,7 +124,45 @@ class LLMProvider(Protocol):
 
 
 class ProviderNotConfigured(RuntimeError):
-    pass
+    """It cannot be used as it is set up. `category` is what telemetry records:
+    a word of VEYE's, never the provider's own text."""
+    category = "provider_not_configured"
+
+
+class ProviderFailed(RuntimeError):
+    """It is set up, and a call to it did not work."""
+    category = "provider_error"
+    # What it used all the same, with no text in it, where that is known.
+    spent: "LLMResponse | None" = None
+
+
+class MemberDataNotCleared(ProviderNotConfigured):
+    """A real member's data would have reached an outside model that has not
+    been cleared for it."""
+    category = "member_data_not_cleared"
+
+
+class ClientContentNotAllowed(ProviderNotConfigured):
+    """Text from the client's own documents would have gone through a
+    developer credential."""
+    category = "client_content_not_allowed"
+
+
+def carries_passages(request: LLMRequest) -> bool:
+    """Is there a passage of approved knowledge in this prompt? Read from the
+    prompt, for a caller that did not say whose the passages are."""
+    section = _section(request.system or "", "APPROVED KNOWLEDGE")
+    return bool(section) and not section.lower().startswith("(none")
+
+
+def carries_client_content(request: LLMRequest) -> bool:
+    return request.client_content if request.client_content is not None else carries_passages(request)
+
+
+def leaves_veye(provider) -> bool:
+    """Does a prompt handed to this provider leave Veye? One that does not say
+    is treated as one that does."""
+    return bool(provider.describe().get("external", True))
 
 
 class MockLLMProvider:
@@ -175,6 +223,10 @@ class GroqLLMProvider:
         self._client = Groq(api_key=api_key, timeout=timeout_seconds)
 
     def complete(self, request: LLMRequest) -> LLMResponse:
+        if request.carries_real_member_data:
+            raise ProviderNotConfigured("This development adapter only takes synthetic members' conversations.")
+        if carries_client_content(request):
+            raise ClientContentNotAllowed("This development adapter only takes passages from synthetic documents.")
         started = time.perf_counter()
         messages = [{"role": "system", "content": request.system}]
         messages += [{"role": m.role, "content": m.content} for m in request.messages]
@@ -212,13 +264,15 @@ class UnconfiguredLLMProvider:
 
 def build_llm_provider(kind: str, *, groq_api_key: str | None, groq_model: str, timeout_seconds: float,
                        gemini: dict | None = None) -> LLMProvider:
+    """`kind` is the provider that was asked for. Which credentials happen to
+    be present decides nothing."""
     if kind == "mock":
         return MockLLMProvider()
     if kind == "gemini":
         from app.companion.providers.gemini import GeminiLLMProvider
 
         try:
-            return GeminiLLMProvider(timeout_seconds=timeout_seconds, **(gemini or {}))
+            return GeminiLLMProvider(timeout_seconds=timeout_seconds, **{"backend": "", **(gemini or {})})
         except ProviderNotConfigured as exc:
             # The API still boots and the Companion reports the absence rather
             # than a misconfigured deployment answering members anyway.
@@ -257,7 +311,7 @@ def _first_passage(passages: str) -> str:
 def _context_sentence(context: str) -> str:
     for line in context.splitlines():
         line = line.strip()
-        if line.startswith("- health_number:"):
+        if line.startswith("- health_number:") and "not available" not in line:
             return "From your saved results: " + line.split(":", 1)[1].strip()
     for line in context.splitlines():
         line = line.strip()

@@ -13,8 +13,10 @@ branch, so anything the lexicon cannot resolve asks for clarification."""
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
+from typing import Callable
 
 from app.companion.providers.llm import DataClassification, LLMMessage, LLMProvider, LLMRequest
 
@@ -27,6 +29,8 @@ NO_WORDS = {
     "no thanks.", "i'd rather not", "id rather not", "pass",
 }
 UNCLEAR = "UNCLEAR"
+
+log = logging.getLogger("veye.guides")
 
 
 @dataclass(frozen=True)
@@ -44,10 +48,13 @@ def _normalise(text: str) -> str:
 
 
 def interpret(text: str, choices: list[dict], provider: LLMProvider | None = None, *,
-              classification: DataClassification = DataClassification.REAL_MEMBER) -> Interpretation:
+              classification: DataClassification = DataClassification.REAL_MEMBER,
+              may_ask: Callable[[], bool] | None = None) -> Interpretation:
     """`classification` defaults to the conservative answer: this maps a
     member's own typed reply, and a caller that forgets to say whose it is
-    should get the restrictive treatment, not the permissive one."""
+    should get the restrictive treatment, not the permissive one. `may_ask` is
+    called when the words themselves did not decide it and a model is about to
+    be asked; if it says no, none is."""
     keys = [c["key"] for c in choices]
     if not keys:
         return Interpretation(None, "unclear")
@@ -80,7 +87,7 @@ def interpret(text: str, choices: list[dict], provider: LLMProvider | None = Non
         return Interpretation(hits[0], "lexicon")
 
     # 2. provider classification, validated against the allowed keys
-    if provider is not None and getattr(provider, "name", "mock") != "mock":
+    if provider is not None and getattr(provider, "name", "mock") != "mock" and (may_ask is None or may_ask()):
         options = "\n".join(f"- {c['key']}: {c.get('label', c['key'])}" for c in choices)
         request = LLMRequest(
             system=("You map a member's short reply to exactly one option key from a fixed list. "
@@ -89,12 +96,16 @@ def interpret(text: str, choices: list[dict], provider: LLMProvider | None = Non
             # The member's own words, so the member's own classification.
             messages=(LLMMessage(role="user", content=text.strip()[:300]),), max_tokens=12, temperature=0.0,
             metadata={"purpose": "guided_flow_choice"},
+            client_content=False,   # an option's key and label, as the member sees them
             classification=classification,
         )
         try:
             raw = provider.complete(request).text.strip()
             answer = raw.split()[0].strip(".,").lower() if raw else UNCLEAR
-        except Exception:
+        except Exception as exc:
+            # The member is asked to choose instead. Whoever runs this is told
+            # why, in a word: a key that is missing is not a reply that is unclear.
+            log.warning("a guide's reply was not interpreted: %s (%s)", type(exc).__name__, getattr(exc, "category", "provider_error"))
             answer = UNCLEAR
         if answer in keys:
             return Interpretation(answer, "provider", confidence="high")

@@ -557,6 +557,8 @@
   font-size: var(--fs-body); line-height: 1.55;
 }
 .msg--member { align-self: flex-start; }
+.msg--companion .msg__bubble.msg__bubble--withheld { background: var(--surface-softer); color: var(--text-muted); font-style: italic; }
+.msg__bubble--withheld .icon, .msg__bubble--withheld > svg { display: inline-block; vertical-align: -2px; margin-right: 6px; }
 .msg--member .msg__bubble { background: var(--tint-neutral); color: var(--text-body); border-bottom-left-radius: 4px; }
 .msg--companion { align-self: flex-end; }
 .msg--companion .msg__bubble { background: var(--tint-positive); color: var(--text-body); border-bottom-right-radius: 4px; }

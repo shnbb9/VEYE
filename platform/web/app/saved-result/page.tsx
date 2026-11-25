@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
+import { ask } from "@/components/confirm-dialog";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { useSession } from "@/components/session";
 import {
@@ -51,7 +52,7 @@ function SavedResult() {
   async function erase() {
     let token: string | null = null;
     try { token = sessionStorage.getItem(SAVED_RESULT_LINK_KEY); } catch { /* ignore */ }
-    if (!token || !window.confirm("Delete your saved result and the email address you gave? This cannot be undone.")) return;
+    if (!token || !(await ask({ title: "Delete your saved result?", text: "Your saved result and the email address you gave are deleted. This cannot be undone.", confirm: "Delete", cancel: "Keep it", danger: true }))) return;
     setBusy(true);
     try {
       const done = await eraseSavedResult(token);

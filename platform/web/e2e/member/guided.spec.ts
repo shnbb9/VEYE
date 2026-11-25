@@ -44,6 +44,10 @@ test.describe.serial("Guided experiences", () => {
     // The intro decision: WHY TO / HOW TO — Cara's words, as buttons.
     const choices = page.locator("#guidedChoices");
     await expect(choices.getByRole("button", { name: /why to/i })).toBeVisible();
+    // On a phone every choice ends inside the panel, the longest one included.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(() => choices.evaluate((box) => [...box.querySelectorAll("button")].filter((b) => b.getBoundingClientRect().right > box.getBoundingClientRect().right + 0.5).map((b) => b.textContent))).toEqual([]);
+    await page.setViewportSize({ width: 1440, height: 900 });
     await choices.getByRole("button", { name: /why to/i }).click();
     await expect(page.locator(".guided-bar")).toContainText("First-Time User · WHY TO");
 

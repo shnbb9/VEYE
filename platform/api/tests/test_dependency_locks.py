@@ -24,9 +24,9 @@ API = Path(__file__).resolve().parents[1]
 PYPROJECT = tomllib.loads((API / "pyproject.toml").read_text(encoding="utf-8"))["project"]
 
 LOCKS = {
-    "dev.lock": ("ai",),
+    "dev.lock": ("ai", "gemini"),
     "production.lock": ("gemini", "gcs"),
-    "ci.lock": ("test", "ai"),
+    "ci.lock": ("test", "ai", "gemini"),
 }
 
 

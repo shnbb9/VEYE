@@ -60,9 +60,12 @@ function Conversations() {
       setRows(list);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That change could not be saved.");
+      // Refused because something came in meanwhile: show it.
+      getConversation(id).then(setDetail).catch(() => undefined);
     } finally { setBusy(false); }
   }
-  const markReviewed = () => change((id) => reviewConversation(id));
+  const seen = detail?.messages.at(-1)?.id ?? null;
+  const markReviewed = () => change((id) => reviewConversation(id, seen));
 
   const needsReview = rows?.filter((row) => row.flagged && !row.reviewed_at).length;
 
@@ -145,7 +148,9 @@ function Conversations() {
                       {message.outcome && message.outcome !== "answered" && <> · <Chip label={message.outcome} /></>}
                       {message.policy_decision && message.role === "member" && <> · policy: {message.policy_decision.outcome}{message.policy_decision.category ? ` (${message.policy_decision.category})` : ""}</>}
                     </div>
-                    <div className="msg__bubble">{message.content}</div>
+                    <div className={`msg__bubble${message.withheld ? " msg__bubble--withheld" : ""}`} data-testid={message.withheld ? "reply-withheld" : undefined}>
+                      {message.withheld && <Icon name="lock" size={14} />}{message.content}
+                    </div>
                     {message.role === "sprout" && (
                       <div className="msg__sources">
                         {message.sources.length > 0 && <>Sources · {message.sources.length}: {message.sources.map((s) => `${s.title} v${s.source_version}`).join(", ")} · </>}
@@ -161,7 +166,7 @@ function Conversations() {
                   <PrioritySelect id="cvImportance" value={detail.summary.priority} disabled={busy} onChange={(next) => void change((id) => setConversationPriority(id, next))} />
                   {detail.summary.resolved_at
                     ? <button className="btn btn--ghost btn--sm" type="button" disabled={busy} onClick={() => void change(reopenConversation)} data-testid="conversation-reopen">Reopen</button>
-                    : <button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => void change(resolveConversation)} data-testid="conversation-resolve">Mark resolved</button>}
+                    : <button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => void change((id) => resolveConversation(id, seen))} data-testid="conversation-resolve">Mark resolved</button>}
                   <span className="t-support" style={{ flex: "1 1 220px" }}>Reviewed means somebody read it. It does not answer the member: the team replies outside Sprout, and resolving says nothing is left to do.</span>
                 </div>
               )}

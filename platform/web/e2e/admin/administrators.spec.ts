@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ADITYA, ADMIN, ADMIN_TWO, DUAL, freshAdmin } from "../fixtures/accounts";
-import { adminSignIn, expectAdminHome, linkFrom, memberSignIn, open, toPath, waitForMail } from "../fixtures/helpers";
+import { confirmDialog, adminSignIn, expectAdminHome, linkFrom, memberSignIn, open, toPath, waitForMail } from "../fixtures/helpers";
 
 /* Administrator provisioning, through the real screens: invite someone from
    Settings → Administrators, pick the invitation out of the mailbox, activate
@@ -138,8 +138,8 @@ test.describe.serial("Administrators", () => {
     await expect(theirs.getByTestId("accept-submit")).toBeDisabled();
 
     // Withdrawing the invitation kills the live one as well.
-    page.once("dialog", (dialog) => void dialog.accept());
     await page.getByTestId(`revoke-${invited.email}`).click();
+    await confirmDialog(page);
     await expect(page.getByTestId("admins-notice")).toContainText("withdrawn");
     await theirs.goto(toPath(linkFrom(second.text, "admin/accept-invitation")));
     await expect(theirs.getByTestId("invitation-error")).toBeVisible();
@@ -187,8 +187,8 @@ test.describe.serial("Administrators", () => {
     await expectAdminHome(theirs);
 
     await open(page, "/admin/settings?section=administrators");
-    page.once("dialog", (dialog) => void dialog.accept());
     await page.getByTestId(`deactivate-${invited.email}`).click();
+    await confirmDialog(page);
     await expect(page.getByTestId("admins-notice")).toContainText("deactivated");
     await expect(page.getByTestId("admins-table").locator("tr", { hasText: invited.email })).toContainText("Deactivated");
 

@@ -23,7 +23,7 @@ say
 say "# 1. APIs"
 say "gcloud services enable run.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com \\"
 say "  artifactregistry.googleapis.com cloudscheduler.googleapis.com storage.googleapis.com \\"
-say "  vpcaccess.googleapis.com servicenetworking.googleapis.com"
+say "  vpcaccess.googleapis.com servicenetworking.googleapis.com aiplatform.googleapis.com"
 say
 say "# 2. Service identities (no JSON keys, ever)"
 for sa in veye-api veye-web veye-scheduler; do
@@ -31,6 +31,8 @@ for sa in veye-api veye-web veye-scheduler; do
 done
 say "gcloud projects add-iam-policy-binding ${PROJECT_ID} --member=serviceAccount:veye-api@${PROJECT_ID}.iam.gserviceaccount.com --role=roles/cloudsql.client"
 say "gcloud projects add-iam-policy-binding ${PROJECT_ID} --member=serviceAccount:veye-scheduler@${PROJECT_ID}.iam.gserviceaccount.com --role=roles/run.invoker"
+say "#    When Gemini is to be tested, and not before: Vertex AI for the API's own identity"
+say "gcloud projects add-iam-policy-binding ${PROJECT_ID} --member=serviceAccount:veye-api@${PROJECT_ID}.iam.gserviceaccount.com --role=roles/aiplatform.user"
 say
 say "# 3. Artifact Registry"
 say "gcloud artifacts repositories create veye --repository-format=docker --location=${REGION}"

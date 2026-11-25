@@ -38,3 +38,4 @@ from app.progress.health_assessment import models as health_assessment_models  #
 from app.progress.simple_quiz import models as simple_quiz_models  # noqa: F401
 from app.prospects import models as prospect_models  # noqa: F401
 from app.requests import models as request_models  # noqa: F401
+from app.sprout_permission import models as sprout_permission_models  # noqa: F401

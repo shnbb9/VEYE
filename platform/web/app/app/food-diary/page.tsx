@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
+import { ask } from "@/components/confirm-dialog";
+import { DiaryCalendar } from "@/components/member/diary-calendar";
+import { useToast } from "@/components/member/member-chrome";
+import { useExitGhost } from "@/components/use-exit-ghost";
 import { useModalDialog } from "@/components/use-modal-dialog";
 import dialog from "@/components/avatar-crop-dialog.module.css";
+import { addDays, isDayKey, shortDay } from "@/lib/diary-dates";
 import {
   addMeal, addMealPhoto, addMealPhotoFromLink, estimateMacros, getDiaryDay, getDiaryFeedback, localDateKey, mealPhotoUrl,
   removeMeal, removeMealPhoto, saveDiaryDay, updateMeal,
-  type DiaryDay, type Macros, type Meal,
+  type DiaryDay, type DiaryHistoryDay, type Macros, type Meal,
 } from "@/lib/member-api";
 import { prefersReducedMotion } from "@/lib/member-format";
 import "../prototype-type.css";
@@ -25,7 +31,11 @@ import "../prototype-type.css";
    photo (the phone's camera, or the webcam on a computer), Choose file, or a
    link the API fetches once and keeps its own copy of — the browser never
    loads the link itself. The meal is saved first and its photo after, so a
-   refused photo never loses the meal. */
+   refused photo never loses the meal.
+
+   History is a list or a month (25 Nov 2026). The open day is in the address,
+   so a reload and the Back button come back to it; which view was open is kept
+   for this tab only. */
 
 const CameraCapture = dynamic(() => import("@/components/member/camera-capture").then((m) => m.CameraCapture), { ssr: false });
 
@@ -41,10 +51,26 @@ function prefersNativeCamera(): boolean {
   return window.matchMedia?.("(pointer: coarse)").matches || !navigator.mediaDevices?.getUserMedia;
 }
 
-function shift(key: string, delta: number): string {
-  const [y, m, d] = key.split("-").map(Number);
-  return localDateKey(new Date(y, m - 1, d + delta, 12));
+/** The day in the address, if it is one. */
+function dayInAddress(): string {
+  const asked = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("date");
+  return isDayKey(asked) ? asked : localDateKey();
 }
+
+// How History was left, for this tab. A convenience: nothing depends on it.
+type HistoryView = { open: boolean; view: "list" | "calendar" };
+const VIEW_KEY = "veye_diary_history";
+function keptView(): HistoryView {
+  try {
+    const kept = JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? "null") as Partial<HistoryView> | null;
+    return { open: kept?.open === true, view: kept?.view === "calendar" ? "calendar" : "list" };
+  } catch { return { open: false, view: "list" }; }
+}
+function keepView(view: HistoryView) {
+  try { sessionStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch { /* it is only remembered, never needed */ }
+}
+
+const said = (reason: unknown, fallback: string) => (reason instanceof Error ? reason.message : fallback);
 
 /* The prototype's one-time scroll reveal (.fdx-panel is one of its reveal
    marks): each panel fades and rises in the first time it nears the viewport,
@@ -72,10 +98,22 @@ function useReveal(name: string) {
 }
 
 export default function FoodDiaryPage() {
+  return <Suspense fallback={null}><FoodDiary /></Suspense>;
+}
+
+function FoodDiary() {
+  const inAddress = useSearchParams().get("date");
   const [leftRef, leftReveal] = useReveal("left");
   const [rightRef, rightReveal] = useReveal("right");
-  const [date, setDate] = useState(localDateKey());
+  const toast = useToast();
+  const today = localDateKey();
+  const [date, setDate] = useState(dayInAddress);
   const [day, setDay] = useState<DiaryDay | null>(null);
+  // Every logged or saved day, kept while another day loads so neither the
+  // list nor the month empties in between.
+  const [days, setDays] = useState<DiaryHistoryDay[] | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [attempt, setAttempt] = useState(0);
   const [form, setForm] = useState(EMPTY);
   const [feelings, setFeelings] = useState<string[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
@@ -83,7 +121,8 @@ export default function FoodDiaryPage() {
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<HistoryView>(keptView);
+  const [acting, setActing] = useState<string | null>(null);   // the button waiting for its answer
   // The photo that goes with the entry being written: a file or snapshot
   // (shown from the device), or a link (fetched by the API on save).
   const [pending, setPending] = useState<PendingPhoto | null>(null);
@@ -97,17 +136,42 @@ export default function FoodDiaryPage() {
   const busy = useRef(false);
   const estimateTurn = useRef(0);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const open = useRef(date);
+  const body = useRef<HTMLDivElement>(null);
+  const dayTitle = useRef<HTMLHeadingElement>(null);
+  const [hold, setHold] = useState(0);      // the day's height, kept while the next one loads
 
-  // renderFdxDay: a new day (or a changed one) hides the previous feedback.
-  const show = useCallback((next: DiaryDay) => { setDay(next); setFeedback(null); }, []);
+  // renderFdxDay: a new day (or a changed one) hides the previous feedback. An
+  // answer about a day that is no longer open updates History and nothing else.
+  const show = useCallback((next: DiaryDay) => {
+    setDays(next.history);
+    if (next.entry_date !== open.current) return;
+    setDay(next);
+    setFeedback(null);
+    setHold(0);
+  }, []);
 
   useEffect(() => {
     let live = true;
+    open.current = date;
+    setLoadError("");
+    setFeedback(null);      // what was said of the last day is not said of this one
+    setSavedNote(false);
     getDiaryDay(date)
       .then((next) => { if (live) show(next); })
-      .catch((reason) => { if (live) setError(reason instanceof Error ? reason.message : "Your diary could not be loaded."); });
+      .catch((reason) => { if (live) { setLoadError(said(reason, "Your diary could not be loaded.")); setHold(0); } });
     return () => { live = false; };
-  }, [date, show]);
+  }, [date, attempt, show]);
+
+  // The open day is in the address, without a step in the browser's history
+  // for every day looked at.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (date === localDateKey()) url.searchParams.delete("date"); else url.searchParams.set("date", date);
+    if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
+  }, [date, inAddress]);
+
+  useEffect(() => { keepView(history); }, [history]);
 
   useEffect(() => () => { if (savedTimer.current) clearTimeout(savedTimer.current); }, []);
 
@@ -129,9 +193,47 @@ export default function FoodDiaryPage() {
     setFeelings((current) => current.includes(feeling) ? current.filter((f) => f !== feeling) : [...current, feeling]);
   }
 
-  function goTo(next: string) {
-    stopEditing();             // the form keeps what was typed, as in the prototype
+  /* Opening another day. A meal that is being written keeps what was typed (it
+     has no day until it is added, and the form says which day that will be). A
+     meal that is being EDITED belongs to this day: leaving it asks first, if
+     anything was changed, and then takes its words out of the form with it. */
+  async function goTo(next: string): Promise<boolean> {
+    if (next === date || saving) return false;
+    if (editing) {
+      if (editChanged() && !(await ask({
+        title: "Leave without saving this meal?", text: "What you changed has not been saved yet.",
+        confirm: "Leave without saving", cancel: "Keep editing", danger: true }))) {
+        document.getElementById("fdxWhat")?.focus();
+        return false;
+      }
+      stopEditing();
+      clearForm();
+    }
+    setHold(body.current?.offsetHeight ?? 0);
     setDate(next);
+    return true;
+  }
+
+  function editChanged(): boolean {
+    const meal = editingMeal;
+    if (!meal) return false;
+    return form.what !== meal.description || form.time !== meal.meal_time || form.notes !== meal.notes
+      || feelings.length !== meal.feelings.length || feelings.some((f) => !meal.feelings.includes(f))
+      || pending !== null || link.trim() !== "" || dropPhoto;
+  }
+
+  function clearForm() {
+    setForm(EMPTY);
+    setFeelings([]);
+    estimateTurn.current++;
+    setMacros(null);
+    setError("");
+  }
+
+  /** From the month: the day opens above it, so bring its title into view if it is not. */
+  async function openFromCalendar(next: string, byPointer: boolean) {
+    const opened = next === date || await goTo(next);
+    if (opened && byPointer) dayTitle.current?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }
 
   // ---- the photo row ----------------------------------------------------------
@@ -181,7 +283,10 @@ export default function FoodDiaryPage() {
 
   const editingMeal = editing ? (day?.meals.find((meal) => meal.id === editing) ?? null) : null;
 
-  function startEdit(meal: Meal) {
+  async function startEdit(meal: Meal) {
+    if (editing && editing !== meal.id && editChanged() && !(await ask({
+      title: "Leave without saving this meal?", text: "What you changed in the other meal has not been saved yet.",
+      confirm: "Leave without saving", cancel: "Keep editing", danger: true }))) return;
     setEditing(meal.id);
     setForm({ what: meal.description, time: meal.meal_time, notes: meal.notes });
     setFeelings(meal.feelings);
@@ -218,48 +323,50 @@ export default function FoodDiaryPage() {
         return;
       }
       show(next);
+      toast.flash(editing ? "Meal updated" : "Meal added");
       setEditing(null);
-      setForm(EMPTY);
-      setFeelings([]);
       resetPhoto();
-      estimateTurn.current++;
-      setMacros(null);
+      clearForm();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The entry could not be saved.");
+      setError(said(reason, "The entry could not be saved."));
     } finally { busy.current = false; setSaving(false); }
   }
 
-  async function remove(meal: Meal) {
-    try {
-      show(await removeMeal(meal.id));
-      if (editing === meal.id) stopEditing();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The entry could not be removed.");
-    }
+  /** One press, one request: a second one waits for the first to be answered. */
+  async function act(name: string, work: () => Promise<void>, problem: string) {
+    if (busy.current) return;
+    busy.current = true;
+    setActing(name);
+    try { await work(); }
+    catch (reason) { setError(said(reason, problem)); }
+    finally { busy.current = false; setActing(null); }
   }
 
-  async function saveDay() {
-    try {
-      const next = await saveDiaryDay(date);
-      setDay(next);
-      setSavedNote(true);
-      if (savedTimer.current) clearTimeout(savedTimer.current);
-      savedTimer.current = setTimeout(() => setSavedNote(false), 2200);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The day could not be saved.");
-    }
-  }
+  const remove = (meal: Meal) => act(`remove:${meal.id}`, async () => {
+    show(await removeMeal(meal.id));
+    if (editing === meal.id) { stopEditing(); clearForm(); }
+    toast.flash("Meal removed");
+  }, "The entry could not be removed.");
 
-  async function askFeedback() {
-    try {
-      setFeedback((await getDiaryFeedback(date)).text);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Feedback is not available right now.");
-    }
-  }
+  const saveDay = () => act("save", async () => {
+    const next = await saveDiaryDay(date);
+    setDays(next.history);
+    if (next.entry_date === open.current) setDay(next);
+    setSavedNote(true);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSavedNote(false), 2200);
+  }, "The day could not be saved.");
 
-  const meals = day?.entry_date === date ? day.meals : [];
-  const totals = day?.entry_date === date ? day.totals : null;
+  const askFeedback = () => act("feedback", async () => {
+    const asked = date;
+    const { text } = await getDiaryFeedback(asked);
+    if (asked === open.current) setFeedback(text);
+  }, "Feedback is not available right now.");
+
+  const ready = day?.entry_date === date;
+  const waiting = !ready && !loadError;
+  const meals = ready ? day.meals : [];
+  const totals = ready ? day.totals : null;
 
   return (
     <>
@@ -351,6 +458,9 @@ export default function FoodDiaryPage() {
           <textarea className="fdx-input fdx-textarea" id="fdxNotes" rows={2} placeholder="Anything worth remembering about this meal" maxLength={2000}
                     value={form.notes} onChange={(event) => { const value = event.target.value; setForm((current) => ({ ...current, notes: value })); }} />
 
+          {date !== today && (
+            <p className="fdx-macro-note fdx-target" data-testid="diary-target">{editing ? "From" : "This will be added to"} {shortDay(date)}.</p>
+          )}
           <button className="btn-primary fdx-add" id="fdxAdd" type="button" disabled={saving} aria-busy={saving} onClick={() => void submit()}>{saving ? "Saving…" : editing ? "Update Entry" : "Add Entry"}</button>
           <p className="fdx-err" id="fdxErr" role="alert" hidden={!error}>{error}</p>
         </section>
@@ -358,28 +468,39 @@ export default function FoodDiaryPage() {
         {/* ================= right: the day ================= */}
         <section ref={rightRef} className={`fdx-panel fdx-right${rightReveal}`} aria-labelledby="fdxRightTitle">
           <div className="fdx-day-head">
-            <h2 className="fdx-panel-title" id="fdxRightTitle">Your day</h2>
+            <h2 className="fdx-panel-title" id="fdxRightTitle" ref={dayTitle}>Your day</h2>
             <div className="fdx-date-nav">
-              <button className="fdx-date-arrow" id="fdxPrevDay" type="button" aria-label="Previous day" onClick={() => goTo(shift(date, -1))}>&lsaquo;</button>
+              <button className="fdx-date-arrow" id="fdxPrevDay" type="button" aria-label="Previous day" onClick={() => void goTo(addDays(date, -1))}>&lsaquo;</button>
               <input className="fdx-input fdx-date" id="fdxDate" type="date" aria-label="Diary date" value={date}
-                     onChange={(event) => { if (event.target.value) goTo(event.target.value); }} />
-              <button className="fdx-date-arrow" id="fdxNextDay" type="button" aria-label="Next day" onClick={() => goTo(shift(date, 1))}>&rsaquo;</button>
+                     onChange={(event) => { if (isDayKey(event.target.value)) void goTo(event.target.value); }} />
+              <button className="fdx-date-arrow" id="fdxNextDay" type="button" aria-label="Next day" onClick={() => void goTo(addDays(date, 1))}>&rsaquo;</button>
             </div>
           </div>
+
+          {/* The day, and only this day: nothing of the last one stays while it
+              loads, and the panel keeps its height so nothing jumps. */}
+          <div className="fdx-daybody" ref={body} style={hold ? { minHeight: hold } : undefined} aria-busy={waiting} data-testid="diary-day" data-day={date}>
+          {waiting && <DaySkeleton />}
+          {loadError && (
+            <div className="fdx-loaderr" role="alert">
+              <p>{loadError}</p>
+              <button className="btn-ghost fdx-action" type="button" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+            </div>
+          )}
 
           <div className="fdx-summary" id="fdxSummary" aria-live="polite">
             {/* one text node per run, as the prototype's innerHTML has, so the text shapes (kerns) identically */}
             {meals.length > 0 && totals && <><b>{meals.length}</b>{` meal${meals.length === 1 ? "" : "s"} logged · Protein `}<b>{`${totals.protein_g}g`}</b>{" · Carbs "}<b>{`${totals.carbs_g}g`}</b>{" · Fat "}<b>{`${totals.fat_g}g`}</b>{" · "}<b>{totals.kcal}</b>{" kcal "}<span className="fdx-summary-note">(prototype estimates)</span></>}
           </div>
 
-          <div className="fdx-empty" id="fdxEmpty" hidden={meals.length > 0}>
+          <div className="fdx-empty" id="fdxEmpty" hidden={!ready || meals.length > 0}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11.6 5.2C9.3 3.1 6.1 2.2 3.9 2.3 2.4 2.4 1.3 2.9 1.3 3.9v12.9c0 .9 1.1 1.3 2.6 1.6 3.1.6 6 1.5 7.7 2 1.7-.5 4.6-1.4 7.7-2 1.5-.3 2.6-.7 2.6-1.6V3.9c0-1-1.1-1.5-2.6-1.6-2.2-.1-5.4.8-7.7 2.9z" /><path d="M11.6 5.2v15.2" /></svg>
             <p>No entries for the day, start logging in.</p>
           </div>
 
           <div className="fdx-meals" id="fdxMeals" data-testid="diary-meals">
             {meals.map((meal, i) => (
-              <article className="fdx-meal" key={meal.id}>
+              <article className={`fdx-meal${editing === meal.id ? " is-editing" : ""}`} key={meal.id}>
                 <div className="fdx-meal-top">
                   <span className="fdx-meal-time">{meal.meal_time}</span>
                   <span className="fdx-meal-macros">{`P ${meal.protein_g}g · C ${meal.carbs_g}g · F ${meal.fat_g}g · ${meal.kcal} kcal`}</span>
@@ -394,18 +515,20 @@ export default function FoodDiaryPage() {
                 {meal.feelings.length > 0 && <div className="fdx-meal-feels">{meal.feelings.map((f) => <span key={f}>{f}</span>)}</div>}
                 {meal.notes && <p className="fdx-meal-notes">{meal.notes}</p>}
                 <div className="fdx-meal-actions">
-                  <button className="fdx-meal-btn" data-fdx-edit={i} type="button" onClick={() => startEdit(meal)}>Edit</button>
-                  <button className="fdx-meal-btn fdx-meal-btn--danger" data-fdx-rm={i} type="button" onClick={() => void remove(meal)}>Remove</button>
+                  <button className="fdx-meal-btn" data-fdx-edit={i} type="button" disabled={acting !== null || saving} onClick={() => void startEdit(meal)}>Edit</button>
+                  <button className="fdx-meal-btn fdx-meal-btn--danger" data-fdx-rm={i} type="button" disabled={acting !== null || saving} aria-busy={acting === `remove:${meal.id}`}
+                          onClick={() => void remove(meal)}>{acting === `remove:${meal.id}` ? "Removing…" : "Remove"}</button>
                 </div>
               </article>
             ))}
           </div>
+          </div>
 
           <div className="fdx-day-actions">
-            <button className="btn-ghost fdx-action" id="fdxFeedback" type="button" onClick={() => void askFeedback()}>Give me feedback</button>
-            <button className="btn-primary fdx-action" id="fdxSaveDay" type="button" onClick={() => void saveDay()}>Save</button>
-            <button className="btn-ghost fdx-action" id="fdxHistoryBtn" type="button" aria-expanded={historyOpen} aria-controls="fdxHistory"
-                    onClick={() => setHistoryOpen((open) => !open)}>History</button>
+            <button className="btn-ghost fdx-action" id="fdxFeedback" type="button" disabled={!ready || acting !== null} aria-busy={acting === "feedback"} onClick={() => void askFeedback()}>Give me feedback</button>
+            <button className="btn-primary fdx-action" id="fdxSaveDay" type="button" disabled={!ready || acting !== null} aria-busy={acting === "save"} onClick={() => void saveDay()}>Save</button>
+            <button className="btn-ghost fdx-action" id="fdxHistoryBtn" type="button" aria-expanded={history.open} aria-controls="fdxHistory"
+                    onClick={() => setHistory((now) => ({ ...now, open: !now.open }))}>History</button>
           </div>
           <p className="fdx-savednote" id="fdxSavedNote" role="status" hidden={!savedNote}>Day saved.</p>
 
@@ -414,15 +537,32 @@ export default function FoodDiaryPage() {
             <p className="fdx-macro-note">Prototype-generated feedback &mdash; based on fixed rules over your saved entries, not a live AI service.</p>
           </div>
 
-          <div className="fdx-history" id="fdxHistory" hidden={!historyOpen}>
-            <h3>History</h3>
-            <div id="fdxHistoryDays">
-              {day && day.history.length > 0 ? day.history.map((row) => (
-                <button className="fdx-hist-row" key={row.entry_date} data-fdx-day={row.entry_date} type="button"
-                        onClick={() => { goTo(row.entry_date); setHistoryOpen(false); }}>
+          <div className="fdx-history" id="fdxHistory" hidden={!history.open}>
+            <div className="fdx-history-head">
+              <h3>History</h3>
+              <div className="fdx-views" role="group" aria-label="Show history as">
+                <button className="fdx-view" type="button" aria-label="List view" title="List view" aria-pressed={history.view === "list"}
+                        onClick={() => setHistory({ open: true, view: "list" })} data-testid="diary-view-list">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 6.5h12M8 12h12M8 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01" /></svg>
+                </button>
+                <button className="fdx-view" type="button" aria-label="Calendar view" title="Calendar view" aria-pressed={history.view === "calendar"}
+                        onClick={() => setHistory({ open: true, view: "calendar" })} data-testid="diary-view-calendar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3" /><path d="M3.5 9.8h17M8 3v4M16 3v4M8 13.6h.01M12 13.6h.01M16 13.6h.01M8 16.8h.01M12 16.8h.01" /></svg>
+                </button>
+              </div>
+            </div>
+            {/* Mounted once it has been asked for, so the month opens on the day that is open. */}
+            {history.open && history.view === "calendar" && (
+              <DiaryCalendar selected={date} today={today} days={days} onSelect={(next, byPointer) => void openFromCalendar(next, byPointer)} />
+            )}
+            <div id="fdxHistoryDays" className="fdx-history-days" hidden={history.view !== "list"}>
+              {days && days.length > 0 ? days.map((row) => (
+                <button className={`fdx-hist-row${row.entry_date === date ? " is-open" : ""}`} key={row.entry_date} data-fdx-day={row.entry_date} type="button"
+                        aria-current={row.entry_date === date ? "date" : undefined}
+                        onClick={() => void goTo(row.entry_date).then((opened) => { if (opened || row.entry_date === date) setHistory((now) => ({ ...now, open: false })); })}>
                   <b>{row.entry_date}</b><span>{`${row.meals} meal${row.meals === 1 ? "" : "s"} · ~${row.kcal} kcal${row.saved ? " · saved" : ""}`}</span>
                 </button>
-              )) : <p className="fdx-macro-note">No saved days yet.</p>}
+              )) : days && <p className="fdx-macro-note">No saved days yet.</p>}
             </div>
             {/* The prototype's read-only "earlier entries" table holds rows from
                 its retired browser-only format; the application never had
@@ -440,13 +580,26 @@ export default function FoodDiaryPage() {
   );
 }
 
+/* The shape of a day, once it has been worth waiting for: a day that answers at
+   once is never preceded by a flash of grey. */
+function DaySkeleton() {
+  return (
+    <div className="fdx-wait" role="status">
+      <span className="sr-status">Opening the day…</span>
+      <span className="skel" aria-hidden="true" /><span className="skel" aria-hidden="true" />
+    </div>
+  );
+}
+
 /* A meal's photo at full size, over the page. */
 function PhotoViewer({ meal, version, onClose }: { meal: Meal; version: string; onClose: () => void }) {
   const card = useRef<HTMLDivElement>(null);
+  const overlay = useRef<HTMLDivElement>(null);
   useModalDialog(true, card, onClose, "[data-photo-close]");
+  useExitGhost(overlay);
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className={dialog.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className={dialog.overlay} ref={overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div className={dialog.card} ref={card} role="dialog" aria-modal="true" aria-label={`Photo of ${meal.description}`} data-testid="diary-photo-view">
         <img src={mealPhotoUrl(meal.id, version, "full")} alt={meal.description} style={{ width: "100%", borderRadius: 12, display: "block" }} />
         <p className={dialog.sub} style={{ marginTop: 12, marginBottom: 0 }}>{`${meal.meal_time} · ${meal.description}`}</p>

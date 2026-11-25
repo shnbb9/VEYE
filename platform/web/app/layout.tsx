@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmHost } from "@/components/confirm-dialog";
 import { SessionProvider } from "@/components/session";
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </noscript>
         <SessionProvider>
           <AppShell>{children}</AppShell>
+          <ConfirmHost />
         </SessionProvider>
       </body>
     </html>

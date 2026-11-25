@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ask } from "@/components/confirm-dialog";
 import { Chip, Icon, fmtDate } from "@/components/admin/admin-chrome";
 import {
   applyShorterRetention, getPrivacySettings, previewRetention, publishRetention, runRetentionCleanup,
@@ -57,7 +58,7 @@ export function PrivacyProspectsCard() {
 
   async function applyShorter() {
     if (!settings) return;
-    if (!window.confirm(`Apply "${settings.label}" to existing saved results? Expiry only ever moves earlier, and any result already past its new expiry is deleted now. This cannot be undone.`)) return;
+    if (!(await ask({ title: `Apply "${settings.label}" to existing saved results?`, text: "Expiry only ever moves earlier, and any result already past its new expiry is deleted now. This cannot be undone.", confirm: "Apply", danger: true }))) return;
     setBusy("apply"); setMessage(null);
     try {
       const outcome = await applyShorterRetention();

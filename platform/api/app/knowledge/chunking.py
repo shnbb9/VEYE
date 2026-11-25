@@ -87,4 +87,16 @@ def _split_long(paragraph: str, max_chars: int) -> list[str]:
             current = f"{current} {sentence}".strip()
     if current:
         pieces.append(current)
-    return pieces
+    return [part for piece in pieces for part in _split_words(piece, max_chars)]
+
+
+def _split_words(piece: str, max_chars: int) -> list[str]:
+    """A table or a list with no full stop in it is one sentence, however long.
+    A passage nobody could embed whole is one whose end nobody could find."""
+    parts: list[str] = []
+    while len(piece) > max_chars:
+        cut = piece.rfind(" ", 1, max_chars + 1)
+        cut = cut if cut > 0 else max_chars
+        parts.append(piece[:cut].rstrip())
+        piece = piece[cut:].lstrip()
+    return parts + [piece] if piece else parts

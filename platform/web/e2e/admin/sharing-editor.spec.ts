@@ -1,6 +1,6 @@
 import { expect, request, test, type Browser, type Page } from "@playwright/test";
 import { ADMIN, API_URL, MAILPIT_URL, freshMember } from "../fixtures/accounts";
-import { adminSignIn, expectAdminHome, linkFrom, memberApi, open, signUpMember, toPath, waitForMail } from "../fixtures/helpers";
+import { confirmDialog, adminSignIn, expectAdminHome, linkFrom, memberApi, open, signUpMember, toPath, waitForMail } from "../fixtures/helpers";
 
 /* Settings → Product settings → Health sharing (architecture V2 §§4.2, 4.5),
    driven in the browser: the request email is drafted, previewed, sent to the
@@ -153,10 +153,9 @@ test.describe("health sharing settings in the browser", () => {
       const mode = admin.getByTestId("sharing-mode");
       await mode.getByTestId("sharing-mode-automatic").check();
       await mode.getByTestId("sharing-sender-name").fill(sender);
-      let asked = "";
-      admin.once("dialog", (dialog) => { asked = dialog.message(); void dialog.accept(); });
       const published = admin.waitForResponse((r) => r.url().endsWith(`${SETTINGS}/notification`));
       await mode.getByTestId("sharing-mode-publish").click();
+      const asked = await confirmDialog(admin);
       expect((await published).status()).toBe(200);
       expect(asked).toContain("Members who verified earlier are not emailed");
       await expect(mode).toContainText("Published as version");
@@ -201,10 +200,9 @@ test.describe("health sharing settings in the browser", () => {
       // Preview again after saving, so the publish step knows it is material.
       await terms.getByTestId("terms-preview").click();
       await expect(terms.getByTestId("terms-preview-panel")).toContainText("Material change");
-      let asked = "";
-      admin.once("dialog", (dialog) => { asked = dialog.message(); void dialog.accept(); });
       const published = admin.waitForResponse((r) => r.url().endsWith(`${SETTINGS}/terms/publish`));
       await terms.getByTestId("terms-publish").click();
+      const asked = await confirmDialog(admin);
       const after = (await (await published).json()) as Settings;
       expect(asked).toContain("This changes who receives the records or why");
       expect(after.terms.version).toBe(original.terms.version + 1);

@@ -182,6 +182,32 @@ export const grantHealthPermission = (d: Decision) => postJson<HealthPermission>
 export const declineHealthPermission = (d: Decision) => postJson<HealthPermission>(`${PERMISSION}/decline`, decision(d));
 export const revokeHealthPermission = () => postJson<HealthPermission>(`${PERMISSION}/revoke`, {});
 
+/* Sprout personalization: the member's other choice. It has its own words, its
+   own record and its own routes; nothing about the one above is sent with it. */
+export type SproutTerms = {
+  version: number; label: string; hash: string; title: string; purpose: string; recipient: string; information: string[];
+  never: string; separate: string; outside_ai: string; withdrawal: string; without: string; expiry_rule: string;
+};
+export type SproutPermissionEvent = { id: string; from_state: string; to_state: string; policy_version: string; terms_version: number | null; created_at: string };
+export type SproutPermission = {
+  state: "off" | "on" | "turned_off";
+  state_label: string;
+  personalizes: boolean;
+  authorized_at: string | null;
+  revoked_at: string | null;
+  policy_version: string;
+  terms: SproutTerms;
+  email_verified: boolean;
+  events: SproutPermissionEvent[];
+  was_combined: boolean;
+};
+const SPROUT = `/api/v1/members/${ME}/sprout-permission`;
+export const getSproutPermission = () => apiJson<SproutPermission>(SPROUT);
+/** Sent with the exact words on screen, so a yes is never credited to words that have since changed. */
+export const turnOnSprout = (terms: SproutTerms) =>
+  postJson<SproutPermission>(`${SPROUT}/grant`, { terms_version: terms.version, terms_hash: terms.hash });
+export const turnOffSprout = () => postJson<SproutPermission>(`${SPROUT}/revoke`, {});
+
 /* The dashboard's Personal tip: written by Sprout from the member's own
    summaries, cached per member, and regenerated only when their data moves.
    `generated` is false when this is the honest fallback, so the screen can

@@ -38,6 +38,8 @@ class StepOut(BaseModel):
     node: NodeOut | None
     actions: list[ActionOut]
     clarification: str | None = None
+    # Sprout's own answer instead of a step forward (see GuidedFlowService.answer).
+    reply: AskResponse | None = None
     section_title: str
     steps_taken: int
     content_meta: dict

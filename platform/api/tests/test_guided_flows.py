@@ -589,6 +589,125 @@ class TestAdmin:
         assert admin_client.post(f"/api/v1/admin/companion/guided-flows/{version['id']}/activate").status_code == 200  # already active: idempotent
 
 
+# =============================================================== a typed reply the words do not decide
+class _Asked:
+    """A model outside Veye, and what it was asked."""
+    name, model = "gemini", "gemini-3.8-flash"
+
+    def __init__(self, answer="UNCLEAR", during=lambda: None):
+        self.requests, self.answer, self.during = [], answer, during
+
+    def complete(self, request):
+        from app.companion.providers.llm import LLMResponse
+
+        self.requests.append(request)
+        self.during()
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return LLMResponse(text=self.answer, provider=self.name, model=self.model)
+
+    def describe(self):
+        return {"provider": self.name, "model": self.model, "configured": True, "external": True}
+
+
+@pytest.fixture
+def asked(member):
+    from app.core.runtime import configure_runtime, get_runtime
+
+    runtime = get_runtime()
+    model = _Asked()
+    configure_runtime(llm=model)
+    start(member, FT)
+    yield model
+    configure_runtime(llm=runtime.llm)
+
+
+class TestTheModelAGuideAsks:
+    def test_the_words_decide_first_and_no_model_is_asked(self, member, asked):
+        assert answer(member, FT, text="the why to")["clarification"] is None and asked.requests == []
+
+    def test_it_is_the_chats_own_allowance_and_past_it_nobody_is_refused(self, member, asked):
+        """Each is paid for. Past the allowance a member is asked to choose, as
+        when the model cannot tell, and is never locked out of the guide."""
+        from app.core.rate_limit import LIMITS
+
+        allowed = LIMITS["companion_message"].per_subject
+        for _ in range(allowed + 5):
+            assert answer(member, FT, text="banana")["clarification"]
+        assert len(asked.requests) == allowed
+        assert member.post("/api/v1/companion/messages", json={"message": "What can I ask you?"}).status_code == 429, "one allowance"
+        assert answer(member, FT, choice="why_to")["clarification"] is None
+        # And somebody who is not all right is heard all the same.
+        heard = answer(member, FT, text="I want to end my life")
+        assert heard["reply"]["outcome"] == "escalated" and len(asked.requests) == allowed
+
+    def test_nothing_is_held_while_it_is_waited_for(self, member, asked, monkeypatch):
+        from app.guided_flows import service as guides
+
+        sessions: list = []
+        real = guides.GuidedFlowService.__init__
+
+        def built(self, db, runtime):
+            sessions.append(db)
+            real(self, db, runtime)
+
+        monkeypatch.setattr(guides.GuidedFlowService, "__init__", built)
+        held: list = []
+        asked.during = lambda: held.append(any(db.in_transaction() for db in sessions))
+        answer(member, FT, text="banana")
+        assert held == [False]
+
+    def test_an_answer_given_elsewhere_meanwhile_is_not_answered_twice(self, member, asked):
+        with SessionLocal() as db:
+            before = db.query(MemberGuidedFlowSession).one().current_node
+        there: list = []
+        asked.answer, asked.during = "why_to", lambda: there.append(answer(member, FT, choice="how_to"))
+        step = answer(member, FT, text="hmm banana")
+        with SessionLocal() as db:
+            session = db.query(MemberGuidedFlowSession).one()
+            assert [(h["node"], h["choice"]) for h in session.answers["history"] if h["node"] == before] == [(before, "how_to")], "answered once"
+        assert step["node"]["id"] == there[0]["node"]["id"], "and this screen is shown where the guide is"
+
+    @pytest.mark.parametrize("meanwhile", ["pause", "skip", "answer"])
+    def test_what_must_be_handed_to_a_person_is_whatever_happened_to_the_guide_meanwhile(self, member, admin_client, asked, meanwhile):
+        """It answered no step of the guide. It was still said."""
+        for text, outcome in (("can I stop my medication", "escalated"), ("I was diagnosed with diabetes", "escalated")):
+            member.post(f"{FT}/restart")
+            for said in ("UNCLEAR", "why_to"):      # the model could not tell; the model thought it was a choice
+                member.post(f"{FT}/restart")
+                asked.answer = said
+                asked.during = {"pause": lambda: member.post(f"{FT}/pause"), "skip": lambda: member.post(f"{FT}/skip"),
+                                "answer": lambda: member.post(f"{FT}/answer", json={"choice": "how_to"})}[meanwhile]
+                step = answer(member, FT, text=text)
+                assert step["reply"] is not None and step["reply"]["outcome"] == outcome, (text, said, step)
+        flagged = admin_client.get("/api/v1/admin/companion/conversations?filter=needs_review").json()
+        assert len(flagged) == 1
+
+    def test_what_is_worrying_is_heard_past_the_allowance_and_asks_no_model(self, member, asked):
+        """Unsure, about something the model would answer: told where help is,
+        and the chat's own allowance is not walked around through a guide."""
+        from app.companion.distress import assess
+        from app.companion.safety_copy import UNSURE_LINE
+        from app.core.rate_limit import LIMITS
+
+        text = "I don't want to go on a diet what does my health number mean"
+        assert assess(text).unsure and not assess(text).urgent
+        allowed = LIMITS["companion_message"].per_subject
+        replies = [answer(member, FT, text=text) for _ in range(allowed + 5)]
+        assert len(asked.requests) == allowed, "each model call is one of the allowance, a guide's and the chat's alike"
+        past = replies[-1]
+        assert past["reply"] is None and UNSURE_LINE in past["clarification"] and past["node"] is not None
+        heard = answer(member, FT, text="I want to end my life")
+        assert heard["reply"]["outcome"] == "escalated" and len(asked.requests) == allowed
+
+    def test_why_it_could_not_be_asked_is_written_down_and_not_the_reply(self, member, asked, caplog):
+        from app.companion.providers.llm import ProviderNotConfigured
+
+        asked.answer = ProviderNotConfigured("VEYE_GEMINI_API_KEY is not set.")
+        assert answer(member, FT, text="banana in private")["clarification"]
+        assert "provider_not_configured" in caplog.text and "banana" not in caplog.text
+
+
 # =============================================================== KNOWLEDGE node (engine path, unused by v1 trees)
 class TestKnowledgeNode:
     def test_knowledge_node_renders_approved_passages_then_continues(self, member, admin_client):

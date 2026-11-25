@@ -55,7 +55,7 @@ jobs:
           cache: pip
           cache-dependency-path: platform/api/requirements/ci.lock
       - name: Install the API's locked dependencies and test extras
-        # Hashed lock (runtime + [test] + [ai]); pytest imports the app from
+        # Hashed lock (runtime + [test,ai,gemini]); pytest imports the app from
         # the working directory (pyproject `pythonpath`), so the project
         # itself is not installed.
         working-directory: platform/api
@@ -158,7 +158,7 @@ jobs:
           cache-dependency-path: platform/web/package-lock.json
 
       - name: Install the API's locked dependencies
-        # The development image's lock (runtime + [ai]); alembic, python -m
+        # The development image's lock (runtime + [ai,gemini]); alembic, python -m
         # and uvicorn import the app from the working directory.
         working-directory: platform/api
         run: pip install --require-hashes -r requirements/dev.lock

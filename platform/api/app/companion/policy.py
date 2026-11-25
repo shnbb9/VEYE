@@ -9,8 +9,9 @@ categories hand the conversation to a person."""
 from __future__ import annotations
 
 import re
-import unicodedata
 from dataclasses import dataclass, field
+
+from app.companion.distress import normalise
 
 POLICY_VERSION = "1.0.0"
 
@@ -18,6 +19,8 @@ OUTCOME_ALLOW = "allow"
 OUTCOME_PROHIBIT = "prohibit"
 OUTCOME_ESCALATE = "escalate"
 OUTCOME_OFF_TOPIC = "off_topic"
+# Answered with kind, fixed words, and nobody is told.
+OUTCOME_SUPPORT = "support"
 
 MEMBER_DATA_SCOPES = (
     "health_number_summary",
@@ -79,6 +82,7 @@ def default_policy() -> dict:
 CRISIS_FLOOR = ("suicid", "kill myself", "killing myself", "end my life", "ending my life", "want to die", "better off dead",
                 "hurt myself", "hurting myself", "harm myself", "harming myself", "self-harm", "self harm", "overdose")
 CRISIS_CATEGORY = "wellbeing_concern"
+MEDICAL_CATEGORY = "medical"
 
 
 @dataclass(frozen=True)
@@ -107,17 +111,8 @@ _WORD_ENDINGS = "(?:s|es|d|ed|ing)?"
 _STEM_ENDINGS = "(?:s|es|d|ed|ing|e|is|al|ally|tic|tics|able|t|ts|cy|cies|ness|ly)?"
 
 
-def normalise_message(message: str) -> str:
-    """Lower case, single spaces, and the keyboard's own characters folded: a
-    phone types can’t, and full-width letters are still letters."""
-    text = unicodedata.normalize("NFKC", message or "").lower()
-    for mark in ("‘", "’", "ʼ", "´", "`"):
-        text = text.replace(mark, "'")
-    return " ".join(text.split())
-
-
 def _matches(text: str, keyword: str) -> bool:
-    keyword = normalise_message(keyword)
+    keyword = normalise(keyword)
     if not keyword:
         return False
     if re.fullmatch(r"[a-z0-9]+", keyword):
@@ -136,7 +131,7 @@ class PolicyEngine:
         self.version = str(self.policy.get("version") or POLICY_VERSION)
 
     def evaluate(self, message: str) -> PolicyDecision:
-        text = normalise_message(message)
+        text = normalise(message)
         if not text:
             return PolicyDecision(OUTCOME_OFF_TOPIC, None, None, "Empty message.", policy_version=self.version)
 

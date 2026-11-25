@@ -51,6 +51,16 @@ def _replay_erasures(db: Session, dry_run: bool) -> dict:
     return replay_erasure_ledger(db, dry_run=dry_run)
 
 
+def _reindex_knowledge(db: Session, dry_run: bool) -> dict:
+    """After the embedding provider is changed: write the approved sources into
+    the index it searches, beside the one they are in already."""
+    from app.core.runtime import get_runtime
+    from app.knowledge.service import KnowledgeService
+
+    runtime = get_runtime()
+    return KnowledgeService(db, runtime.object_store, runtime.embeddings).reindex(dry_run=dry_run)
+
+
 _LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
 
 
@@ -86,6 +96,8 @@ JOBS: dict[str, JobFn] = {
 # restore runbook, not on a schedule: it reads the whole ledger.
 ON_DEMAND: dict[str, JobFn] = {
     "replay-erasures": _replay_erasures,
+    # Once, when somebody has decided to search with another embedding provider.
+    "reindex-knowledge": _reindex_knowledge,
 }
 
 
@@ -113,7 +125,7 @@ def run_job(session_factory: Callable[[], Session], job: str, *, dry_run: bool =
             status, error = "ok", None
         except Exception as exc:  # recorded, not swallowed: the run row says what broke
             db.rollback()
-            counts, status = {}, "error"
+            counts, status = getattr(exc, "counts", {}), "error"    # what was done all the same
             error = f"{type(exc).__name__}: {str(exc)[:500]}"
             log.exception("job %s failed", job)
     with session_factory() as db:

@@ -71,10 +71,10 @@ def build_runtime(config: Settings | None = None) -> Runtime:
     templates.configure(environment=config.environment, reply_to=config.email_reply_to)
     llm = build_llm_provider(config.llm_provider, groq_api_key=reveal(config.groq_api_key), groq_model=config.groq_model,
                              timeout_seconds=config.llm_timeout_seconds,
-                             gemini={"project": config.gcp_project or "", "location": config.gcp_location,
-                                     "model": config.gemini_model, "api_key": reveal(config.gemini_api_key),
-                                     "member_data_cleared": config.gemini_member_data_cleared,
-                                     "production": config.is_production})
+                             gemini={"backend": config.gemini_backend, "project": config.gcp_project or "",
+                                     "location": config.gcp_location, "model": config.gemini_model,
+                                     "api_key": reveal(config.gemini_api_key), "local": config.is_local,
+                                     "member_data_cleared": config.gemini_member_data_cleared})
     embeddings = build_embedding_provider(config.embedding_provider,
                                           dimensions=config.embedding_dimensions, settings=config)
     object_store = build_object_store(config.knowledge_object_store, local_root=config.knowledge_object_root,

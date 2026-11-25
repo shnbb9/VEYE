@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.auth.principal import CurrentPrincipal, require_member
-from app.companion.routes import get_companion_service
-from app.companion.schemas import AskResponse, SourceOut
+from app.companion.routes import admit, ask_response, deliver, get_companion_service
 from app.companion.service import CompanionService
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
@@ -32,8 +31,8 @@ def step_out(step: Step) -> StepOut:
                        task=step.node.get("task"))
     return StepOut(session_id=step.session_id, flow_key=step.flow_key, flow_title=step.flow_title, flow_version=step.flow_version,
                    status=step.status, messages=step.messages, node=node, actions=[ActionOut(**a) for a in step.actions],
-                   clarification=step.clarification, section_title=step.section_title, steps_taken=step.steps_taken,
-                   content_meta=step.content_meta)
+                   clarification=step.clarification, reply=ask_response(step.reply) if step.reply else None,
+                   section_title=step.section_title, steps_taken=step.steps_taken, content_meta=step.content_meta)
 
 
 def _raise(exc: GuidedFlowError):
@@ -87,9 +86,19 @@ def current(key: str, principal: CurrentPrincipal = Depends(require_member), db:
 
 
 @router.post("/{key}/answer", response_model=StepOut)
-def answer(key: str, payload: AnswerRequest, principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
-           service: GuidedFlowService = Depends(get_guided_flow_service)) -> StepOut:
-    return _run(db, lambda: service.answer(principal, key, choice=payload.choice, text=payload.text))
+def answer(key: str, payload: AnswerRequest, background: BackgroundTasks,
+           principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+           service: GuidedFlowService = Depends(get_guided_flow_service),
+           companion: CompanionService = Depends(get_companion_service)) -> StepOut:
+    try:
+        step = service.answer(principal, key, choice=payload.choice, text=payload.text, companion=companion)
+    except GuidedFlowError as exc:
+        db.rollback()
+        _raise(exc)
+    db.commit()
+    if step.reply is not None and step.reply.outbox_ids:
+        background.add_task(deliver, step.reply.outbox_ids)
+    return step_out(step)
 
 
 @router.post("/{key}/pause", response_model=StepOut)
@@ -105,19 +114,19 @@ def skip(key: str, principal: CurrentPrincipal = Depends(require_member), db: Se
 
 
 @router.post("/{key}/ask", response_model=AskInFlowResponse)
-def ask(key: str, payload: AskInFlowRequest, principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
+def ask(key: str, payload: AskInFlowRequest, request: Request, background: BackgroundTasks,
+        principal: CurrentPrincipal = Depends(require_member), db: Session = Depends(get_db),
         service: GuidedFlowService = Depends(get_guided_flow_service),
         companion: CompanionService = Depends(get_companion_service)) -> AskInFlowResponse:
+    # The same model, so the same allowance as asking from the chat.
+    admit(db, request, principal, companion, payload.question)
+    db.commit()
     try:
         reply, step = service.ask(principal, key, payload.question, companion)
     except GuidedFlowError as exc:
         db.rollback()
         _raise(exc)
     db.commit()
-    return AskInFlowResponse(
-        reply=AskResponse(conversation_id=reply.conversation_id, member_message_id=reply.member_message_id, reply_message_id=reply.reply_message_id,
-                          reply=reply.reply, outcome=reply.outcome, policy_outcome=reply.policy_outcome, policy_category=reply.policy_category,
-                          sources=[SourceOut(**s) for s in reply.sources], context_scopes=reply.context_scopes, provider=reply.provider,
-                          model=reply.model, safety_result=reply.safety_result, trace_id=reply.trace_id, personalized=reply.personalized),
-        step=step_out(step),
-    )
+    if reply.outbox_ids:
+        background.add_task(deliver, reply.outbox_ids)
+    return AskInFlowResponse(reply=ask_response(reply), step=step_out(step))

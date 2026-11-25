@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ask } from "@/components/confirm-dialog";
 import { Chip, Icon, fmtDate } from "@/components/admin/admin-chrome";
 import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import {
@@ -61,7 +62,7 @@ function ModeSection({ settings, onSaved }: { settings: SharingSettings; onSaved
 
   async function publish() {
     if (form.mode === "automatic" && current.mode !== "automatic" &&
-        !window.confirm("Switch on automatic requests? From now on, every member who verifies their email address is asked once, by email. Members who verified earlier are not emailed.")) return;
+        !(await ask({ title: "Switch on automatic requests?", text: "From now on, every member who verifies their email address is asked once, by email. Members who verified earlier are not emailed.", confirm: "Switch on" }))) return;
     setBusy(true); setNote(null);
     try {
       const saved = await publishNotification({ ...form, sender_name: form.sender_name.trim() });
@@ -191,7 +192,7 @@ function TermsSection({ settings, onSaved }: { settings: SharingSettings; onSave
       <div className="notice notice--quiet">
         <Icon name="lock" size={18} />
         <div>
-          <strong>Fixed — always shown, not editable here:</strong> what is shared ({t.locked.categories.join("; ")}), {t.locked.companion_use}{" "}
+          <strong>Fixed — always shown, not editable here:</strong> what is shared ({t.locked.categories.join("; ")}). {t.locked.companion_use}{" "}
           For how long: {t.locked.expiry_rule} {t.locked.withdrawal} Not covered: {t.locked.not_covered}
         </div>
       </div>
@@ -204,7 +205,7 @@ function TermsSection({ settings, onSaved }: { settings: SharingSettings; onSave
         <button className="btn btn--primary btn--sm" type="button" disabled={busy !== null || dirty || !t.draft} data-testid="terms-publish"
                 title={dirty ? "Save the draft first" : !t.draft ? "Nothing to publish: save a draft first" : undefined}
                 onClick={() => void run("publish", async () => {
-                  if (preview?.material_change && !window.confirm("This changes who receives the records or why. Members who already decided agreed to the earlier wording; they will see that a newer version exists. Publish?")) return;
+                  if (preview?.material_change && !(await ask({ title: "Publish a material change?", text: "This changes who receives the records or why. Members who already decided agreed to the earlier wording; they will see that a newer version exists.", confirm: "Publish" }))) return;
                   const s = await publishTerms(); onSaved(s); setValue(s.terms.value); setNote({ tone: "ok", text: `Published as version ${s.terms.version}. New decisions are recorded against it.` });
                 })}>{busy === "publish" ? "Publishing…" : "Publish"}</button>
         {t.draft && <button className="btn btn--ghost btn--sm" type="button" disabled={busy !== null}

@@ -56,17 +56,38 @@ services:
       VEYE_SMTP_PASSWORD: ${VEYE_SMTP_PASSWORD:-}
       VEYE_EMAIL_FROM: "${VEYE_EMAIL_FROM:-Veye <no-reply@veye.local>}"
       VEYE_EMAIL_REPLY_TO: ${VEYE_EMAIL_REPLY_TO:-}
-      # Companion providers. Defaults are the offline mock and deterministic
-      # local embeddings; a Groq development key is only ever read from the
-      # ignored env file, never from this compose file.
       # Production runs the limits at 1. A development stack and the
       # acceptance suite produce far more traffic from one address than a
       # person would — twenty-five sign-ups per run — so the same limits
       # are scaled rather than switched off.
       VEYE_RATE_LIMIT_SCALE: ${VEYE_RATE_LIMIT_SCALE:-50}
+      # Companion providers. Defaults are the offline mock and deterministic
+      # local embeddings. A key is only ever read from the ignored env file,
+      # never from this one, and this service is the only one given it.
       VEYE_LLM_PROVIDER: ${VEYE_LLM_PROVIDER:-mock}
       VEYE_GROQ_API_KEY: ${VEYE_GROQ_API_KEY:-}
       VEYE_GROQ_MODEL: ${VEYE_GROQ_MODEL:-llama-3.3-70b-versatile}
+      # Google: VEYE_LLM_PROVIDER=gemini, VEYE_EMBEDDING_PROVIDER=google, or
+      # both. VEYE_GEMINI_BACKEND says which of its doors they go through, and
+      # nothing else does:
+      #   developer  VEYE_GEMINI_API_KEY. Synthetic members and documents only.
+      #   vertex     VEYE_GCP_PROJECT, and the identity compose.vertex.yaml adds
+      #              (scripts/local-up.ps1 -Vertex).
+      # The two locations are different settings because Google serves the two
+      # models from different places.
+      VEYE_GEMINI_BACKEND: ${VEYE_GEMINI_BACKEND:-}
+      VEYE_GEMINI_API_KEY: ${VEYE_GEMINI_API_KEY:-}
+      VEYE_GEMINI_MODEL: ${VEYE_GEMINI_MODEL:-gemini-3.8-flash}
+      VEYE_GEMINI_MEMBER_DATA_CLEARED: ${VEYE_GEMINI_MEMBER_DATA_CLEARED:-false}
+      VEYE_GCP_PROJECT: ${VEYE_GCP_PROJECT:-}
+      VEYE_GCP_LOCATION: ${VEYE_GCP_LOCATION:-us}
+      VEYE_EMBEDDING_PROVIDER: ${VEYE_EMBEDDING_PROVIDER:-hashing}
+      VEYE_EMBEDDING_MODEL: ${VEYE_EMBEDDING_MODEL:-}
+      VEYE_EMBEDDING_LOCATION: ${VEYE_EMBEDDING_LOCATION:-us-central1}
+      VEYE_EMBEDDING_DIMENSIONS: ${VEYE_EMBEDDING_DIMENSIONS:-256}
+      # This container is not on Google Cloud: without this it would look for a
+      # metadata server for some seconds before saying it has no identity.
+      NO_GCE_CHECK: "true"
       VEYE_KNOWLEDGE_OBJECT_ROOT: /app/var/knowledge-objects
       # Member media (profile photos) through the ObjectStorage boundary: the
       # local file store on a named volume; a cloud bucket is a client decision.

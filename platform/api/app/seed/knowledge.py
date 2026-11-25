@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.runtime import get_runtime
 from app.db.session import SessionLocal
 from app.knowledge.models import STATUS_ACTIVE, STATUS_ARCHIVED, STATUS_INACTIVE, KnowledgeSource
-from app.knowledge.service import KnowledgeService
+from app.knowledge.service import KnowledgeService, NotEmbedded
 
 CONTENT_DIR = Path(__file__).parent / "knowledge_content"
 DEMO_APPROVER = "Cara Hogue (local demo)"
@@ -64,12 +64,20 @@ def seed_knowledge(db: Session | None = None) -> dict[str, str]:
             if spec.title in existing:
                 outcome[spec.title] = "exists"
                 continue
+            data = (CONTENT_DIR / spec.filename).read_bytes()
             source: KnowledgeSource = service.create_source(
                 title=spec.title, type=spec.type, scope_key=spec.scope_key, description=spec.description,
                 reference_label=spec.reference_label, synthetic=True,
             )
-            data = (CONTENT_DIR / spec.filename).read_bytes()
-            document = service.attach_document(source, filename=spec.filename, content_type="text/markdown", data=data)
+            try:
+                document = service.attach_document(source, filename=spec.filename, content_type="text/markdown", data=data, synthetic=True)
+            except NotEmbedded as exc:
+                # An outside provider that is not set up, or not answering, is
+                # no reason for the API not to start. Tried again next time.
+                db.delete(source)
+                db.flush()
+                outcome[spec.title] = f"not created: {exc.detail}"
+                continue
             if document.ingestion_status != "ingested":
                 raise RuntimeError(f"Seed document {spec.filename} failed to ingest: {document.ingestion_error}")
             # Every seed source is approved once; the target lifecycle state is then applied.

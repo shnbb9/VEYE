@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { ADMIN, freshMember } from "../fixtures/accounts";
-import { adminSignIn, expectAdminHome, expectMemberDashboard, expectNoHorizontalOverflow, linkFrom, memberApi, memberSignIn, open, toPath, waitForMail } from "../fixtures/helpers";
+import { confirmDialog, adminSignIn, expectAdminHome, expectMemberDashboard, expectNoHorizontalOverflow, linkFrom, memberApi, memberSignIn, open, toPath, waitForMail } from "../fixtures/helpers";
 
 /* Add a member (Cara, 15 Nov 2026), through the real screens and a real
    mailbox: the console sends an address an invitation, the person opens it,
@@ -83,8 +83,8 @@ test("a withdrawn invitation opens nothing", async ({ page, browser }) => {
   const row = page.getByTestId("invitation-row").filter({ hasText: person.email });
   await expect(row).toContainText("Pending");
   const link = toPath(linkFrom((await waitForMail(person.email, "You are invited to Veye")).text, "accept-invitation"));
-  page.once("dialog", (dialog) => void dialog.accept());
   await row.getByTestId("invitation-revoke").click();
+  await confirmDialog(page);
   await expect(row).toContainText("Withdrawn");
   const theirs = await (await browser.newContext()).newPage();
   await theirs.goto(link);

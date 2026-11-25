@@ -18,9 +18,11 @@ from sqlalchemy.orm import Session
 
 from app.assessments.models import HealthNumberAttempt
 from app.auth.models import AuthSession, AuthToken, UserAccount
-from app.companion.models import CompanionConversation, CompanionFeedback, CompanionMessage, CompanionMessageSource
+from app.companion.models import (CompanionConversation, CompanionFeedback, CompanionMessage, CompanionMessageSource,
+                                  MemberPersonalTip)
 from app.food.models import FoodDiaryDay, FoodDiaryEntry
 from app.guided_flows.models import MemberGuidedFlowSession
+from app.health_permission.models import MemberHealthPermission, MemberHealthPermissionEvent
 from app.meal_plans.models import MealPlanDay
 from app.members.activity import MemberActivityDay
 from app.members.invitations import MemberInvitation
@@ -33,6 +35,7 @@ from app.progress.health_assessment.models import HealthAssessmentAttempt
 from app.progress.simple_quiz.models import SimpleQuizAttempt
 from app.progress.starts import AssessmentStart
 from app.requests.models import MemberRequest
+from app.sprout_permission.models import MemberSproutPermission, MemberSproutPermissionEvent
 from app.storage.images import Crop, ImageRejected, original_key, prepare_picture, recut_picture, thumb_key
 from app.storage.media_changes import MediaChanges, sweep_prefix
 from app.storage.object_storage import ObjectNotFound, ObjectStorage
@@ -260,6 +263,7 @@ class MemberProfileService:
             # Their own decisions about sharing, with the wording each was made
             # against — evidence belongs to the person who gave it.
             "health_data_sharing": self._sharing_export(member_id),
+            "sprout_personalization": self._sprout_export(member_id),
             "guided_sessions": [plain(s, ("flow_key", "flow_version", "status", "current_node", "started_at", "updated_at", "completed_at"))
                                 for s in rows(MemberGuidedFlowSession, MemberGuidedFlowSession.started_at)],
         }
@@ -277,6 +281,24 @@ class MemberProfileService:
             "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None,
             "history": [{"to_state": e.to_state, "actor": e.actor, "source": e.source,
                          "policy_version": e.policy_version, "created_at": e.created_at.isoformat()}
+                        for e in row.events],
+        }
+
+    def _sprout_export(self, member_id: UUID | None) -> dict[str, Any]:
+        if member_id is None:
+            return {}
+        from app.sprout_permission.models import STATE_OFF
+        from app.sprout_permission.service import SproutPermissionService
+
+        row = SproutPermissionService(self.db).current(member_id)
+        if row is None:
+            return {"state": STATE_OFF, "history": []}
+        return {
+            "state": row.state,
+            "policy_version": row.policy_version,
+            "authorized_at": row.authorized_at.isoformat() if row.authorized_at else None,
+            "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None,
+            "history": [{"to_state": e.to_state, "policy_version": e.policy_version, "created_at": e.created_at.isoformat()}
                         for e in row.events],
         }
 
@@ -300,7 +322,8 @@ class MemberProfileService:
                 self.db.query(CompanionConversation).filter(CompanionConversation.id.in_(conversation_ids)).delete(synchronize_session=False)
             for model in (HealthNumberAttempt, BodyCompositionAttempt, BloodMarkerAttempt, HealthAssessmentAttempt, SimpleQuizAttempt,
                           MoodEntry, FoodDiaryEntry, FoodDiaryDay, MealPlanDay, MemberGuidedFlowSession, MemberActivityDay,
-                          AssessmentStart):
+                          AssessmentStart, MemberPersonalTip, MemberHealthPermissionEvent, MemberHealthPermission,
+                          MemberSproutPermissionEvent, MemberSproutPermission):
                 self.db.query(model).filter(model.member_id == member_id).delete(synchronize_session=False)
             self.db.query(MemberInvitation).filter(MemberInvitation.member_id == member_id).delete(synchronize_session=False)
             self.db.query(MemberRequest).filter(MemberRequest.member_id == member_id).update({"member_id": None}, synchronize_session=False)

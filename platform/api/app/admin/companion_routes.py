@@ -19,6 +19,7 @@ from app.admin.schemas import (
     MemberContextCardOut,
     OverviewOut,
     PolicyDecisionOut,
+    ResolveRequest,
     ReviewRequest,
     SettingsIn,
     SettingsOut,
@@ -27,7 +28,7 @@ from app.assessments.repository import health_number_history
 from app.auth.models import UserAccount
 from app.auth.principal import CurrentPrincipal, require_admin
 from app.companion.models import CompanionConversation, CompanionFeedback, CompanionMessage, CompanionPolicyDecision
-from app.companion.policy import MEMBER_DATA_SCOPES, POLICY_VERSION
+from app.companion.policy import MEMBER_DATA_SCOPES, OUTCOME_ESCALATE, POLICY_VERSION
 from app.companion.routes import message_out
 from app.companion.settings import get_or_create_settings
 from app.core.runtime import Runtime, get_runtime
@@ -39,6 +40,11 @@ from app.members.models import Member
 from app.observability.models import AiTraceEvent
 
 router = APIRouter(prefix="/api/v1/admin/companion", tags=["admin-companion"], dependencies=[Depends(require_admin)])
+
+# A reply Sprout wrote from the member's health information says what is in
+# it, so it is shown only while the member shares with the team. Whether
+# Sprout may use that information is their other choice and opens nothing here.
+WITHHELD_REPLY = "Hidden. Sprout wrote this from health information this member does not share with the team."
 
 
 def _member_user(db: Session, member_id: UUID) -> tuple[Member | None, UserAccount | None]:
@@ -120,7 +126,12 @@ def conversations(filter: str = Query(default="needs_review", pattern="^(needs_r
                     holds(UserAccount.email)),
             )).all())
         named |= set(db.scalars(select(Member.id).where(holds(Member.display_name))).all())
-        spoken = select(CompanionMessage.conversation_id).where(holds(CompanionMessage.content))
+        # Nor may a search find what a screen may not show.
+        readable = or_(CompanionMessage.not_from_records(),
+                       CompanionConversation.member_id.in_(HealthPermissionService(db).sharing_member_ids()))
+        spoken = (select(CompanionMessage.conversation_id)
+                  .join(CompanionConversation, CompanionConversation.id == CompanionMessage.conversation_id)
+                  .where(holds(CompanionMessage.content), readable))
         query = query.filter(or_(CompanionConversation.member_id.in_(named), CompanionConversation.id.in_(spoken)))
     return [summary_out(db, c) for c in query.order_by(CompanionConversation.last_message_at.desc()).limit(200).all()]
 
@@ -143,7 +154,8 @@ def conversation_detail(conversation_id: UUID, db: Session = Depends(get_db)) ->
     # member shares their health records, read fresh on every request (as
     # Member 360 does through `_apply_sharing`). This card once showed it to
     # every administrator whatever the member had decided.
-    if HealthPermissionService(db).shares_health_data(conversation.member_id):
+    shares = HealthPermissionService(db).shares_health_data(conversation.member_id)
+    if shares:
         latest = health_number_history(db, conversation.member_id)
         hn = f"{float(latest[0].displayed_score):.1f} — {latest[0].status}" if latest else "Not completed"
     else:
@@ -151,9 +163,12 @@ def conversation_detail(conversation_id: UUID, db: Session = Depends(get_db)) ->
     messages = []
     for m in conversation.messages:
         base = message_out(m)
+        withheld = m.from_records and not shares
+        if withheld:
+            base.content = WITHHELD_REPLY
         messages.append(AdminMessageOut(**base.model_dump(), provider=m.provider, model=m.model, latency_ms=m.latency_ms,
-                                        safety_result=m.safety_result, context_scopes=m.context_scopes, trace_id=m.trace_id,
-                                        policy_decision=_decision_out(m.policy_decision)))
+                                        safety_result=m.safety_result, context_scopes=m.context_scopes if shares else [], trace_id=m.trace_id,
+                                        policy_decision=_decision_out(m.policy_decision), withheld=withheld))
     return ConversationDetailOut(
         summary=summary_out(db, conversation),
         member=MemberContextCardOut(name=user.display_name if user else (member.display_name if member else "Member"),
@@ -164,12 +179,35 @@ def conversation_detail(conversation_id: UUID, db: Session = Depends(get_db)) ->
     )
 
 
+NEWER = "Something was handed to a person after this page was opened. Read it below, then mark it."
+
+
+def _nothing_newer(db: Session, conversation_id: UUID, seen: UUID | None) -> None:
+    """Reading is of what was on the screen. A message handed over since then
+    would otherwise leave the queue without anybody having seen it. Holds the
+    row, so one arriving now waits and puts it back in the queue."""
+    (db.query(CompanionConversation).filter(CompanionConversation.id == conversation_id)
+     .populate_existing().with_for_update(key_share=True).one_or_none())
+    if seen is None:
+        return
+    read_to = (db.query(CompanionMessage.created_at)
+               .filter(CompanionMessage.id == seen, CompanionMessage.conversation_id == conversation_id).scalar())
+    if read_to is None:
+        raise HTTPException(status_code=422, detail="That message is not in this conversation.")
+    newer = (db.query(CompanionMessage.id).join(CompanionPolicyDecision, CompanionPolicyDecision.id == CompanionMessage.policy_decision_id)
+             .filter(CompanionMessage.conversation_id == conversation_id, CompanionMessage.role == "member",
+                     CompanionMessage.created_at > read_to, CompanionPolicyDecision.outcome == OUTCOME_ESCALATE).first())
+    if newer is not None:
+        raise HTTPException(status_code=409, detail=NEWER)
+
+
 @router.post("/conversations/{conversation_id}/review", response_model=ConversationSummaryOut)
 def review_conversation(conversation_id: UUID, payload: ReviewRequest, principal: CurrentPrincipal = Depends(require_admin),
                         db: Session = Depends(get_db)) -> ConversationSummaryOut:
     conversation = db.get(CompanionConversation, conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found.")
+    _nothing_newer(db, conversation_id, payload.seen_message_id)
     conversation.reviewed_at = datetime.now(timezone.utc)
     conversation.reviewed_by = principal.display_name
     record_audit(db, principal, "conversation.reviewed", "companion_conversation", str(conversation.id), {"note": payload.note})
@@ -188,10 +226,11 @@ def _flagged(db: Session, conversation_id: UUID) -> CompanionConversation:
 
 
 @router.post("/conversations/{conversation_id}/resolve", response_model=ConversationSummaryOut)
-def resolve_conversation(conversation_id: UUID, principal: CurrentPrincipal = Depends(require_admin),
+def resolve_conversation(conversation_id: UUID, payload: ResolveRequest | None = None, principal: CurrentPrincipal = Depends(require_admin),
                          db: Session = Depends(get_db)) -> ConversationSummaryOut:
     """Nothing is left to do about it. Resolving it also means it was read."""
     conversation = _flagged(db, conversation_id)
+    _nothing_newer(db, conversation_id, payload.seen_message_id if payload else None)
     now = datetime.now(timezone.utc)
     conversation.resolved_at, conversation.resolved_by = now, principal.display_name
     if conversation.reviewed_at is None:
@@ -256,16 +295,19 @@ def feedback(filter: str = Query(default="all", pattern="^(all|unreviewed|review
         query = query.filter(CompanionFeedback.reviewed_at.is_(None))
     elif filter == "reviewed":
         query = query.filter(CompanionFeedback.reviewed_at.is_not(None))
-    rows = []
-    for fb in query.order_by(CompanionFeedback.submitted_at.desc()).limit(200).all():
-        member, user = _member_user(db, fb.member_id)
-        rows.append(FeedbackRowOut(
-            id=fb.id, conversation_id=fb.conversation_id, message_id=fb.message_id,
-            member_name=user.display_name if user else (member.display_name if member else "Member"), rating=fb.rating,
-            reason=fb.reason, comment=fb.comment, submitted_at=fb.submitted_at, reviewed_at=fb.reviewed_at, reviewed_by=fb.reviewed_by,
-            reply_excerpt=_reply_excerpt(fb.message),
-        ))
-    return rows
+    sharing = HealthPermissionService(db).sharing_member_ids()
+    return [_feedback_row(db, fb, sharing) for fb in query.order_by(CompanionFeedback.submitted_at.desc()).limit(200).all()]
+
+
+def _feedback_row(db: Session, fb: CompanionFeedback, sharing: set[UUID]) -> FeedbackRowOut:
+    member, user = _member_user(db, fb.member_id)
+    withheld = bool(fb.message is not None and fb.message.from_records and fb.member_id not in sharing)
+    return FeedbackRowOut(
+        id=fb.id, conversation_id=fb.conversation_id, message_id=fb.message_id,
+        member_name=user.display_name if user else (member.display_name if member else "Member"), rating=fb.rating,
+        reason=fb.reason, comment=fb.comment, submitted_at=fb.submitted_at, reviewed_at=fb.reviewed_at, reviewed_by=fb.reviewed_by,
+        reply_excerpt=WITHHELD_REPLY if withheld else _reply_excerpt(fb.message), reply_withheld=withheld,
+    )
 
 
 @router.post("/feedback/{feedback_id}/review", response_model=FeedbackRowOut)
@@ -277,11 +319,7 @@ def review_feedback(feedback_id: UUID, principal: CurrentPrincipal = Depends(req
     fb.reviewed_by = principal.display_name
     record_audit(db, principal, "feedback.reviewed", "companion_feedback", str(fb.id), {"rating": fb.rating})
     db.commit()
-    member, user = _member_user(db, fb.member_id)
-    return FeedbackRowOut(id=fb.id, conversation_id=fb.conversation_id, message_id=fb.message_id,
-                          member_name=user.display_name if user else (member.display_name if member else "Member"), rating=fb.rating,
-                          reason=fb.reason, comment=fb.comment, submitted_at=fb.submitted_at, reviewed_at=fb.reviewed_at,
-                          reviewed_by=fb.reviewed_by, reply_excerpt=_reply_excerpt(fb.message))
+    return _feedback_row(db, fb, HealthPermissionService(db).sharing_member_ids())
 
 
 def settings_out(row) -> SettingsOut:

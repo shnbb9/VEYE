@@ -1,6 +1,6 @@
 import { expect, request, test, type Browser, type Page } from "@playwright/test";
 import { ADMIN, MAILPIT_URL, freshMember } from "../fixtures/accounts";
-import { adminSignIn, answerOnboarding, expectAdminHome, linkFrom, open, toPath, waitForMail } from "../fixtures/helpers";
+import { confirmDialog, adminSignIn, answerOnboarding, expectAdminHome, linkFrom, open, toPath, waitForMail } from "../fixtures/helpers";
 
 /* The console's half of saved results (architecture V2 §§2.4, 3), control by
    control. The owner's retention choices: Forever cannot be published without
@@ -129,10 +129,9 @@ test.describe("saved results in the console", () => {
 
       // Applying it is a separate, confirmed step, and it only moves expiry earlier.
       card = await privacyCard(admin);
-      let asked = "";
-      admin.once("dialog", (dialog) => { asked = dialog.message(); void dialog.accept(); });
       const applied = admin.waitForResponse((r) => r.url().endsWith("/api/v1/admin/settings/privacy/apply-shorter"));
       await card.getByTestId("retention-apply").click();
+      const asked = await confirmDialog(admin);
       expect((await applied).status()).toBe(200);
       expect(asked).toContain("Expiry only ever moves earlier");
       await expect(card.getByTestId("retention-message")).toContainText("now expire earlier");
@@ -210,10 +209,9 @@ test.describe("saved results in the console", () => {
 
       // From the result screen itself.
       const tab = await saveResult(browser, first.email);
-      let asked = "";
-      tab.once("dialog", (dialog) => { asked = dialog.message(); void dialog.accept(); });
       const erased = tab.waitForResponse((r) => r.url().endsWith("/api/v1/prospects/erase"));
       await tab.getByTestId("saved-erase").click();
+      const asked = await confirmDialog(tab);
       expect((await erased).status()).toBe(200);
       expect(asked).toContain("This cannot be undone");
       await expect(tab.getByTestId("saved-status")).toContainText("have been deleted");
@@ -237,9 +235,8 @@ test.describe("saved results in the console", () => {
       await expect(stale.getByTestId("saved-result-gone")).toBeVisible();
 
       // And deleting it from that page.
-      let confirmText = "";
-      device.once("dialog", (dialog) => { confirmText = dialog.message(); void dialog.accept(); });
       await device.getByTestId("saved-result-erase").click();
+      const confirmText = await confirmDialog(device);
       await expect(device.getByTestId("saved-result-erased")).toContainText("have been deleted");
       expect(confirmText).toContain("cannot be undone");
       expect((await findProspect(admin, second.email)).total).toBe(0);

@@ -7,9 +7,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Dependencies first, from the hashed lock: the runtime set plus the [ai]
-# extra (the optional Groq and Langfuse SDKs, so a development key in the
-# ignored env file is enough to switch them on; neither is required). pip
+# Dependencies first, from the hashed lock: the runtime set plus the [ai] and
+# [gemini] extras (the optional Groq, Langfuse and Google SDKs, so a setting in
+# the ignored env file is enough to switch one on; none is required). pip
 # refuses any file whose hash is not in the lock, and this layer is rebuilt
 # only when the lock changes, not on every source edit. To change a
 # dependency: edit pyproject.toml, then run platform/scripts/lock-api-deps.ps1.

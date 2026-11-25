@@ -33,6 +33,11 @@ class CompanionTrace:
     latency_ms: int = 0
     input_tokens: int | None = None
     output_tokens: int | None = None
+    # For a provider with more than one door, and one that charges.
+    backend: str | None = None
+    thinking_tokens: int | None = None
+    attempts: int = 1
+    estimated_cost_usd: float | None = None
     retrieved_sources: list[dict] = field(default_factory=list)  # {source_id, document_id, chunk_id, score}
     feedback: str | None = None
     error_category: str | None = None
@@ -152,6 +157,10 @@ class TelemetryRecorder:
             "latency_ms": trace.latency_ms,
             "input_tokens": trace.input_tokens,
             "output_tokens": trace.output_tokens,
+            "backend": trace.backend,
+            "thinking_tokens": trace.thinking_tokens,
+            "attempts": trace.attempts,
+            "estimated_cost_usd": trace.estimated_cost_usd,
             "retrieved_sources": [
                 {"source_id": s.get("source_id"), "document_id": s.get("document_id"), "chunk_id": s.get("chunk_id"),
                  "source_version": s.get("source_version"), "score": s.get("score")}

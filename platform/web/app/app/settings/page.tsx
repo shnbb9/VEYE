@@ -6,6 +6,7 @@ import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { useToast } from "@/components/member/member-chrome";
 import { MemberAvatar } from "@/components/member/member-avatar";
 import { DeleteProfile } from "@/components/member/delete-profile";
+import { PrivacyChoices } from "@/components/member/privacy-choices";
 import { useSession } from "@/components/session";
 import {
   cancelEmailChange,
@@ -20,12 +21,6 @@ import {
   type Account,
   type MemberSession,
 } from "@/lib/auth-api";
-import {
-  getHealthPermission,
-  revokeHealthPermission,
-  type HealthPermission,
-  type HealthPermissionEvent,
-} from "@/lib/member-api";
 import { exportUrl, myOriginalPhotoUrl, recropPhoto, removePhoto, updateProfile, uploadPhoto, type PhotoCrop } from "@/lib/member-api";
 import dynamic from "next/dynamic";
 
@@ -258,11 +253,11 @@ function SettingsView() {
 
         <section className="settings-card fade-in d3">
           <div className="settings-card__head"><div><span className="settings-kicker">Veye Companion</span><h2>Personalisation</h2></div><span className="settings-card__mark">03</span></div>
-          <p className="settings-help">Sprout addresses you by your first name, which Veye adds to each reply itself — your name, email and contact details are never sent to the language model. Proactive suggestions are not connected yet.</p>
+          <p className="settings-help">Sprout addresses you by your first name, which Veye adds to each reply itself — your name, email and contact details are never sent to the language model. Proactive suggestions are not connected yet. Whether Sprout may use your health information is your choice, under <a className="settings-inline" href="#privacy">Your privacy choices</a>.</p>
           <Link className="settings-outline" href="/app/companion">Open Sprout <span aria-hidden="true">&rarr;</span></Link>
         </section>
 
-        <HealthSharingSection />
+        <PrivacyChoices />
 
         <SecuritySection account={account} onEmailChangeRequested={() => void session.refresh()} />
 
@@ -278,117 +273,6 @@ function SettingsView() {
     </>
   );
 }
-
-/* Health Data Sharing Permission — the member's decision, and the only place
-   it can be made. The Veye team can ask from the console; nothing they do
-   there changes what is below. Deciding happens on the consent screen, where
-   everything being agreed to is shown first (architecture V2 §4.4).
-   Withdrawing is one confirmed click here, and takes effect on the team's very
-   next request, because the API reads this state each time. */
-function HealthSharingSection() {
-  const [permission, setPermission] = useState<HealthPermission | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const toast = useToast();
-
-  useEffect(() => {
-    getHealthPermission().then(setPermission).catch((reason) =>
-      setError(reason instanceof Error ? reason.message : "Your sharing setting could not be loaded."));
-  }, []);
-
-  async function withdraw() {
-    if (!window.confirm("Stop sharing your saved results with the Veye team? It takes effect at once.")) return;
-    setBusy(true); setError("");
-    try {
-      setPermission(await revokeHealthPermission());
-      toast.flash("Sharing has stopped");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "That could not be saved.");
-    } finally { setBusy(false); }
-  }
-
-  const asked = permission?.state === "requested";
-  const sharing = permission?.shares_health_data === true;
-  const reviewHref = permission?.open_request ? `/app/sharing-request?request=${encodeURIComponent(permission.open_request.ref)}` : "/app/sharing-request";
-
-  return (
-    <section className="settings-card fade-in d4" id="privacy" data-testid="health-sharing">
-      <div className="settings-card__head">
-        <div><span className="settings-kicker">Your health records</span><h2>Sharing with the Veye team</h2></div>
-        <span className="settings-card__mark">04</span>
-      </div>
-
-      {error && <p className="chat-error" role="alert">{error}</p>}
-      {!permission && !error && <p className="settings-help">Loading…</p>}
-
-      {permission && (
-        <>
-          <p className="settings-help" data-testid="health-sharing-state">
-            <strong>{permission.state_label}.</strong>{" "}
-            {sharing
-              ? "The Veye team can open your saved results while they are helping you."
-              : "Nobody at Veye can open your saved results."}
-          </p>
-          <p className="settings-help">{permission.explanation}</p>
-
-          {asked && permission.requested_by_name && (
-            <p className="settings-help" data-testid="health-sharing-asked">
-              {permission.requested_by_name} asked on {shortDate(permission.requested_at)}.
-            </p>
-          )}
-
-          {permission.policy_version && permission.policy_version !== permission.current_policy_version && (
-            <p className="settings-help" data-testid="health-sharing-older-terms">
-              You decided against an earlier version of the terms ({permission.policy_version}); the current version is {permission.current_policy_version}.
-            </p>
-          )}
-
-          <div className="settings-profile-actions">
-            {!sharing && (
-              <Link className="settings-save" href={reviewHref} data-testid="health-sharing-review">
-                {asked ? "Review the request" : "Review and decide"} <span aria-hidden="true">&rarr;</span>
-              </Link>
-            )}
-            {sharing && (
-              <button className="settings-outline" type="button" disabled={busy}
-                      onClick={() => void withdraw()}
-                      data-testid="health-sharing-revoke">
-                {busy ? "Saving…" : "Stop sharing"}
-              </button>
-            )}
-          </div>
-
-          {permission.events.length > 0 && (
-            <>
-              <p className="settings-help" style={{ marginTop: 18 }}><strong>What has happened</strong></p>
-              <ul className="settings-session-list" data-testid="health-sharing-history">
-                {permission.events.slice().reverse().map((event) => (
-                  <li key={event.id}>
-                    {describeEvent(event)} &middot; {shortDate(event.created_at)}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-function describeEvent(event: HealthPermissionEvent): string {
-  switch (event.to_state) {
-    case "requested": return `${event.actor_name || "The Veye team"} asked to see your results`;
-    case "granted": return "You started sharing your results";
-    case "declined": return "You chose not to share";
-    case "revoked": return "You stopped sharing";
-    default: return event.to_state;
-  }
-}
-
-const shortDate = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—";
-
 
 /* Security — the member's own credentials and sessions. Everything here acts
    on the signed-in account only, and the member always proves who they are

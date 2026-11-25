@@ -78,6 +78,11 @@ class AskResponse(BaseModel):
     safety_result: str | None
     trace_id: str | None
     personalized: bool
+    # What happened to the member's health information: used, off (their
+    # Sprout choice), restricted (on, but not in this environment) or none.
+    health_context: str = "none"
+    # How worried the fixed rules were about this message, if at all.
+    safety_level: str | None = None
 
 
 class FeedbackRequest(BaseModel):

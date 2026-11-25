@@ -34,7 +34,7 @@ def _run(args: list[str], env: dict) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, *args], cwd=API, env=env, capture_output=True, text=True, timeout=180)
 
 
-@pytest.mark.parametrize("job", ["purge-prospects", "deliver-outbox", "process-erasures", "replay-erasures", "all"])
+@pytest.mark.parametrize("job", ["purge-prospects", "deliver-outbox", "process-erasures", "replay-erasures", "reindex-knowledge", "all"])
 def test_every_scheduled_job_starts_on_its_own(job, own_database):
     result = _run(["-m", "app.jobs", "run", job, "--dry-run"], own_database)
     assert result.returncode == 0, result.stderr[-1500:]
@@ -63,7 +63,7 @@ def test_a_production_job_refuses_to_run_on_laptop_defaults(own_database):
 
 # What only a process that answers requests needs.
 REQUEST_ONLY = {"VEYE_TRUSTED_PROXY_HOPS", "VEYE_CORS_ORIGINS", "VEYE_LLM_PROVIDER", "VEYE_GEMINI_MEMBER_DATA_CLEARED",
-                "VEYE_AUTH_PROVIDER", "VEYE_JOBS_INTERVAL_SECONDS"}
+                "VEYE_GEMINI_MODEL", "VEYE_GCP_LOCATION", "VEYE_AUTH_PROVIDER", "VEYE_JOBS_INTERVAL_SECONDS"}
 
 
 def test_the_maintenance_job_is_given_the_services_own_settings():

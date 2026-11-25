@@ -36,10 +36,8 @@ from app.food.photos import MealPhotoError, MealPhotoService
 from app.food.routes import MealOut, meal_out
 from app.guided_flows.models import GuidedFlow, MemberGuidedFlowSession
 from app.health_permission.models import (
-    STATE_GRANTED,
     STATE_LABELS as PERMISSION_LABELS,
     STATE_NOT_REQUESTED,
-    MemberHealthPermission,
 )
 from app.health_permission.service import HealthPermissionService
 from app.members.models import Member
@@ -368,11 +366,7 @@ def sharing_member_ids(db: Session) -> set[UUID]:
     There is no de-identified analytics exception here. If one is wanted, it is
     a client and legal decision, not something to assume.
     """
-    rows = (db.query(MemberHealthPermission.member_id)
-            .join(Member, Member.id == MemberHealthPermission.member_id)
-            .filter(MemberHealthPermission.state == STATE_GRANTED, Member.archived_at.is_(None),
-                    Member.erasure_requested_at.is_(None)).all())
-    return {row[0] for row in rows}
+    return HealthPermissionService(db).sharing_member_ids()
 
 
 def _count(db: Session, model, allowed: set[UUID] | None = None) -> int:

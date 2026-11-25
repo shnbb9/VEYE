@@ -10,9 +10,13 @@ Sprout is the companion members talk to inside Veye. It can explain how the Veye
 
 Sprout does not diagnose, treat or prevent any condition. Questions about symptoms, medicines, or how much of a supplement to take are always handed to a person from the Veye team. Supplement amounts are set by condition and confirmed by a coach, never inferred from a conversation.
 
+Sprout is a program, not a clinician or a crisis service, and nobody watches the conversation around the clock. If you, or somebody near you, may not be safe, contact your local emergency services or somebody you trust.
+
 ## Your data
 
-Sprout only sees short summaries of your saved Veye results, never your whole record, and it never sees your name, email address or other contact details. Your first name is added to the reply by Veye itself after the answer comes back.
+Sprout uses your health information only if you have turned on Personalize Sprout using my health information, in Settings under Your privacy choices. It is off until you turn it on, it is separate from sharing with the Veye team, and you can turn it off at any time. With it off, Sprout still answers, without your health information.
+
+With it on, Sprout sees short summaries of your saved Veye results, never your whole record, and it never sees your name, email address or other contact details. Your first name is added to the reply by Veye itself after the answer comes back.
 
 ## Feedback
 

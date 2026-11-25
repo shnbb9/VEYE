@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type SyntheticEvent } from "react";
 import { createPortal } from "react-dom";
+import { useExitGhost } from "@/components/use-exit-ghost";
 import { useModalDialog } from "@/components/use-modal-dialog";
 import styles from "./avatar-crop-dialog.module.css";
 
@@ -57,7 +58,9 @@ export function AvatarCropDialog({ src, initial, title = "Crop your picture", sa
   const [unreadable, setUnreadable] = useState(false);
 
   const close = useCallback(() => { if (!busy) onCancel(); }, [busy, onCancel]);
+  const overlay = useRef<HTMLDivElement>(null);
   useModalDialog(true, card, close, "[data-crop-frame]");
+  useExitGhost(overlay);
 
   const minSide = natural ? Math.min(natural.w, natural.h) : 1;
   const maxZoom = natural ? clamp(minSide / Math.min(MIN_CROP_SIDE, minSide), 1, MAX_ZOOM) : 1;
@@ -199,7 +202,7 @@ export function AvatarCropDialog({ src, initial, title = "Crop your picture", sa
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+    <div className={styles.overlay} ref={overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <div className={styles.card} ref={card} role="dialog" aria-modal="true" aria-labelledby="avatarCropTitle"
            aria-describedby="avatarCropHelp" data-testid="crop-dialog">
         <h2 className={styles.title} id="avatarCropTitle">{title}</h2>

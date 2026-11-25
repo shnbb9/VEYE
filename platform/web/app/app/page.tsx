@@ -118,7 +118,7 @@ export default function MemberDashboard() {
 
             <div className="hn-anchor-body">
               <Link href="/app/progress/health-number?from=dashboard" className="health-badge-block health-badge-block--xl" aria-label="Open the Health Number assessment">
-                <div className="health-badge health-badge--xl"><span className="health-num"><CountUp value={number} /></span></div>
+                <div className="health-badge health-badge--xl"><span className="health-num"><HealthValue value={number} /></span></div>
               </Link>
               <div className="hn-anchor-text">
                 {taken && <p className="hn-anchor-scale">{SCALE_SENTENCE_PREFIX}<strong>{number}</strong>.</p>}
@@ -271,30 +271,10 @@ export default function MemberDashboard() {
 
 const MOOD_EMOJI: Record<string, string> = { happy: "😊", excited: "🤩", calm: "😌", neutral: "😐", tired: "😴", stressed: "😫", sad: "😔", angry: "😡" };
 
-/** Counts the badge up to its value once, exactly as the prototype does; the
- *  final one-decimal value is always written, instantly under reduced motion. */
-function CountUp({ value }: { value: string | null }) {
-  const [shown, setShown] = useState<string>(value ?? "—");
-  const counted = useRef<string | null>(null);
-  useEffect(() => {
-    if (value === null) { setShown("—"); return; }
-    if (counted.current === value) { setShown(value); return; }
-    counted.current = value;
-    const target = parseFloat(value);
-    if (Number.isNaN(target) || prefersReducedMotion()) { setShown(value); return; }
-    const duration = 650;
-    const t0 = performance.now();
-    let frame = 0;
-    const step = (now: number) => {
-      const k = Math.min(1, (now - t0) / duration);
-      const eased = 1 - Math.pow(1 - k, 3);
-      setShown((target * eased).toFixed(1));
-      if (k < 1) frame = requestAnimationFrame(step); else setShown(value);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [value]);
-  return <strong>{shown}</strong>;
+/* A health value is never shown on its way to itself: it used to count up from
+   nought, and for most of a second the card said something that was not so. */
+function HealthValue({ value }: { value: string | null }) {
+  return <strong key={value ?? "none"} className="hn-value">{value ?? "—"}</strong>;
 }
 
 /** The tip copy "types in" as the dashboard opens (client request). The text

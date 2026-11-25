@@ -13,7 +13,7 @@ from app.auth.principal import CurrentPrincipal, require_admin
 from app.core.runtime import Runtime, get_runtime
 from app.db.session import get_db
 from app.knowledge.models import SCOPES, SOURCE_STATUSES, SOURCE_TYPES, KnowledgeDocument, KnowledgeSource
-from app.knowledge.service import KnowledgeError, KnowledgeService
+from app.knowledge.service import MOST_BYTES, KnowledgeError, KnowledgeService
 
 router = APIRouter(prefix="/api/v1/admin/companion/knowledge-sources", tags=["admin-knowledge"], dependencies=[Depends(require_admin)])
 
@@ -97,10 +97,12 @@ def update_source(source_id: UUID, payload: KnowledgeSourceInput, principal: Cur
 
 
 @router.post("/{source_id}/document", response_model=KnowledgeSourceOut, status_code=201)
-async def attach_document(source_id: UUID, file: UploadFile = File(...), principal: CurrentPrincipal = Depends(require_admin),
-                          db: Session = Depends(get_db), service: KnowledgeService = Depends(get_knowledge_service),
-                          runtime: Runtime = Depends(get_runtime)) -> KnowledgeSourceOut:
-    data = await file.read()
+def attach_document(source_id: UUID, file: UploadFile = File(...), principal: CurrentPrincipal = Depends(require_admin),
+                    db: Session = Depends(get_db), service: KnowledgeService = Depends(get_knowledge_service),
+                    runtime: Runtime = Depends(get_runtime)) -> KnowledgeSourceOut:
+    # Not `async`: an outside provider is waited for, and everybody else on this
+    # server would wait with it.
+    data = file.file.read(MOST_BYTES + 1)
     try:
         source = service.get_source(source_id)
         document = service.attach_document(source, filename=file.filename or "document.txt",

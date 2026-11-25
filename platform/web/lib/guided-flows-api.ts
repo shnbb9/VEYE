@@ -28,6 +28,8 @@ export type Step = {
   node: StepNode | null;
   actions: UiAction[];
   clarification: string | null;
+  /** Sprout's own answer, when what was typed was not an answer to the step. The step has not moved. */
+  reply: AskResponse | null;
   section_title: string;
   steps_taken: number;
   content_meta: Record<string, unknown>;

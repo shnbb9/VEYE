@@ -1,5 +1,6 @@
 "use client";
 
+import { ask } from "@/components/confirm-dialog";
 import { ScreenStyles } from "@/components/screen-styles";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -409,7 +410,7 @@ function Result({ view, onSignUp }: { view: ResultView; onSignUp: () => void }) 
   async function eraseSaved() {
     let token: string | null = null;
     try { token = sessionStorage.getItem(SAVED_RESULT_TOKEN_KEY); } catch { /* storage unavailable */ }
-    if (!token || !window.confirm("Delete your saved result and the email address you gave? This cannot be undone.")) return;
+    if (!token || !(await ask({ title: "Delete your saved result?", text: "Your saved result and the email address you gave are deleted. This cannot be undone.", confirm: "Delete", cancel: "Keep it", danger: true }))) return;
     setErasing(true);
     try {
       const done = await eraseSavedResult(token);

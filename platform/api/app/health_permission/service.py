@@ -15,10 +15,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.health_permission.models import (
     POLICY_VERSION,
+    SHARING_STATES,
     SOURCE_ADMIN_CONSOLE,
     SOURCE_MEMBER_APP,
     STATE_DECLINED,
@@ -47,12 +49,22 @@ class HealthPermissionService:
         """The member's permission row, created in the default state if this is
         the first time anyone has asked. Creating it is not a decision: the
         default is `not_requested`, because silence is never consent."""
-        row = (self.db.query(MemberHealthPermission)
-               .filter(MemberHealthPermission.member_id == member_id).one_or_none())
+        return self._row(member_id)
+
+    def _row(self, member_id: UUID, *, lock: bool = False) -> MemberHealthPermission:
+        """`lock` for a transition: two decisions at once happen one after the
+        other instead of both acting on the state they read first."""
+        query = self.db.query(MemberHealthPermission).filter(MemberHealthPermission.member_id == member_id)
+        if lock:
+            query = query.populate_existing().with_for_update()
+        row = query.one_or_none()
         if row is None:
-            row = MemberHealthPermission(member_id=member_id, state=STATE_NOT_REQUESTED)
-            self.db.add(row)
-            self.db.flush()
+            try:
+                with self.db.begin_nested():
+                    self.db.add(MemberHealthPermission(member_id=member_id, state=STATE_NOT_REQUESTED))
+            except IntegrityError:
+                pass  # another request created it
+            row = query.one()
         return row
 
     def current(self, member_id: UUID) -> MemberHealthPermission | None:
@@ -64,18 +76,30 @@ class HealthPermissionService:
     def shares_health_data(self, member_id: UUID) -> bool:
         """The single question every protected read asks. Deliberately a fresh
         database read each time — a withdrawal has to bite immediately, and a
-        value cached anywhere is a value that outlives the member's decision."""
-        row = (self.db.query(MemberHealthPermission)
-               .filter(MemberHealthPermission.member_id == member_id).one_or_none())
-        if not (row and row.shares_health_data):
-            return False
+        value cached anywhere is a value that outlives the member's decision.
+        Columns, not rows: a row this session loaded earlier would answer with
+        what it held then."""
         # A member who asked to be deleted shares nothing from that moment,
         # even before the purge has removed the permission row; nor does an
         # archived one, who cannot sign in to withdraw.
         from app.members.models import Member
 
-        member = self.db.get(Member, member_id)
-        return member is not None and member.erasure_requested_at is None and member.archived_at is None
+        state = (self.db.query(MemberHealthPermission.state)
+                 .join(Member, Member.id == MemberHealthPermission.member_id)
+                 .filter(MemberHealthPermission.member_id == member_id,
+                         Member.erasure_requested_at.is_(None), Member.archived_at.is_(None)).scalar())
+        return state in SHARING_STATES
+
+    def sharing_member_ids(self) -> set[UUID]:
+        """Everyone whose records the console may show, in one query: the same
+        rule as `shares_health_data`, for screens that list many members."""
+        from app.members.models import Member
+
+        rows = (self.db.query(MemberHealthPermission.member_id)
+                .join(Member, Member.id == MemberHealthPermission.member_id)
+                .filter(MemberHealthPermission.state.in_(SHARING_STATES), Member.archived_at.is_(None),
+                        Member.erasure_requested_at.is_(None)).all())
+        return {row[0] for row in rows}
 
     def states_for(self, member_ids: list[UUID]) -> dict[UUID, str]:
         """Bulk read for list screens, so a page of members costs one query."""
@@ -92,7 +116,7 @@ class HealthPermissionService:
                 request_ref: str | None = None) -> MemberHealthPermission:
         """An administrator asks (or, with automatic mode, Veye asks after a
         verified sign-up). This is the console's whole power here."""
-        row = self.for_member(member_id)
+        row = self._row(member_id, lock=True)
         if row.state == STATE_GRANTED:
             raise PermissionError_(409, "This member already shares their health records.")
         now = datetime.now(timezone.utc)
@@ -110,7 +134,7 @@ class HealthPermissionService:
         """`terms` is the version the member was shown (policy.Terms); its
         label, hash and snapshot are kept on the event, so the evidence says
         exactly what was agreed to."""
-        row = self.for_member(member_id)
+        row = self._row(member_id, lock=True)
         if row.state == STATE_GRANTED:
             return row
         self._record(row, STATE_GRANTED, actor="member", actor_user_id=by_user_id,
@@ -124,7 +148,7 @@ class HealthPermissionService:
 
     def decline(self, member_id: UUID, *, by_user_id: UUID, by_name: str, terms=None,
                 request_ref: str | None = None) -> MemberHealthPermission:
-        row = self.for_member(member_id)
+        row = self._row(member_id, lock=True)
         self._record(row, STATE_DECLINED, actor="member", actor_user_id=by_user_id,
                      actor_name=by_name, source=SOURCE_MEMBER_APP, terms=terms, request_ref=request_ref)
         row.decided_at = datetime.now(timezone.utc)
@@ -145,7 +169,7 @@ class HealthPermissionService:
         — told every member who withdrew that they had "decided against an
         earlier version of the terms". The event names the terms in force
         when it happened (`terms_label`), for the evidence."""
-        row = self.for_member(member_id)
+        row = self._row(member_id, lock=True)
         if row.state != STATE_GRANTED:
             raise PermissionError_(409, "There is nothing to withdraw.")
         self._record(row, STATE_REVOKED, actor="member", actor_user_id=by_user_id,

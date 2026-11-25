@@ -125,7 +125,7 @@ class OutboundPrivacyFilter:
         # general; the classification is about whose data it is.
         filtered = LLMRequest(system=system, messages=messages, max_tokens=request.max_tokens,
                               temperature=request.temperature, metadata=dict(request.metadata),
-                              classification=request.classification)
+                              client_content=request.client_content, classification=request.classification)
         for value in (filtered.system, *(m.content for m in filtered.messages), *filtered.metadata.values()):
             if contains_identifier(value, self.known):
                 raise PrivacyViolation("A direct identifier survived the outbound privacy filter; the request was not sent.")

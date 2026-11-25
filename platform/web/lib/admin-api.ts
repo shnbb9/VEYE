@@ -55,6 +55,8 @@ export type AdminMessage = Message & {
   latency_ms: number | null;
   safety_result: string | null;
   context_scopes: string[];
+  /** Written from health information the member does not share with the team: the content is a notice, not the reply. */
+  withheld: boolean;
   trace_id: string | null;
   policy_decision: PolicyDecision | null;
 };
@@ -77,6 +79,7 @@ export type FeedbackRow = {
   reviewed_at: string | null;
   reviewed_by: string | null;
   reply_excerpt: string;
+  reply_withheld: boolean;
 };
 
 export type KnowledgeDocument = {
@@ -224,11 +227,12 @@ export const getOverview = () => apiJson<Overview>(`${BASE}/overview`);
 export const listConversations = (filter: "needs_review" | "reviewed" | "unresolved" | "all", q = "") =>
   apiJson<ConversationSummary[]>(`${BASE}/conversations?filter=${filter}&q=${encodeURIComponent(q)}`);
 export const getConversation = (id: string) => apiJson<ConversationDetail>(`${BASE}/conversations/${id}`);
-export const resolveConversation = (id: string) => postJson<ConversationSummary>(`${BASE}/conversations/${id}/resolve`, {});
+/** `seen` is the last message that was on screen: what came after it has not been read. */
+export const resolveConversation = (id: string, seen: string | null) => postJson<ConversationSummary>(`${BASE}/conversations/${id}/resolve`, { seen_message_id: seen });
 export const reopenConversation = (id: string) => postJson<ConversationSummary>(`${BASE}/conversations/${id}/reopen`, {});
 export const setConversationPriority = (id: string, priority: ConversationSummary["priority"]) =>
   postJson<ConversationSummary>(`${BASE}/conversations/${id}/priority`, { priority }, "PUT");
-export const reviewConversation = (id: string, note?: string) => postJson<ConversationSummary>(`${BASE}/conversations/${id}/review`, { note: note ?? null });
+export const reviewConversation = (id: string, seen: string | null) => postJson<ConversationSummary>(`${BASE}/conversations/${id}/review`, { seen_message_id: seen });
 export const listFeedback = (filter: "all" | "unreviewed" | "reviewed") => apiJson<FeedbackRow[]>(`${BASE}/feedback?filter=${filter}`);
 export const reviewFeedback = (id: string) => postJson<FeedbackRow>(`${BASE}/feedback/${id}/review`, {});
 

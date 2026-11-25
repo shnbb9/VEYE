@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { ADMIN, freshMember } from "../fixtures/accounts";
-import { adminSignIn, expectAdminHome, linkFrom, memberApi, open, signUpMember, toPath, waitForMail } from "../fixtures/helpers";
+import { confirmDialog, adminSignIn, expectAdminHome, linkFrom, memberApi, open, signUpMember, toPath, waitForMail } from "../fixtures/helpers";
 
 /* Health Data Sharing Permission, through both portals.
 
@@ -80,8 +80,8 @@ test.describe.serial("Health Data Sharing Permission", () => {
     expect(shared.sharing_state).toBe("granted");
 
     // 4. Withdrawing re-locks on the very next request, not when something expires.
-    memberPage.once("dialog", (dialog) => void dialog.accept());
     await memberPage.getByTestId("health-sharing-revoke").click();
+    await confirmDialog(memberPage);
     await expect(memberPage.getByTestId("health-sharing-state")).toContainText("Withdrawn");
 
     const after = await read();

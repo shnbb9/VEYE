@@ -111,6 +111,7 @@ button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
 
 /* ---- Companion: states the static prototype could not have ---------------- */
 .msg-note { margin: 6px 0 0; font-family: 'Nunito Sans', sans-serif; font-size: 11.5px; color: var(--body-text-light); font-style: italic; }
+.msg-note a { color: #446514; text-decoration: underline; }
 .chat-error { margin: 8px 0; font-family: 'Nunito Sans', sans-serif; font-size: 13px; color: var(--notify-red); }
 /* Provenance stays collapsed: one small "Sources · N" control, no inline citations. */
 .msg-sources { margin-top: 6px; }
@@ -290,6 +291,132 @@ button.mini-card:hover { box-shadow: 0 8px 20px rgba(56,76,12,.10); }
     .fc-card-tile h2 { margin-bottom: 12px; }
   }
 
+/* ---- Motion (owner, 25 Nov 2026) --------------------------------------------
+   Short, and a little: 120 to 220 ms, opacity and at most a few pixels, nothing
+   that moves what is around it, and nothing at all for a reader who has asked
+   for less (dashboard.css turns every animation and transition off for them).
+   The page's own entrance kept its shape and lost two thirds of its length. */
+.fade-in { animation-duration: .2s; }
+.fade-in.d1 { animation-delay: .02s; }
+.fade-in.d2 { animation-delay: .04s; }
+.fade-in.d3 { animation-delay: .06s; }
+.fade-in.d4 { animation-delay: .08s; }
+.fade-in.d5 { animation-delay: .1s; }
+.fade-in.d6 { animation-delay: .12s; }
+.view.active { animation-duration: .2s; }
+.reveal-in { transition: opacity .22s ease, transform .22s cubic-bezier(.2, .8, .2, 1); }
+.hn-value { animation: fdxArrive .2s ease; }
+.btn-primary, .btn-ghost, .consent__choice, .settings-save, .settings-outline { transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .12s ease; }
+.btn-primary:active, .btn-ghost:active, .consent__choice:active, .settings-save:active, .settings-outline:active { transform: translateY(1px); }
+.choice__panel { transition: opacity .18s ease, transform .18s ease, display .18s allow-discrete; }
+.choice__panel[hidden] { opacity: 0; transform: translateY(-4px); }
+@starting-style { .choice__panel:not([hidden]) { opacity: 0; transform: translateY(-4px); } }
+.choice__history[open] > ul, .consent__details[open] > div { animation: fdxArrive .18s ease; }
+.settings-session-list li { animation: fdxArrive .18s ease; }
+
+/* ---- Settings: the two privacy choices (25 Nov 2026) ----------------------- */
+.settings-card--choices { grid-column: 1 / -1; }
+.choice-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+.choice { min-width: 0; padding: 20px 22px; border: 1px solid #E4EBD6; border-radius: 14px; background: #FDFDF9; }
+.choice__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.choice__head h3 { margin: 0; font: 600 17px/1.35 'Teachers', sans-serif; color: #2E4A1A; }
+.choice__state { flex: none; padding: 3px 12px; border-radius: 999px; background: #EEF1E6; color: #55694A; font: 600 12.5px/1.5 'Teachers', sans-serif; transition: background .18s ease, color .18s ease; }
+.choice__state--on { background: #DDEFC4; color: #2E4A1A; }
+.choice .settings-help { margin: 10px 0 0; font-size: 14.5px; }
+.choice__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.choice__actions .settings-save, .choice__actions .settings-outline { width: auto; margin: 0; border-radius: 999px; text-align: center; text-decoration: none; }
+.choice__actions .settings-save:focus-visible, .choice__actions .settings-outline:focus-visible { outline: 3px solid #8DC412; outline-offset: 2px; }
+.choice__panel { margin-top: 16px; padding-top: 14px; border-top: 1px solid #E4EBD6; color: #384C0C; font-size: 14.5px; line-height: 1.55; }
+.choice__panel[hidden] { display: none; }
+.choice__panel h4 { margin: 14px 0 4px; font: 600 14.5px/1.4 'Teachers', sans-serif; color: #2E4A1A; }
+.choice__panel h4:first-child { margin-top: 0; }
+.choice__panel p { margin: 0 0 6px; }
+.choice__panel ul { margin: 4px 0 8px 20px; padding: 0; }
+.choice__panel .consent__choices { margin-top: 16px; }
+.choice__meta { font-size: 12.5px; color: #71805E; }
+.choice__history { margin-top: 16px; font-size: 14px; color: #55694A; }
+.choice__history summary { cursor: pointer; font-weight: 600; color: #446514; }
+.choice__history .settings-session-list { margin-top: 10px; }
+.choice__loading { display: grid; gap: 10px; padding: 14px 0 4px; min-height: 150px; align-content: start; }
+.choice__loading .skel { height: 16px; }
+.settings-help a.settings-inline { color: #446514; text-decoration: underline; }
+@media (max-width: 980px) { .choice-pair { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .choice { padding: 16px 14px; } .choice__actions > * { width: 100%; } }
+
+/* ---- Food Diary: the open day, and History as a list or a month (25 Nov 2026) --- */
+.fdx-daybody { position: relative; }
+.fdx-wait { display: grid; gap: 12px; padding-top: 18px; opacity: 0; animation: fdxWait .16s ease .14s forwards; }
+.fdx-wait .skel { height: 92px; border-radius: 12px; }
+@keyframes fdxWait { to { opacity: 1; } }
+.fdx-loaderr { margin-top: 18px; padding: 16px 18px; border-radius: 12px; background: #FBEDEA; color: #8A2E26; font-size: 14px; }
+.fdx-loaderr p { margin: 0 0 12px; }
+.fdx-meal { transition: border-color .16s ease, background .16s ease; animation: fdxArrive .18s ease; }
+.fdx-meal.is-editing { border-color: #8DC412; background: #F8FBEF; }
+.fdx-empty:not([hidden]) { animation: fdxArrive .18s ease; }
+@keyframes fdxArrive { from { opacity: 0; transform: translateY(4px); } }
+.fdx-meal-btn:disabled, .fdx-action:disabled { opacity: .55; cursor: progress; }
+.fdx-target { margin: 14px 0 -8px; font-size: 12.5px; }
+.fdx-history { transition: opacity .18s ease, transform .18s ease, display .18s allow-discrete; }
+.fdx-history[hidden] { display: none; opacity: 0; transform: translateY(-4px); }
+@starting-style { .fdx-history:not([hidden]) { opacity: 0; transform: translateY(-4px); } }
+.fdx-history-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.fdx-history .fdx-history-head h3 { margin: 0; }
+.fdx-views { display: inline-flex; padding: 3px; border-radius: 999px; background: #F1F3E8; }
+.fdx-view { display: grid; place-items: center; width: 36px; height: 32px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: #7A8468; cursor: pointer; transition: background .16s ease, color .16s ease; }
+.fdx-view svg { width: 18px; height: 18px; }
+.fdx-view:hover { color: var(--olive-heading); }
+.fdx-view[aria-pressed="true"] { background: #fff; color: var(--olive-heading); box-shadow: 0 1px 4px rgba(46, 74, 26, .14); }
+.fdx-view:focus-visible { outline: 2px solid #446514; outline-offset: 2px; }
+.fdx-history-days[hidden] { display: none; }
+.fdx-history-days { animation: fdxArrive .18s ease; }
+.fdx-hist-row { transition: background .14s ease; }
+.fdx-hist-row.is-open { background: #F3F8E6; border-radius: 8px; }
+
+/* The month, as a page of somebody's own diary: paper, a ruled line, and one
+   handwritten thing on it. The hand is whichever the device already has; the
+   numbers and the words stay in the app's own type. */
+.fdxcal { max-width: 372px; margin: 2px auto 0; padding: 14px 16px 12px; border: 1px solid #EDE7D3; border-radius: 16px; box-shadow: 0 2px 10px rgba(46, 74, 26, .05); background: #FFFEF8; animation: fdxArrive .18s ease; }
+.fdxcal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fdx-history .fdxcal-month { margin: 0; font-family: "Segoe Print", "Bradley Hand", "Noteworthy", "Chalkboard SE", "Comic Neue", cursive; font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--olive-heading); text-align: center; }
+.fdxcal-turn { width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; font-size: 22px; line-height: 1; color: var(--olive-heading); cursor: pointer; transition: background .14s ease; }
+.fdxcal-turn:hover { background: #EEF4DD; }
+.fdxcal-turn:focus-visible, .fdxcal-today:focus-visible { outline: 2px solid #446514; outline-offset: 1px; }
+.fdxcal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.fdxcal-row--head { margin-top: 6px; }
+.fdxcal-row { border-bottom: 1px solid #F3EDDA; }
+.fdxcal-weeks .fdxcal-row:last-child { border-bottom-color: transparent; }
+.fdxcal-weekday { font-size: 11px; line-height: 20px; text-align: center; color: #7A8468; }
+.fdxcal-weeks { animation: fdxTurn .16s ease; }
+@keyframes fdxTurn { from { opacity: 0; } }
+.fdxcal-row > span { min-width: 0; height: 40px; }
+.fdxcal-row--head > span { height: 26px; }
+/* The whole square is the target; the circle inside it is what shows. */
+.fdxcal-cell { position: relative; display: grid; place-items: center; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 10px; background: none; font: inherit; font-size: 13.5px; color: var(--body-text); cursor: pointer; }
+.fdxcal-num { display: grid; place-items: center; width: min(35px, 100%); aspect-ratio: 1; padding-bottom: 4px; box-sizing: border-box; border-radius: 50%; transition: background .14s ease, color .14s ease, box-shadow .14s ease; }
+.fdxcal-cell:hover .fdxcal-num { background: #EEF4DD; }
+.fdxcal-cell:focus-visible { outline: 2px solid #446514; outline-offset: -2px; }
+.fdxcal-cell.is-ahead { color: #A9AF9D; }
+.fdxcal-cell.has-meals .fdxcal-num { background: #F0F7DF; color: var(--olive-heading); font-weight: 600; }
+.fdxcal-cell.is-saved .fdxcal-num { background: #E1F0C2; color: var(--olive-heading); font-weight: 600; }
+.fdxcal-cell.is-today .fdxcal-num { box-shadow: inset 0 0 0 1.5px #8DC412; }
+.fdxcal-cell.is-open .fdxcal-num { background: var(--olive-heading); color: #fff; box-shadow: none; }
+.fdxcal-mark { position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: transparent; pointer-events: none; }
+.fdxcal-cell.has-meals .fdxcal-mark { background: #6FA32B; }
+.fdxcal-cell.is-saved .fdxcal-mark, .fdxcal-mark--saved { width: 9px; height: 5px; margin-left: -4.5px; border: solid #446514; border-width: 0 0 1.8px 1.8px; border-radius: 0; background: transparent; transform: rotate(-45deg) scale(.8); }
+.fdxcal-cell.is-open.has-meals .fdxcal-mark { background: #fff; }
+.fdxcal-cell.is-open.is-saved .fdxcal-mark { border-color: #fff; background: transparent; }
+.fdxcal-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 32px; margin-top: 4px; }
+.fdxcal-legend { display: flex; gap: 14px; margin: 0; font-size: 12px; color: #71805E; }
+.fdxcal-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.fdxcal-legend .fdxcal-mark { position: static; margin: 0; }
+.fdxcal-mark--logged { background: #6FA32B; }
+.fdxcal-today { padding: 5px 12px; border: 1px solid #DDE6C8; border-radius: 999px; background: #fff; font: inherit; font-size: 12px; color: #446514; cursor: pointer; transition: background .14s ease; }
+.fdxcal-today:hover { background: #F1F6E4; }
+.fdxcal-day { margin: 6px 0 2px; padding-top: 8px; border-top: 1px dashed #DDD6BE; font-size: 13px; line-height: 1.5; color: var(--body-text); }
+.fdxcal-day b { font-family: 'Teachers', sans-serif; font-weight: 600; color: var(--olive-heading); }
+@media (max-width: 480px) { .fdxcal { padding: 10px 8px; } .fdx-history .fdxcal-month { font-size: 15px; white-space: nowrap; } .fdxcal-turn { width: 32px; } }
+@media (forced-colors: active) { .fdxcal-cell.is-open { outline: 2px solid Highlight; } .fdxcal-cell.has-meals .fdxcal-mark { background: CanvasText; } }
+
 /* My Progress: the prototype's guide control is a <button>; here it is a link
    to the guided flow. A button does not inherit line-height, so the link takes
    the button's to keep the hero's geometry identical. */
@@ -319,3 +446,13 @@ a.progress-hero__guide { line-height: normal; }
 .fit-pages button:focus-visible { outline: 2px solid #446514; outline-offset: 2px; }
 @media (max-width: 760px) { .fit-thumbs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .fit-thumbs { grid-template-columns: minmax(0, 1fr); } }
+
+/* Body Composition. In Safari a share of that box is sometimes no limit at all:
+   the figure came out half as tall again and lay over the Woman / Man buttons,
+   which could not be pressed. The box's own heights, as numbers. */
+.bmi-figure-img { max-height: 460px; }
+@media (max-width: 880px) { .bmi-figure-img { max-height: 240px; } }
+
+/* On a phone the longest of a guide's choices ran past the edge of the panel.
+   It takes a second line instead; a choice that fits is as it was. */
+.qr-btn { max-width: 100%; white-space: normal; text-align: left; }

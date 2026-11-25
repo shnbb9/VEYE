@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from app.core.idempotency import Idempotency, IdempotencyRecord, Replay, prune_idempotency_records
 from app.db.session import SessionLocal
 from app.main import app
-from tests.conftest import sign_up, decide_sharing
+from tests.conftest import sign_up, turn_on_sprout
 
 ASK = "/api/v1/companion/messages"
 
@@ -234,7 +234,7 @@ def test_two_first_requests_for_a_tip_do_not_collide(member_client):
     from app.companion.models import MemberPersonalTip
     from app.companion.personal_tip import PersonalTipService
 
-    assert decide_sharing(member_client).status_code == 200
+    assert turn_on_sprout(member_client).status_code == 200
     from datetime import date, timedelta
 
     today = date.today()
@@ -267,7 +267,7 @@ def test_two_first_requests_for_a_tip_do_not_collide(member_client):
                                    provider=self.name, model="tipper")
 
             def describe(self):
-                return {"provider": self.name}
+                return {"provider": self.name, "external": False}
 
         llm = Tipper()
 

@@ -34,7 +34,7 @@ from app.companion.policy import PolicyEngine
 from app.core.runtime import configure_runtime, get_runtime
 from app.db.session import SessionLocal
 from app.observability.telemetry import InMemoryTraceExporter, TelemetryRecorder
-from tests.conftest import decide_sharing, verify_member_email
+from tests.conftest import decide_sharing, turn_on_sprout, verify_member_email
 
 MOOD_NOTE_CANARY = "qqzzx-mood-note-canary"
 MEAL_CANARY = "qqzzx-meal-description-canary"
@@ -81,6 +81,9 @@ def _member_who_wrote_private_text_and_shares(member_client, admin_client):
     assert asked.status_code in (200, 201), asked.text
     granted = decide_sharing(member_client)
     assert granted.status_code in (200, 201), granted.text
+    # Both choices: the summaries are built for Sprout, and the console may
+    # read what Sprout wrote from them. The worst case for a leak.
+    assert turn_on_sprout(member_client).status_code == 200
     return member_id
 
 

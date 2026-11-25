@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { ADITYA, ADMIN, freshMember } from "../fixtures/accounts";
-import {
+import { confirmDialog,
   adminSignIn,
   expectAdminHome,
   expectMemberDashboard,
@@ -198,8 +198,8 @@ test.describe("Admin actions on a member account", () => {
     await page.getByRole("navigation", { name: "Section" }).getByRole("link", { name: "Account", exact: true }).click();
     await expect(page.getByTestId("m360-account-actions")).toBeVisible();
 
-    page.once("dialog", (dialog) => void dialog.accept());
     await page.getByTestId("account-deactivate").click();
+    await confirmDialog(page);
     await expect(page.getByTestId("account-action-notice")).toContainText(/deactivated/i);
 
     // They are out of the application at once, and the password stops working.
@@ -242,8 +242,8 @@ test.describe("Admin actions on a member account", () => {
     await expect(page.getByTestId("account-action-notice")).toContainText(/verification email/i);
     await waitForMail(member.email, "Verify your Veye email address");
 
-    page.once("dialog", (dialog) => void dialog.accept());
     await page.getByTestId("account-send-reset").click();
+    await confirmDialog(page);
     await expect(page.getByTestId("account-action-notice")).toContainText(/reset link/i);
     const reset = await waitForMail(member.email, "Reset your Veye password");
 

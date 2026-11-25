@@ -56,8 +56,12 @@ ADMIN = DemoAccount("Cara", "Hogue", "cara.hogue@demo.veye.test", "CaraAdmin!202
 ADMIN_TWO = DemoAccount("Priya", "Ops", "priya.ops@demo.veye.test", "PriyaOps!2026-local", "admin")
 ADITYA = DemoAccount("Aditya", "Demo", "aditya.demo@demo.veye.test", "AdityaDemo!2026-local", "member")
 MAYA = DemoAccount("Maya", "Demo", "maya.demo@demo.veye.test", "MayaDemo!2026-local", "member")
+# Two members for the two separate choices: Tara lets Sprout use her health
+# information and does not share it with the team; Noor has allowed neither.
+TARA = DemoAccount("Tara", "Demo", "tara.demo@demo.veye.test", "TaraDemo!2026-local", "member")
+NOOR = DemoAccount("Noor", "Demo", "noor.demo@demo.veye.test", "NoorDemo!2026-local", "member")
 DUAL = DemoAccount("Jordan", "Dual", "jordan.dual@demo.veye.test", "JordanDual!2026-local", "member+admin")
-DEMO_ACCOUNTS = (ADMIN, ADMIN_TWO, ADITYA, MAYA, DUAL)
+DEMO_ACCOUNTS = (ADMIN, ADMIN_TWO, ADITYA, MAYA, TARA, NOOR, DUAL)
 
 
 def _guard() -> None:
@@ -185,6 +189,18 @@ def _maya_history() -> dict[str, list[tuple[object, int]]]:
     }
 
 
+def _one_health_number(days: int, sleep_hours: float) -> dict[str, list[tuple[object, int]]]:
+    """Enough of a record for a permission to be about something."""
+    return {
+        "health_number": [
+            (HealthNumberAnswers(
+                goals=["Live a Healthier Lifestyle"], plans=["No other plans"], activity="Light (I work, I walk some)",
+                meditate="no", tired="yes", gainWeight="no", abdomenWeight="no", sleepEnough="yes", sleepWell="yes",
+                sleepHours=sleep_hours, diet="No preference", source="Friends or Family"), days),
+        ],
+    }
+
+
 def _dual_history() -> dict[str, list[tuple[object, int]]]:
     # A sparse member record: one Health Number only, so the dual-access
     # identity exercises the "nothing else saved yet" states in both portals.
@@ -217,6 +233,8 @@ def _apply_history(db: Session, member_id, history: dict[str, list[tuple[object,
 ADITYA_MOODS = [(13, "tired"), (12, "stressed"), (11, "neutral"), (10, "tired"), (9, "calm"), (8, "happy"), (7, "neutral"),
                 (6, "calm"), (5, "happy"), (4, "excited"), (3, "calm"), (2, "happy"), (1, "calm")]
 MAYA_MOODS = [(2, "neutral"), (1, "happy")]
+TARA_MOODS = [(4, "calm"), (3, "tired"), (2, "calm"), (1, "happy")]
+NOOR_MOODS = [(3, "neutral"), (2, "calm"), (1, "calm")]
 ADITYA_MEALS = [
     (1, "07:40", "Greek yoghurt with walnuts and blueberries", ["Hungry", "Relaxed"], ""),
     (1, "12:30", "Grilled chicken salad with avocado", ["Hungry", "Rushed"], "Ate at the desk"),
@@ -272,28 +290,37 @@ def _seed_requests(db: Session, members: dict[str, UserAccount]) -> int:
     return count
 
 
-def _seed_health_sharing(db: Session, members: dict[str, UserAccount]) -> str:
-    """Let the synthetic demo members share their records with the console.
+# Who has allowed what: one demo member for each combination, and the dual one.
+SHARES_WITH_TEAM = ("aditya", "maya", "dual")
+SPROUT_ON = ("aditya", "tara")
+
+
+def _seed_choices(db: Session, members: dict[str, UserAccount]) -> str:
+    """The synthetic demo members' own choices, each made once.
 
     This is seed data for a demo, not a default. A real member starts at
-    `not_requested` and nothing in the product grants on their behalf — sign
-    up on this stack and Member 360 will show the withheld state. Without it
-    the demo console would be empty of exactly the screens it exists to show.
+    `not_requested` and off, and nothing in the product decides on their
+    behalf — sign up on this stack and Member 360 will show the withheld state.
+    A choice somebody has since changed while trying the demo is left as they
+    left it: a restart must not bring a withdrawn yes back.
     """
-    from app.health_permission.models import STATE_GRANTED
+    from app.health_permission.models import STATE_NOT_REQUESTED
     from app.health_permission.service import HealthPermissionService
+    from app.sprout_permission.service import SproutPermissionService
+    from app.sprout_permission.terms import current_terms
 
-    service = HealthPermissionService(db)
-    granted = 0
-    for user in members.values():
+    team, sprout = HealthPermissionService(db), SproutPermissionService(db)
+    made = 0
+    for key, user in members.items():
         if user.member_id is None:
             continue
-        row = service.for_member(user.member_id)
-        if row.state == STATE_GRANTED:
-            continue
-        service.grant(user.member_id, by_user_id=user.id, by_name=user.display_name)
-        granted += 1
-    return f"{granted} demo member(s) sharing" if granted else "exists"
+        if key in SHARES_WITH_TEAM and team.for_member(user.member_id).state == STATE_NOT_REQUESTED:
+            team.grant(user.member_id, by_user_id=user.id, by_name=user.display_name)
+            made += 1
+        if key in SPROUT_ON and sprout.current(user.member_id) is None:
+            sprout.grant(user.member_id, by_user_id=user.id, by_name=user.display_name, terms=current_terms())
+            made += 1
+    return f"{made} demo choice(s) made" if made else "exists"
 
 
 def seed_users(db: Session | None = None) -> dict[str, str]:
@@ -308,7 +335,9 @@ def seed_users(db: Session | None = None) -> dict[str, str]:
         ensure_admin(db, ADMIN_TWO)
         outcome[ADMIN_TWO.email] = "admin"
         members: dict[str, UserAccount] = {}
-        for account, history, key in ((ADITYA, _aditya_history, "aditya"), (MAYA, _maya_history, "maya"), (DUAL, _dual_history, "dual")):
+        for account, history, key in ((ADITYA, _aditya_history, "aditya"), (MAYA, _maya_history, "maya"),
+                                      (TARA, lambda: _one_health_number(6, 6.5), "tara"),
+                                      (NOOR, lambda: _one_health_number(5, 7), "noor"), (DUAL, _dual_history, "dual")):
             user, created = _ensure_member(db, account, admin_access=account is DUAL)
             if not created and account is DUAL and not user.admin_access:
                 _service(db).grant_admin_access(user)  # older seeds predate dual access
@@ -317,11 +346,13 @@ def seed_users(db: Session | None = None) -> dict[str, str]:
                 backfilled += _seed_journal(db, user.member_id, ADITYA_MOODS, ADITYA_MEALS)
             elif key == "maya":
                 backfilled += _seed_journal(db, user.member_id, MAYA_MOODS, [])
+            elif key in ("tara", "noor"):
+                backfilled += _seed_journal(db, user.member_id, TARA_MOODS if key == "tara" else NOOR_MOODS, [])
             members[key] = user
             outcome[account.email] = "created" if created else ("backfilled " + ", ".join(backfilled) if backfilled else "exists")
         requests = _seed_requests(db, members)
         outcome["requests"] = f"{requests} sample requests" if requests else "exists"
-        outcome["health_sharing"] = _seed_health_sharing(db, members)
+        outcome["choices"] = _seed_choices(db, members)
         db.commit()
         return outcome
     finally:

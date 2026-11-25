@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { myConsolePhotoUrl } from "@/lib/admin-console-api";
 import { usePathname, useRouter } from "next/navigation";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { ScreenStyles } from "@/components/screen-styles";
 import { ConsoleSkeleton } from "@/components/skeleton";
 import { RequirePortal, useSession } from "@/components/session";
+import { usePageFade } from "@/components/use-page-fade";
 import { isLocalBuild } from "@/lib/environment";
 
 /* The Veye Admin Console shell, ported from admin-panel/prototype-client
@@ -120,6 +121,8 @@ function AdminFrame({ children }: { children: ReactNode }) {
   const account = session.admin;
   const initials = account ? `${account.first_name[0] ?? ""}${account.last_name[0] ?? ""}`.toUpperCase() : "";
   const section = MAIN_NAV.find((item) => item.match(pathname))?.key ?? "home";
+  const content = useRef<HTMLElement>(null);
+  usePageFade(content, pathname);
 
   async function signOut() {
     // Ends the ADMIN session only; a member session in this browser stays.
@@ -173,7 +176,7 @@ function AdminFrame({ children }: { children: ReactNode }) {
               </Link>
             </div>
           </header>
-          <main id="main-content" tabIndex={-1}>{children}</main>
+          <main id="main-content" tabIndex={-1} ref={content}>{children}</main>
         </div>
       </div>
     </>
@@ -241,7 +244,7 @@ export function Subnav({ items, active }: { items: readonly { key: string; label
 
 const CHIP_TONE: Record<string, string> = {
   Active: "live", Inactive: "draft", Draft: "draft", Archived: "archived", ingested: "live", failed: "error", pending: "draft",
-  answered: "live", prohibited: "attention", escalated: "attention", off_topic: "draft", unavailable: "error",
+  answered: "live", prohibited: "attention", escalated: "attention", off_topic: "draft", unavailable: "error", support: "info", safety: "attention",
   allow: "live", prohibit: "attention", escalate: "error", helpful: "live", not_helpful: "attention", pass: "live",
   enabled: "live", disabled: "archived", sent: "live", skipped: "draft",
 };

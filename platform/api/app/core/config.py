@@ -1,3 +1,5 @@
+import os
+
 from pydantic import SecretStr, field_validator
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -105,22 +107,27 @@ class Settings(BaseSettings):
     email_reply_to: str | None = None
 
     # ---- Companion / AI providers --------------------------------------------------
-    # LLMProvider: "mock" (deterministic, offline) or "groq" (development only,
-    # needs VEYE_GROQ_API_KEY). Provider absence never stops the API booting.
+    # LLMProvider: "mock" (deterministic, offline), "gemini", or "groq"
+    # (development only, needs VEYE_GROQ_API_KEY). Provider absence never stops
+    # the API booting.
     llm_provider: str = "mock"
-    # Gemini on Google Cloud is the selected production provider (9 Nov 2026).
-    # Vertex AI with the service's own identity, not a personal API key: a key
-    # belongs to a person, is covered by no agreement, and cannot be rotated or
-    # audited like a service identity.
-    # gemini-3.8-flash is GA; gemini-2.0-flash was retired on 1 June 2026.
+    # Which of Google's doors, for the model and for Google's embeddings alike:
+    #   developer  the Gemini Developer API with VEYE_GEMINI_API_KEY. Local
+    #              development and synthetic testing only.
+    #   vertex     Vertex AI with VEYE_GCP_PROJECT and the running service's own
+    #              identity (Application Default Credentials).
+    # No default, and no guessing: with neither chosen nothing is sent, and one
+    # is never used in place of the other because its credentials are there.
+    gemini_backend: str = ""
+    # gemini-3.8-flash is stable on both; gemini-2.0-flash was retired on 1 June 2026.
     gemini_model: str = "gemini-3.8-flash"
     gcp_project: str | None = None
-    # Google serves this model on `global` and the `us` / `eu` multi-regions
-    # only. `us` keeps processing inside the United States, which `global` does
-    # not promise. us-central1 does not serve it at all.
+    # Where Vertex AI answers. Google serves this model on `global` and the
+    # `us` / `eu` multi-regions. `us` keeps processing inside the United States,
+    # which `global` does not promise. us-central1 does not serve it at all.
     gcp_location: str = "us"
-    # Local experimentation only. Refused in production, and never permitted to
-    # carry member data.
+    # The developer backend's, and nothing else's. Refused outside local
+    # development, and never permitted to carry member data.
     gemini_api_key: SecretStr | None = None
     # Sending a member's health summaries to an external model is a disclosure,
     # and whether it is a permitted one is a BAA/covered-service question
@@ -132,7 +139,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 30.0
     # EmbeddingProvider: "hashing" is the deterministic local provider used for
     # development retrieval and is the default; "google" is Google's text
-    # embeddings on Vertex AI, which is implemented but not connected.
+    # embeddings, through VEYE_GEMINI_BACKEND.
     #
     # `embedding_dimensions` is not a free choice: knowledge_chunks.embedding
     # is vector(n) fixed by migration, so changing it means migrating the
@@ -141,6 +148,9 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 256
     # Empty means the provider's own documented default.
     embedding_model: str = ""
+    # Where Vertex AI embeds. Not where it answers: gemini-embedding-001 is
+    # served from single regions and the language model from multi-regions.
+    embedding_location: str = "us-central1"
     # "local" (development) or "gcs". Source documents live in their own
     # bucket, separate from member media: different lifecycle, different
     # audience, and one IAM grant should not cover both.
@@ -225,6 +235,15 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment.lower() in {"production", "prod"}
+
+    @property
+    def is_local(self) -> bool:
+        """Somebody's own machine, or a test run. Named one by one: a staging
+        deployment, or a name nobody thought of, is not. Nor is a container on
+        Cloud Run that was told nothing and took the default."""
+        if os.environ.get("K_SERVICE") or os.environ.get("CLOUD_RUN_JOB"):
+            return False
+        return self.environment.strip().lower() in {"development", "local", "local-docker", "test"}
 
     @model_validator(mode="after")
     def _secure_cookies_in_production(self) -> "Settings":

@@ -9,7 +9,7 @@ export function CompanionPage({ active, desc, actions, children, count }: {
 }) {
   return (
     <div className="page">
-      <PageHead title="Companion" desc={desc ?? "Sprout is the companion members talk to inside Veye. It answers from approved Veye knowledge and short summaries of the member's own results."}
+      <PageHead title="Companion" desc={desc ?? "Sprout is the companion members talk to inside Veye. It answers from approved Veye knowledge and, if the member lets it, short summaries of their own results."}
                 crumbs={[{ label: "Home", href: "/admin" }, { label: "Companion" }]} actions={actions} />
       <Subnav items={COMPANION_NAV.map((item) => (item.key === "conversations" ? { ...item, count } : item))} active={active} />
       {children}

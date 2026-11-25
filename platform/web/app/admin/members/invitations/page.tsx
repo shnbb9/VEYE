@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { ask } from "@/components/confirm-dialog";
 import { Chip, EmptyState, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
 import { InviteMember } from "@/components/admin/invite-member";
 import { MEMBER_VIEWS } from "@/components/admin/member-views";
@@ -53,7 +54,7 @@ function Invitations() {
   useEffect(() => { void load(); }, [load]);
 
   async function act(row: MemberInvitation, action: "resend" | "revoke") {
-    if (action === "revoke" && !window.confirm(`Withdraw the invitation to ${row.email}? The link they were sent stops working.`)) return;
+    if (action === "revoke" && !(await ask({ title: `Withdraw the invitation to ${row.email}?`, text: "The link they were sent stops working.", confirm: "Withdraw", cancel: "Keep it", danger: true }))) return;
     setBusy(row.id); setError(""); setNotice("");
     try {
       const next = await (action === "resend" ? resendMemberInvitation(row.id) : revokeMemberInvitation(row.id));

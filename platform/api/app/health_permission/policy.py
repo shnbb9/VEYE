@@ -56,16 +56,15 @@ CATEGORIES = (
 )
 # Bumped whenever one of these locked elements changes, so a decision recorded
 # under earlier words can never be mistaken for one made under these.
-LOCKED_REVISION = 2
-COMPANION_USE = ("Veye Companion (Sprout) may use summaries of these records and of your food diary to answer you "
-                 "about your own progress. It never receives your notes or meal descriptions word for word.")
+LOCKED_REVISION = 3
+COMPANION_USE = ("Sprout is not part of this choice. Whether Sprout may use your health information is a separate "
+                 "setting, and it starts switched off.")
 EXPIRY_RULE = "Until you withdraw it."
-WITHDRAWAL = ("You can withdraw at any time in Settings, and it stops at once: from that moment the team and "
-              "Sprout no longer see your records. Withdrawing cannot undo what was already seen while sharing "
-              "was on.")
-NOT_COVERED = ("Your name, email address, the messages you send to Veye, and your food diary with its photos are "
-               "not covered by this choice and stay visible to the team so they can help you.")
-DECLINE_EFFECT = "If you don't allow sharing, nobody at Veye can open your saved results, and Sprout answers without them."
+WITHDRAWAL = ("You can withdraw at any time in Settings, and it stops at once: from that moment the team no longer "
+              "sees your records. Withdrawing cannot undo what was already seen while sharing was on.")
+NOT_COVERED = ("Your name, email address, the messages you send to Veye, what you write to Sprout, and your food diary "
+               "with its photos are not covered by this choice and stay visible to the team so they can help you.")
+DECLINE_EFFECT = "If you don't allow sharing, nobody at Veye can open your saved results. Your Sprout choice stays as it is."
 
 
 def _single_line(value: str, *, max_length: int, label: str) -> str:
@@ -136,8 +135,8 @@ DEFAULT_TEMPLATE = TemplateValue(
 
 DEFAULT_TERMS = TermsValue(
     summary=paragraphs(
-        "Sharing lets the Veye team open your saved results when they are helping you, and lets Veye Companion "
-        "use them to answer you about your own progress. Until you share them, nobody at Veye can see them."
+        "Sharing lets the Veye team open your saved results when they are helping you. Until you share them, "
+        "nobody at Veye can see them."
     ),
     details=paragraphs(
         "The team sees your records only inside the Veye console, only while sharing is on, and every time they "
@@ -224,6 +223,16 @@ def current_terms(db: Session) -> Terms:
     value = TermsValue.model_validate(row.value)
     return Terms(value=value, version=int(row.version or 0), published_at=aware(row.published_at),
                  published_by=row.published_by_name or "", hash=terms_hash(value))
+
+
+def covered_sprout(label: str) -> bool:
+    """Was this a yes to words that also let Sprout use the records? They did
+    from 9 to 25 Nov 2026 (v2 and v3, and everything published at revisions 1
+    and 2). Only asked to explain the change to the member who said it: an
+    earlier yes is never read as a yes to Sprout now."""
+    if label.startswith("health-sharing-terms-v"):
+        return not label.endswith(f"-r{LOCKED_REVISION}")
+    return label.startswith("health-sharing-") and label.endswith(("-v2", "-v3"))
 
 
 def is_material_change(old: TermsValue, new: TermsValue) -> bool:

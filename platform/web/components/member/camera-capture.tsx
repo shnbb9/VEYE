@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useExitGhost } from "@/components/use-exit-ghost";
 import { useModalDialog } from "@/components/use-modal-dialog";
 import styles from "@/components/avatar-crop-dialog.module.css";
 
@@ -72,7 +73,9 @@ export function CameraCapture({ onUse, onCancel, onChooseFile }: Props) {
   useEffect(() => () => { if (shot) URL.revokeObjectURL(shot.url); }, [shot]);
 
   const close = useCallback(() => { stop(); onCancel(); }, [onCancel, stop]);
+  const overlay = useRef<HTMLDivElement>(null);
   useModalDialog(true, card, close, "[data-camera-cancel]");
+  useExitGhost(overlay);
   // The main button changes with each step; focus follows it, never lost
   // behind the dialog.
   useEffect(() => {
@@ -106,7 +109,7 @@ export function CameraCapture({ onUse, onCancel, onChooseFile }: Props) {
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+    <div className={styles.overlay} ref={overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <div className={styles.card} ref={card} role="dialog" aria-modal="true" aria-labelledby="cameraTitle" data-testid="camera-dialog">
         <h2 className={styles.title} id="cameraTitle">Snap a photo of your meal</h2>
         <p className={styles.sub}>Take the photo, then use it — it is added when you save the meal.</p>

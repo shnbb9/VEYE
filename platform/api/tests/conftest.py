@@ -5,6 +5,10 @@ os.environ["VEYE_DATABASE_URL"] = "sqlite:///./test-veye.db"
 os.environ["VEYE_ENVIRONMENT"] = "test"
 os.environ["VEYE_EMAIL_PROVIDER"] = "memory"
 os.environ["VEYE_LLM_PROVIDER"] = "mock"
+# Whatever a developer has in their own .env: no test uses their credentials.
+os.environ.update({"VEYE_EMBEDDING_PROVIDER": "hashing", "VEYE_EMBEDDING_DIMENSIONS": "256", "VEYE_GEMINI_BACKEND": "", "VEYE_GEMINI_API_KEY": "",
+                   "VEYE_GEMINI_MEMBER_DATA_CLEARED": "false", "VEYE_GCP_PROJECT": "", "VEYE_GROQ_API_KEY": "",
+                   "NO_GCE_CHECK": "true"})     # nor looks for a machine of Google's to be on
 os.environ["VEYE_KNOWLEDGE_OBJECT_ROOT"] = "./var/test-knowledge-objects"
 # Member photos and the erasure ledger: their own root, emptied after every
 # test, instead of the development media folder.
@@ -57,6 +61,31 @@ def clean_database():
     shutil.rmtree("./var/test-media-objects", ignore_errors=True)
 
 
+OUTSIDE = ("googleapis.com", "google.internal", "groq.com", "langfuse.com")
+
+
+@pytest.fixture(autouse=True)
+def nothing_reaches_an_outside_service(monkeypatch):
+    """A double that is forgotten becomes a real request, with whatever
+    credentials this machine has. Stopped where a name is looked up, and said
+    at the end even if the code under test swallowed it."""
+    import socket
+
+    asked: list[str] = []
+    look_up = socket.getaddrinfo
+
+    def guarded(host, *args, **kwargs):
+        name = (host.decode() if isinstance(host, bytes) else str(host or "")).rstrip(".").lower()
+        if name.endswith(OUTSIDE):
+            asked.append(name)
+            raise OSError(f"a test tried to reach {name}")
+        return look_up(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", guarded)
+    yield
+    assert asked == [], "a test tried to reach an outside service"
+
+
 @pytest.fixture
 def client():
     with TestClient(app) as test_client:
@@ -101,6 +130,15 @@ def decide_sharing(client: TestClient, decision: str = "grant", **extra):
     terms = client.get("/api/v1/members/me/health-permission").json()["terms"]
     return client.post(f"/api/v1/members/me/health-permission/{decision}",
                        json={"terms_version": terms["version"], "terms_hash": terms["hash"], **extra})
+
+
+def turn_on_sprout(client: TestClient):
+    """Switch Sprout personalization on the way the app does: the member's
+    other choice, with its own words and its own route."""
+    verify_member_email(client)
+    terms = client.get("/api/v1/members/me/sprout-permission").json()["terms"]
+    return client.post("/api/v1/members/me/sprout-permission/grant",
+                       json={"terms_version": terms["version"], "terms_hash": terms["hash"]})
 
 
 def admin_sign_in(client: TestClient, email: str, password: str, remember: bool = True):

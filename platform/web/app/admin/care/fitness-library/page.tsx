@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ask } from "@/components/confirm-dialog";
 import { Chip, Icon, PageHead, Subnav, fmtDate } from "@/components/admin/admin-chrome";
 import {
   CARE_KINDS,
@@ -175,7 +176,8 @@ export default function FitnessLibraryAdminPage() {
                 </button>
                 <button className="btn btn--ghost btn--sm" type="button" disabled={busy} onClick={() => setEditing({ id: video.id, title: video.title, subtitle: video.subtitle })}>Edit</button>
                 <button className="btn btn--ghost btn--sm" type="button" disabled={busy}
-                        onClick={() => { if (window.confirm(`Remove “${video.title}” from ${label(goal)}? Members stop seeing it at once.`)) void run(() => removeFitnessVideo(video.id), "Removed."); }}>Remove</button>
+                        onClick={() => void ask({ title: `Remove “${video.title}”?`, text: `It leaves ${label(goal)}, and members stop seeing it at once.`, confirm: "Remove", danger: true })
+                          .then((yes) => { if (yes) void run(() => removeFitnessVideo(video.id), "Removed."); })}>Remove</button>
               </div>
             </div>
           ))}

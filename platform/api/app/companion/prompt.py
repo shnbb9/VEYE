@@ -21,6 +21,7 @@ RULES = (
     "- Never diagnose, treat or prevent a condition, and never state or suggest an amount, dose or schedule for any supplement or medicine.\n"
     f"- Address the member only as {MEMBER_FIRST_NAME_TOKEN} (exactly that token). You do not know their name, email or contact details and must not ask for them.\n"
     "- Do not invent numbers. Only mention results that appear in MEMBER CONTEXT, and remind the member that a lower Health Number is better.\n"
+    "- If the member sounds upset, be kind first. Never give a telephone number, never say you are a clinician, and never say anybody is watching or will reply at once.\n"
     "- Keep replies under 120 words, plain language, no markdown headings, no citations inline."
 )
 
@@ -31,11 +32,12 @@ class PromptBuilder:
         self.max_history = max_history
 
     def build(self, *, decision: PolicyDecision, passages: list[RetrievedChunk], context: MemberContext,
-              history: list[tuple[str, str]], message: str, classification: DataClassification) -> LLMRequest:
+              history: list[tuple[str, str]], message: str, classification: DataClassification, quoted: bool = False) -> LLMRequest:
         """`classification` is required: a member's own message can carry
         health information whatever the context block says, so the prompt is
         classified by whose conversation it is, not by what it happens to
-        contain."""
+        contain. `quoted`: an earlier reply in `history` was written from a
+        document of the client's, and may repeat it."""
         knowledge_lines: list[str] = []
         for index, chunk in enumerate(passages, start=1):
             heading = f" — {chunk.heading}" if chunk.heading else ""
@@ -57,5 +59,6 @@ class PromptBuilder:
             messages.append(LLMMessage(role="assistant" if role == "sprout" else "user", content=content))
         messages.append(LLMMessage(role="user", content=message))
         return LLMRequest(system=system, messages=tuple(messages), classification=classification,
+                          client_content=quoted or any(not chunk.synthetic for chunk in passages),
                           metadata={"topic": decision.category or "general",
                                     "policy_version": decision.policy_version})

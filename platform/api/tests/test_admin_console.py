@@ -16,15 +16,18 @@ def _seed_everything():
 def test_overview_is_built_from_the_database(admin_client):
     _seed_everything()
     body = admin_client.get("/api/v1/admin/overview").json()
-    # Cara (admin-only) is not a member; Aditya, Maya and Jordan are.
-    assert body["members_total"] == 3
+    # Cara (admin-only) is not a member; the other five are. Tara and Noor have
+    # a Health Number each and share nothing with the team, so they are counted
+    # as members and nowhere in the results.
+    assert body["members_total"] == 5
     assert body["completions"]["health_number"] == 4          # 2 + 1 + 1
     assert body["completions"]["health_assessment"] == 2      # Aditya only
     assert body["completions"]["simple_quiz"] == 3            # Aditya 2, Maya 1
     assert body["members_completed"]["health_assessment"] == 1
     assert body["members_completed"]["simple_quiz"] == 2
     assert body["members_completed"]["blood_markers"] == 2
-    assert {m["email"] for m in body["recent_members"]} == {"aditya.demo@demo.veye.test", "maya.demo@demo.veye.test", "jordan.dual@demo.veye.test"}
+    assert {m["email"] for m in body["recent_members"]} == {f"{name}@demo.veye.test" for name in (
+        "aditya.demo", "maya.demo", "tara.demo", "noor.demo", "jordan.dual")}
     assert body["recent_activity"] and all({"at", "member_name", "kind", "summary"} <= set(row) for row in body["recent_activity"])
     # nothing invented
     assert not any(key for key in body if "revenue" in key or "growth" in key)
@@ -33,7 +36,8 @@ def test_overview_is_built_from_the_database(admin_client):
 def test_members_directory_search_filters_sort_and_member_360(admin_client):
     _seed_everything()
     page = admin_client.get("/api/v1/admin/members").json()
-    assert page["total"] == 3 and [r["name"] for r in page["rows"]] == ["Aditya Demo", "Jordan Dual", "Maya Demo"]
+    assert page["total"] == 5
+    assert [r["name"] for r in page["rows"]] == ["Aditya Demo", "Jordan Dual", "Maya Demo", "Noor Demo", "Tara Demo"]
     aditya = page["rows"][0]
     assert aditya["health_number"] is not None and aditya["onboarding"] == "Complete" and aditya["trackers_completed"] == 5
     assert aditya["admin_access"] is False
@@ -43,7 +47,9 @@ def test_members_directory_search_filters_sort_and_member_360(admin_client):
     assert admin_client.get("/api/v1/admin/members?q=maya").json()["total"] == 1
     assert admin_client.get("/api/v1/admin/members?q=nobody").json()["total"] == 0
     by_hn = admin_client.get("/api/v1/admin/members?sort=health_number&direction=asc").json()["rows"]
-    assert [r["health_number"] for r in by_hn] == sorted(r["health_number"] for r in by_hn)
+    shown = [r["health_number"] for r in by_hn if r["health_number"] is not None]
+    assert len(shown) == 3 and shown == sorted(shown)
+    assert {r["name"] for r in by_hn if r["health_number"] is None} == {"Noor Demo", "Tara Demo"}
     assert admin_client.get("/api/v1/admin/members?active=never").json()["total"] == 0
 
     detail = admin_client.get(f"/api/v1/admin/members/{aditya['member_id']}").json()
@@ -84,8 +90,8 @@ def test_assessments_index_and_attempts_are_read_only_system_managed(admin_clien
 def test_insights_are_real_aggregates(admin_client):
     _seed_everything()
     body = admin_client.get("/api/v1/admin/insights").json()
-    assert body["members_total"] == 3
-    assert len(body["members_by_month"]) == 12 and sum(m["count"] for m in body["members_by_month"]) == 3
+    assert body["members_total"] == 5
+    assert len(body["members_by_month"]) == 12 and sum(m["count"] for m in body["members_by_month"]) == 5
     assert body["attempts"]["health_number"] == 4
     assert sum(m["count"] for m in body["attempts_by_month"]["simple_quiz"]) == 3
     assert {f["flow_key"] for f in body["guided_flows"]} >= set()

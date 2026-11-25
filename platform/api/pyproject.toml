@@ -40,12 +40,13 @@ ai = [
   "groq>=1.0,<2",
   "langfuse>=4.0,<5",
 ]
-# Gemini on Google Cloud, the selected production provider. Optional because
-# nothing in the default deployment reaches it: VEYE_LLM_PROVIDER is "mock".
+# Google's models, through either of its doors (VEYE_GEMINI_BACKEND). Optional
+# because nothing in the default deployment reaches them: VEYE_LLM_PROVIDER is
+# "mock" and VEYE_EMBEDDING_PROVIDER is "hashing".
 gemini = [
-  # The unified SDK. Not pinned below 2: the Interactions API and the current
-  # model generation need the 2.x line, and 1.x is the superseded surface.
-  "google-genai>=2.3,<3",
+  # The unified SDK. 2.34 is the release this was written and tested against
+  # (25 Nov 2026); 3.x changes its transport and its default API versions.
+  "google-genai>=2.34,<3",
 ]
 # Member media in Google Cloud Storage. Optional: the default store is local.
 gcs = [
@@ -70,4 +71,4 @@ include = ["app*"]
 exclude = ["alembic*", "tests*"]
 
 [tool.setuptools.package-data]
-app = ["**/*.md", "**/*.txt"]
+app = ["**/*.md", "**/*.txt", "**/*.json"]

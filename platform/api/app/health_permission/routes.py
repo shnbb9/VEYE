@@ -86,12 +86,11 @@ settings_router = APIRouter(prefix="/api/v1/admin/settings/health-sharing", tags
 # text of the current terms' summary.
 EXPLANATION = (
     "Sharing lets the Veye team open your saved results — your Health Number, body "
-    "composition, blood markers, questionnaires and moods — when they are helping you, "
-    "and lets Veye Companion use them to answer you about your own progress. Until you "
-    "share them, nobody at Veye can see them and Sprout answers without them. Your name, "
-    "email, the messages you send and your food diary are not covered by this and stay "
-    "visible to the team so they can help you. You can withdraw sharing at any time, and "
-    "it stops at once."
+    "composition, blood markers, questionnaires and moods — when they are helping you. "
+    "Until you share them, nobody at Veye can see them. Your name, email, the messages "
+    "you send, what you write to Sprout and your food diary are not covered by this and "
+    "stay visible to the team so they can help you. Sprout is a separate choice. You can "
+    "withdraw sharing at any time, and it stops at once."
 )
 
 

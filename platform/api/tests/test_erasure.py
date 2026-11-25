@@ -25,11 +25,12 @@ from app.db.session import SessionLocal
 from app.erasure.models import ErasureRequest
 from app.erasure.service import LEDGER_PREFIX
 from app.health_permission.models import MemberHealthPermission, MemberHealthPermissionEvent
+from app.sprout_permission.models import MemberSproutPermission, MemberSproutPermissionEvent
 from app.main import app
 from app.members.models import Member
 from app.mood.models import MoodEntry
 from app.requests.models import MemberRequest
-from tests.conftest import MEMBER_PASSWORD, admin_sign_in, decide_sharing, sign_in, sign_up, verify_member_email
+from tests.conftest import MEMBER_PASSWORD, admin_sign_in, decide_sharing, sign_in, sign_up, turn_on_sprout, verify_member_email
 
 PASSWORD = "EraseMe!2026-local"
 ANSWERS = {
@@ -62,6 +63,7 @@ def rich_member(email: str) -> tuple[TestClient, dict]:
     http.post("/api/v1/companion/messages", json={"message": "How is my progress?"})
     http.post("/api/v1/members/me/photo", files={"file": ("me.png", io.BytesIO(png()), "image/png")})
     decide_sharing(http)
+    turn_on_sprout(http)
     account = http.get("/api/v1/auth/me").json()["member"]
     return http, account
 
@@ -83,6 +85,8 @@ def rows_for(member_id: UUID) -> dict[str, int]:
             "policy_decisions": db.query(CompanionPolicyDecision).filter(CompanionPolicyDecision.member_id == member_id).count(),
             "sharing": db.query(MemberHealthPermission).filter(MemberHealthPermission.member_id == member_id).count(),
             "sharing_events": db.query(MemberHealthPermissionEvent).filter(MemberHealthPermissionEvent.member_id == member_id).count(),
+            "sprout": db.query(MemberSproutPermission).filter(MemberSproutPermission.member_id == member_id).count(),
+            "sprout_events": db.query(MemberSproutPermissionEvent).filter(MemberSproutPermissionEvent.member_id == member_id).count(),
         }
 
 
@@ -115,7 +119,8 @@ def test_erasure_removes_every_trace_and_leaves_a_receipt_without_health_data(ad
     http, account = rich_member("erase.full@demo.veye.test")
     member_id, user_id = UUID(account["member_id"]), UUID(account["id"])
     before = rows_for(member_id)
-    assert all(before[k] >= 1 for k in ("member", "health_number", "mood", "requests", "conversations", "messages", "sharing")), before
+    assert all(before[k] >= 1 for k in ("member", "health_number", "mood", "requests", "conversations", "messages", "sharing",
+                                        "sprout", "sprout_events")), before
     admin_client.get(f"/api/v1/admin/members/{member_id}")  # an audited read about this member
     # An audit entry that really does record the address (the positive control
     # for redaction: without one, "no email in the audit log" proves nothing).
@@ -231,6 +236,35 @@ def test_a_failed_purge_keeps_access_closed_and_finishes_on_retry(admin_client):
     assert retried.status_code == 200 and retried.json()["state"] == "erased"
     assert rows_for(member_id)["member"] == 0
     assert admin_client.post(f"/api/v1/admin/erasure-requests/{row['request_id']}/retry").status_code == 409
+
+
+def test_a_message_in_flight_during_the_purge_leaves_nothing(admin_client, monkeypatch):
+    """Second review: the second sweep left the companion out, and rows keyed by
+    member without a foreign key stay when the member goes."""
+    from app.companion.models import CompanionConversation, CompanionMessage, CompanionPolicyDecision
+    from app.erasure.service import ErasureService
+
+    http, account = rich_member("in.flight@demo.veye.test")
+    member_id = UUID(http.get("/api/v1/auth/me").json()["member"]["member_id"])
+    real = ErasureService._stage_media
+
+    def late(self, request):
+        conversation = CompanionConversation(member_id=member_id)
+        self.db.add(conversation)
+        self.db.flush()
+        decision = CompanionPolicyDecision(conversation_id=conversation.id, member_id=member_id, outcome="escalate", category="wellbeing_concern",
+                                           matched_rule="safety:self_harm", reason="x", policy_version="x")
+        self.db.add(decision)
+        self.db.add(CompanionMessage(conversation_id=conversation.id, role="member", content="written while it ran"))
+        self.db.flush()
+        return real(self, request)
+
+    monkeypatch.setattr(ErasureService, "_stage_media", late)
+    assert erase(http).status_code in (200, 202)
+    with SessionLocal() as db:
+        assert db.query(CompanionPolicyDecision).filter(CompanionPolicyDecision.member_id == member_id).count() == 0
+        assert db.query(CompanionConversation).filter(CompanionConversation.member_id == member_id).count() == 0
+        assert db.query(CompanionMessage).filter(CompanionMessage.content == "written while it ran").count() == 0
 
 
 def test_running_the_purge_again_does_nothing_twice(admin_client):
