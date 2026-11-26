@@ -36,6 +36,7 @@ from app.requests.schemas import (
     PublicRequestIn,
     RequestOut,
     RequestReplyOut,
+    TeamNoticeOut,
 )
 
 
@@ -75,7 +76,7 @@ def reply_state(row: MemberRequest) -> str:
     return "failed" if row.replies else "waiting"
 
 
-def request_out(row: MemberRequest) -> RequestOut:
+def request_out(row: MemberRequest, team_notice: TeamNoticeOut | None = None) -> RequestOut:
     return RequestOut(
         id=row.id, kind=row.kind, kind_label=KIND_LABELS.get(row.kind, row.kind), status=row.status,
         status_label=STATUS_LABELS.get(row.status, row.status), source=row.source, member_id=row.member_id,
@@ -83,6 +84,7 @@ def request_out(row: MemberRequest) -> RequestOut:
         created_at=row.created_at, updated_at=row.updated_at, handled_by=row.handled_by, handled_at=row.handled_at,
         resolution_note=row.resolution_note or "", priority=row.priority, reply_state=reply_state(row),
         replies=[reply_out(r) for r in sorted(row.replies, key=lambda r: _aware(r.created_at))],
+        team_notice=team_notice,
     )
 
 

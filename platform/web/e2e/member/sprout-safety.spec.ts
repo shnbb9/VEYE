@@ -64,7 +64,16 @@ test.describe("somebody may not be all right", () => {
     await expect(last(page)).not.toContainText(/\d{3}/);      // no country is known, so no number is given
 
     await expect.poll(async () => (await told(reply.conversation_id)).map((m) => m.to).sort()).toEqual(expect.arrayContaining([ADMIN.email, ADMIN_TWO.email]));
-    const first = await told(reply.conversation_id);
+    // Every active administrator is told, one after another, and earlier tests in a
+    // run add administrators: the count is kept once it has stopped growing, not
+    // the moment the first two arrive (26 Nov 2026: 9 were counted, 10 arrived).
+    let first = await told(reply.conversation_id);
+    await expect.poll(async () => {
+      const now = await told(reply.conversation_id);
+      const settled = now.length === first.length;
+      first = now;
+      return settled;
+    }, { intervals: [1000] }).toBe(true);
     for (const mail of first) {
       expect(mail.text.toLowerCase()).not.toContain("suicid");
       expect(mail.text).not.toContain("Ember");

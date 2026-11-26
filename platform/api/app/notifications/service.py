@@ -26,7 +26,8 @@ from app.notifications.models import Notification, NotificationOutbox, Notificat
 
 NOTIFICATION_KINDS = ("welcome", "email_verification", "password_reset", "companion_escalation",
                       "admin_invitation", "email_change", "email_changed", "account_deactivated",
-                      "prospect_confirmation", "health_sharing_request", "erasure_receipt", "member_invitation")
+                      "prospect_confirmation", "health_sharing_request", "erasure_receipt", "member_invitation",
+                      "request_received")
 # Security messages are always delivered regardless of preference: nobody may
 # switch off the message that activates their console account, confirms a new
 # address, tells the old address that the account moved, or tells them their
@@ -241,3 +242,16 @@ class NotificationService:
             elif outcome is not None and outcome.status in (RETRY, FAILED):
                 failed += 1
         return {"due": len(due), "stale": len(stale), "sent": sent, "failed": failed}
+
+
+def deliver_after(outbox_ids: list[UUID]) -> None:
+    """For a background task, after the person has their answer: a mail server
+    that takes its time keeps nobody waiting. Anything not sent here is picked
+    up by the scheduled delivery."""
+    from app.core.runtime import get_runtime
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        service = NotificationService(db, get_runtime().email)
+        for outbox_id in outbox_ids:
+            service.dispatch(outbox_id)

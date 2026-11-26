@@ -33,7 +33,7 @@ from app.companion.models import (
     CompanionPolicyDecision,
     CompanionSettings,
 )
-from app.companion.personalization import MEMBER_FIRST_NAME_TOKEN, substitute
+from app.companion.personalization import MEMBER_FIRST_NAME_TOKEN, as_written, substitute, without_marks
 from app.companion.policy import (
     CRISIS_CATEGORY,
     CRISIS_FLOOR,
@@ -530,8 +530,10 @@ class CompanionService:
             return TURNED_OFF_MEANWHILE, OUTCOME_UNAVAILABLE, passages, {"health_context": HEALTH_OFF}
         # 8. Output safety.
         safety = OutputSafety(safe_response=self.settings.safe_response, fallback=self.settings.fallback, known=known).check(response.text)
-        # 9. Personalization inside the trust boundary: only the known token is replaced.
-        personalized = substitute(safety.text, {MEMBER_FIRST_NAME_TOKEN: principal.first_name})
+        # 9. Personalization inside the trust boundary: a redaction mark the
+        #    model copied becomes words, and only the known token is replaced.
+        unmarked, _ = without_marks(safety.text)
+        personalized = substitute(unmarked, {MEMBER_FIRST_NAME_TOKEN: principal.first_name})
         trace.provider, trace.model = response.provider, response.model
         self._used(trace, response)
         trace.safety_result = safety.result
@@ -561,7 +563,8 @@ class CompanionService:
             earlier = [m for m in earlier if not m.from_records]
         earlier = [m for m in earlier if m.policy_decision is None or m.policy_decision.outcome not in (OUTCOME_ESCALATE, OUTCOME_SUPPORT)]
         kept = earlier[-limit:]
-        return [(m.role, m.content) for m in kept], any(m.from_records for m in kept), self._quotes_the_client(earlier)
+        turns = [(m.role, as_written(m.content, principal.first_name) if m.role == "sprout" else m.content) for m in kept]
+        return turns, any(m.from_records for m in kept), self._quotes_the_client(earlier)
 
     def _quotes_the_client(self, earlier: list[CompanionMessage]) -> bool:
         """A reply may repeat what it was written from, and the replies after

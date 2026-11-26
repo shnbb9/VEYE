@@ -131,6 +131,9 @@ def run(db: Session, people: People, heard: Heard, *, backend: str, unavailable)
         reply = converse(db, who, message)
         now = Step(name, [], reply.reply, heard.responses[-1] if len(heard.responses) > before[1] else None)
         steps.append(now)
+        # A real model copies a redaction mark it is shown (26 Nov 2026); a member must never read one.
+        if "[REDACTED" in reply.reply:
+            now.wrong.append("a redaction mark reached the member")
         if (len(heard.requests) > before[0]) is not asked:
             now.wrong.append("the model was asked" if not asked else "the model was never asked")
         return now, reply, heard.requests[-1] if asked and heard.requests else None

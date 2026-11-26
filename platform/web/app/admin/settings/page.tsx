@@ -379,7 +379,7 @@ function ProductSection() {
             approved address in static copy and nothing here changes it. An
             administrator who changed this and believed the public page had
             followed would have been sending people to an unwatched mailbox. */}
-        <div className="card__head"><div><h2 className="card__title">Member support</h2><p className="t-support">The address on the member dashboard&rsquo;s Contact Us card, and the one Veye&rsquo;s account emails and request replies tell members to write to. The public Help page is not changed from here.</p></div></div>
+        <div className="card__head"><div><h2 className="card__title">Member support</h2><p className="t-support">The address on the member dashboard&rsquo;s Contact Us card, and the one Veye&rsquo;s account emails and request replies tell members to write to. Each new Contact Us message, Help question and Join Beta request is announced to it by email, without what is in it. The public Help page is not changed from here.</p></div></div>
         <div className="card__body stack gap-5">
           {error && <p className="errorbar">{error}</p>}
           {!saved && !error && <p className="loading-row">Loading…</p>}

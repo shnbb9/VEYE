@@ -253,12 +253,18 @@ export type RequestReply = {
   id: string; body: string; to_email: string; sent_by_name: string;
   delivery_status: "sent" | "failed"; delivery_detail: string | null; created_at: string;
 };
+/* The email that told the team's support address this request arrived. */
+export type TeamNotice = {
+  status: "queued" | "sending" | "retry" | "sent" | "failed" | "skipped"; to_email: string; sent_at: string | null; detail: string | null;
+};
 export type ConsoleRequest = {
   id: string; kind: RequestKind; kind_label: string; status: RequestStatus; status_label: string; source: "public" | "member";
   member_id: string | null; name: string; email: string; subject: string; message: string; page: string | null;
   created_at: string; updated_at: string; handled_by: string | null; handled_at: string | null; resolution_note: string;
   priority: Priority | null; reply_state: ReplyState;
   replies: RequestReply[];
+  // None for requests that came in before the team was emailed about them.
+  team_notice?: TeamNotice | null;
 };
 export type RequestsPage = { rows: ConsoleRequest[]; total: number; page: number; page_size: number; counts: Record<string, number> };
 export type RequestsView = "open" | "all" | "resolved" | "new" | "in_progress" | "awaiting_reply";

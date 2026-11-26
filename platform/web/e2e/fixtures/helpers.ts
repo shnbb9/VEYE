@@ -177,6 +177,29 @@ export async function waitForMail(to: string, subjectPart: string, attempts = 20
   }
 }
 
+/** The newest message to `to` whose subject has `subjectPart` and whose text has
+ *  `textPart`: for a mailbox many messages of one kind reach, like the team's. */
+export async function waitForMailWith(to: string, subjectPart: string, textPart: string, attempts = 20): Promise<{ id: string; text: string }> {
+  const mail = await request.newContext({ baseURL: MAILPIT_URL });
+  try {
+    for (let i = 0; i < attempts; i++) {
+      const search = await mail.get(`/api/v1/search?query=${encodeURIComponent(`to:${to}`)}&limit=50`);
+      if (search.ok()) {
+        const body = (await search.json()) as { messages: MailpitMessage[] };
+        const candidates = body.messages.filter((m) => m.Subject.includes(subjectPart)).sort((a, b) => b.Created.localeCompare(a.Created));
+        for (const candidate of candidates.slice(0, 10)) {
+          const detail = (await (await mail.get(`/api/v1/message/${candidate.ID}`)).json()) as { Text: string };
+          if (detail.Text.includes(textPart)) return { id: candidate.ID, text: detail.Text };
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    throw new Error(`No Mailpit message to ${to} with subject containing "${subjectPart}" and text containing "${textPart}"`);
+  } finally {
+    await mail.dispose();
+  }
+}
+
 export function linkFrom(text: string, path: string): string {
   const match = text.match(new RegExp(`https?://[^\\s]+/${path}\\?[^\\s)]+`));
   if (!match) throw new Error(`No ${path} link in email:\n${text}`);

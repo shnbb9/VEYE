@@ -84,6 +84,8 @@ LIMITS = {
     "resend_verification": Limit("resend_verification", per_subject=5, window_minutes=60),
     # Writes from anyone at all.
     "public_request": Limit("public_request", per_subject=10, window_minutes=60),
+    # A member's requests: each one emails the team's support address.
+    "member_request": Limit("member_request", per_subject=20, window_minutes=60),
     # Each member invitation emails an address an administrator typed.
     "member_invitation": Limit("member_invitation", per_subject=60, window_minutes=60),
     # Presenting an invitation token: 32 random bytes, so this is about load.

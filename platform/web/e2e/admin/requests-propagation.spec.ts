@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ADMIN, ADMIN_TWO, ADITYA, freshMember } from "../fixtures/accounts";
-import { adminSignIn, expectAdminHome, expectMemberDashboard, memberSignIn, open, portalSessions, signUpMember, waitForMail } from "../fixtures/helpers";
+import { adminSignIn, expectAdminHome, expectMemberDashboard, memberSignIn, open, portalSessions, signUpMember, waitForMail, waitForMailWith } from "../fixtures/helpers";
 
 /* Admin ↔ member propagation, both directions:
    - a member's Contact Us / Join Beta and a visitor's Help question land in
@@ -51,6 +51,18 @@ test.describe.serial("Requests & Inbox and content propagation", () => {
     const detail = page.getByTestId("request-detail");
     await expect(detail).toContainText("Is my first Health Number kept");
     await expect(detail).toContainText(member.email);
+
+    /* The team's support address was told that it arrived, and only that
+       (owner, 26 Nov 2026); the console says where the email went. */
+    const api = process.env.E2E_API_URL ?? "http://localhost:8001";
+    const support = ((await (await page.request.get(`${api}/api/v1/settings/support`)).json()) as { support_email: string }).support_email;
+    await expect(page.getByTestId("request-team-notice")).toContainText(`Sent to ${support}`);
+    const sentByMember = (await maya.evaluate(async (base) => (await fetch(`${base}/api/v1/members/me/requests`, { credentials: "include" })).json(), api)) as { id: string; subject: string }[];
+    const requestId = sentByMember.find((r) => r.subject === `E2E contact ${stamp}`)!.id;
+    const told = await waitForMailWith(support, "Veye: a new Contact Us message", `/admin/requests?id=${requestId}`);
+    expect(told.text).toContain("a signed-in member");
+    for (const privateBit of [member.email, member.lastName, `E2E contact ${stamp}`, "Is my first Health Number kept"]) expect(told.text).not.toContain(privateBit);
+
     await page.getByTestId("request-progress").click();
     await expect(detail.locator(".chip").first()).toHaveText("In progress");
 

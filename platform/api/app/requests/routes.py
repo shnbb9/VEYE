@@ -4,14 +4,18 @@ Public: a visitor sends a Contact Us message or a Help question.
 Member: Contact Us / Help question / Join Beta from inside the application,
 plus the member's own list (so a card can say "requested on …").
 Admin: list with filters, one request, status changes, and the replies
-the console sends back — the only thing here that emails anybody."""
+the console sends back.
+
+Two things here email anybody: a new request tells the team's support
+address that it arrived (app/requests/team.py), and a reply goes to whoever
+wrote in."""
 
 from __future__ import annotations
 
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.admin.audit import record_audit
@@ -21,8 +25,9 @@ from app.core.runtime import Runtime, get_runtime
 from app.core.idempotency import Idempotency, Replay
 from app.core.rate_limit import RateLimiter, client_address
 from app.db.session import get_db
+from app.notifications.service import deliver_after
 from app.product_settings.routes import read_support
-from app.requests.models import KINDS
+from app.requests.models import KINDS, MemberRequest
 from app.requests.schemas import (
     MemberRequestIn,
     MemberRequestOut,
@@ -35,6 +40,7 @@ from app.requests.schemas import (
     SubmittedOut,
 )
 from app.requests.service import RequestError, RequestService, member_request_out, request_out
+from app.requests.team import team_notices, tell_the_team
 
 public_router = APIRouter(prefix="/api/v1/requests", tags=["requests"])
 member_router = APIRouter(prefix="/api/v1/members/me/requests", tags=["requests"])
@@ -45,26 +51,39 @@ def _raise(exc: RequestError) -> None:
     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
+def _console(db: Session, row: MemberRequest) -> RequestOut:
+    """A request as the console sees it, with what became of the team's email."""
+    return request_out(row, team_notices(db, [row.id]).get(row.id))
+
+
 @public_router.post("", response_model=SubmittedOut, status_code=status.HTTP_201_CREATED)
-def submit_public(payload: PublicRequestIn, request: Request, db: Session = Depends(get_db)) -> SubmittedOut:
+def submit_public(payload: PublicRequestIn, request: Request, background: BackgroundTasks, db: Session = Depends(get_db),
+                  runtime: Runtime = Depends(get_runtime)) -> SubmittedOut:
     # Anyone at all can write here, so anyone at all is limited.
     RateLimiter(db).enforce("public_request", subject=f"ip:{client_address(request)}")
     row = RequestService(db).create_public(payload)
+    told = tell_the_team(db, runtime, row)
     db.commit()
+    background.add_task(deliver_after, [told])
     return SubmittedOut(id=row.id, kind=row.kind, status=row.status, created_at=row.created_at)
 
 
 @member_router.post("", response_model=SubmittedOut, status_code=status.HTTP_201_CREATED)
-def submit_member(payload: MemberRequestIn, principal: CurrentPrincipal = Depends(require_member),
-                  db: Session = Depends(get_db)) -> SubmittedOut:
+def submit_member(payload: MemberRequestIn, background: BackgroundTasks, principal: CurrentPrincipal = Depends(require_member),
+                  db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)) -> SubmittedOut:
     user = db.get(UserAccount, principal.user_id)
     if user is None or user.member_id is None:
         raise HTTPException(status_code=403, detail="This account has no Veye member profile.")
+    # Each one emails the team now, so a member is limited too, far above anything honest.
+    RateLimiter(db).enforce("member_request", subject=f"member:{user.member_id}")
     try:
         row, already_open = RequestService(db).create_for_member(user, payload)
     except RequestError as exc:
         _raise(exc)
+    told = None if already_open else tell_the_team(db, runtime, row)
     db.commit()
+    if told is not None:
+        background.add_task(deliver_after, [told])
     return SubmittedOut(id=row.id, kind=row.kind, status=row.status, created_at=row.created_at, already_open=already_open)
 
 
@@ -92,13 +111,15 @@ def list_requests(
                                                page=page, page_size=page_size)
     except RequestError as exc:
         _raise(exc)
-    return RequestsPage(rows=[request_out(r) for r in rows], total=total, page=page, page_size=page_size, counts=service.counts())
+    notices = team_notices(db, [r.id for r in rows])
+    return RequestsPage(rows=[request_out(r, notices.get(r.id)) for r in rows], total=total, page=page, page_size=page_size,
+                        counts=service.counts())
 
 
 @admin_router.get("/{request_id}", response_model=RequestOut)
 def get_request(request_id: UUID, db: Session = Depends(get_db)) -> RequestOut:
     try:
-        return request_out(RequestService(db).get(request_id))
+        return _console(db, RequestService(db).get(request_id))
     except RequestError as exc:
         _raise(exc)
 
@@ -112,7 +133,7 @@ def set_status(request_id: UUID, payload: RequestStatusIn, principal: CurrentPri
         _raise(exc)
     record_audit(db, principal, f"requests.{payload.status}", "member_request", str(row.id), {"kind": row.kind, "status": row.status})
     db.commit()
-    return request_out(row)
+    return _console(db, row)
 
 
 @admin_router.put("/{request_id}/priority", response_model=RequestOut)
@@ -127,7 +148,7 @@ def set_priority(request_id: UUID, payload: PriorityIn, principal: CurrentPrinci
     record_audit(db, principal, "requests.priority_set", "member_request", str(row.id),
                  {"from": before or "", "to": row.priority or ""})
     db.commit()
-    return request_out(row)
+    return _console(db, row)
 
 
 @admin_router.post("/{request_id}/reply", response_model=RequestOut)
@@ -145,7 +166,7 @@ def reply_to_request(request_id: UUID, payload: RequestReplyIn, principal: Curre
         idempotency.claim("request_reply", payload.idempotency_key, subject=str(principal.user_id))
     except Replay as replay:
         db.commit()
-        return request_out(RequestService(db).get(request_id))
+        return _console(db, RequestService(db).get(request_id))
     sender = db.get(UserAccount, principal.user_id)
     support = read_support(db).support_email
     try:
@@ -158,4 +179,4 @@ def reply_to_request(request_id: UUID, payload: RequestReplyIn, principal: Curre
                  {"kind": row.kind, "to": reply.to_email, "delivery": reply.delivery_status})
     idempotency.complete("request_reply", payload.idempotency_key, str(reply.id))
     db.commit()
-    return request_out(row)
+    return _console(db, row)

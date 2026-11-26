@@ -320,6 +320,33 @@ def companion_escalation(first_name: str, category: str, admin_link: str) -> Ren
     )
 
 
+_ARRIVED = {"contact_us": "Contact Us message", "help_question": "Help question", "join_beta": "Join Beta request"}
+
+
+def request_received(kind: str, source: str, received_at, link: str) -> Rendered:
+    """To the team's support address when somebody writes in. It says that one
+    arrived and where to read it; never who wrote or what they wrote. Those stay
+    in the console, behind its sign-in: a message can carry health details, and
+    a mailbox is not the place that decides who may read them."""
+    what = _ARRIVED.get(kind, "request")
+    who = "a signed-in member" if source == "member" else "a visitor to the website"
+    when = f"{_date(received_at)} at {received_at:%H:%M} UTC" if received_at else "just now"
+    return Rendered(
+        subject=f"Veye: a new {what}",
+        text=(
+            f"A new {what} arrived from {who} on {when}.\n\n"
+            f"Read it and reply in the console:\n{link}\n\n"
+            "Who wrote and what they wrote are not in this email; they stay in the console.\n"
+        ),
+        html=_wrap(
+            f"A new {what}",
+            [f"It arrived from {escape(who)} on {escape(when)}.",
+             "Who wrote and what they wrote are not in this email; they stay in the console."],
+            ("Read it in the console", link),
+        ),
+    )
+
+
 def _date(value) -> str:
     return value.strftime("%d %B %Y").lstrip("0") if value else ""
 

@@ -18,6 +18,7 @@ import {
   type RequestStatus,
   type RequestsPage,
   type RequestsView,
+  type TeamNotice,
 } from "@/lib/admin-console-api";
 
 /* Requests & Inbox (admin prototype screens/requests.js): one simple place for
@@ -31,6 +32,19 @@ import {
 const VIEWS: { key: RequestsView; label: string }[] = [{ key: "open", label: "Open" }, { key: "awaiting_reply", label: "Awaiting a reply" }, { key: "all", label: "All" }, { key: "resolved", label: "Resolved" }];
 const KINDS = Object.keys(REQUEST_KIND_LABELS) as RequestKind[];
 const STATUS_TONE: Record<RequestStatus, string> = { new: "attention", in_progress: "info", resolved: "live" };
+
+/* The email that told the team this request arrived, at the support address in
+   Settings. Said as it happened: one that has not left is not reported as sent. */
+function teamNotice(notice: TeamNotice): string {
+  const detail = notice.detail ? `: ${notice.detail}` : "";
+  switch (notice.status) {
+    case "sent": return `Sent to ${notice.to_email} on ${fmtDate(notice.sent_at)}. The email says a request arrived, not what is in it.`;
+    case "queued": case "sending": return `Being sent to ${notice.to_email}.`;
+    case "retry": return `Not delivered to ${notice.to_email} yet${detail}. It is tried again automatically.`;
+    case "failed": return `Not delivered to ${notice.to_email}${detail}. It will not be tried again.`;
+    default: return `Not sent to ${notice.to_email}.`;
+  }
+}
 
 export default function RequestsPage() {
   return <Suspense fallback={null}><Requests /></Suspense>;
@@ -215,6 +229,7 @@ function Requests() {
               <div className="card__body stack gap-5">
                 <PrioritySelect id="rqImportance" value={item.priority} disabled={busy} onChange={(next) => void label(next)} />
                 <div><div className="t-eyebrow">Source</div><p>{item.kind_label} · {item.source === "member" ? "signed-in member" : "public website"}{item.page ? ` · ${item.page}` : ""}</p></div>
+                {item.team_notice && <div data-testid="request-team-notice"><div className="t-eyebrow">Team email</div><p className="t-support">{teamNotice(item.team_notice)}</p></div>}
                 <div><div className="t-eyebrow">Message</div><p style={{ whiteSpace: "pre-wrap" }}>{item.message || <span className="t-support">No message — a Join Beta request carries only the member&rsquo;s identity.</span>}</p></div>
                 {item.member_id && <div><div className="t-eyebrow">Member</div><p><Link href={`/admin/members/${item.member_id}`}>Open Member 360</Link></p></div>}
                 {(item.handled_by || item.handled_at) && <div><div className="t-eyebrow">Handling</div><p className="t-support">{item.handled_by ?? "—"} · {fmtDate(item.handled_at)}</p></div>}

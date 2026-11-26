@@ -44,6 +44,16 @@ class RequestReplyOut(BaseModel):
     created_at: datetime
 
 
+class TeamNoticeOut(BaseModel):
+    """The email that told the team this request arrived: where it went and
+    whether it left. The console's record only; a member never sees it."""
+
+    status: str           # queued | sending | retry | sent | failed
+    to_email: str
+    sent_at: datetime | None
+    detail: str | None
+
+
 class MemberReplyOut(BaseModel):
     """What the member sees of an answer: the words, and when they were sent.
     Not the administrator who typed it, not the address it went to, and never
@@ -97,6 +107,8 @@ class RequestOut(BaseModel):
     priority: Priority | None = None
     reply_state: ReplyState = "waiting"
     replies: list[RequestReplyOut] = []
+    # None for requests that came in before the team was emailed about them.
+    team_notice: TeamNoticeOut | None = None
 
 
 class RequestsPage(BaseModel):
