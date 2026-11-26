@@ -493,7 +493,7 @@ function supportCard(host) {
   const org = S.get().org;
   host.innerHTML = `
       <form class="card" method="post" id="supportForm" novalidate style="height:100%">
-        <div class="card__head"><div><h2 class="card__title">Member support</h2><p class="t-support">The address on the member dashboard’s Contact Us card, and the one Veye’s account emails and request replies tell members to write to. The public Help page is not changed from here.</p></div></div>
+        <div class="card__head"><div><h2 class="card__title">Member support</h2><p class="t-support">The address on the member dashboard’s Contact Us card, and the one Veye’s account emails and request replies tell members to write to. Each new Contact Us message, Help question and Join Beta request is announced to it by email, without what is in it. The public Help page is not changed from here.</p></div></div>
         <div class="card__body stack gap-5">
           ${H.errorbar(ui.supportError)}
           <div class="field"><label class="field__label" for="supportEmail">Support email</label><input class="input" id="supportEmail" type="email" required value="${esc(org.supportEmail)}" data-testid="support-email-input"></div>

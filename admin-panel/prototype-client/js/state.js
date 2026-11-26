@@ -32,6 +32,15 @@ function load() {
     if (!raw) return fresh();
     const stored = JSON.parse(raw);
     if (!stored || stored.schema !== SCHEMA) return fresh();
+    // 26 Nov 2026: a request records the email that told the team it arrived.
+    // Requests stored before then get one, rather than the sample data being
+    // thrown away for one new field.
+    const support = (stored.org && stored.org.supportEmail) || 'contact@veye.co';
+    (stored.requests || []).forEach((r) => {
+      if (!('team_notice' in r)) {
+        r.team_notice = { status: 'sent', to_email: support, sent_at: new Date(Date.parse(r.created_at) + 60 * 1000).toISOString(), detail: null };
+      }
+    });
     // Merge over a fresh base so a key added later never breaks a stored state.
     return { ...fresh(), ...stored };
   } catch (e) {

@@ -28,6 +28,19 @@ const KINDS = { contact_us: 'Contact Us', help_question: 'Help question', join_b
 const STATUS_LABELS = { new: 'New', in_progress: 'In progress', resolved: 'Resolved' };
 const STATUS_TONE = { new: 'attention', in_progress: 'info', resolved: 'live' };
 
+/* The email that told the team this request arrived, at the support address in
+   Settings — the console's own words, as it happened. */
+function teamNotice(notice) {
+  const detail = notice.detail ? `: ${notice.detail}` : '';
+  switch (notice.status) {
+    case 'sent': return `Sent to ${notice.to_email} on ${H.fmtDate(notice.sent_at)}. The email says a request arrived, not what is in it.`;
+    case 'queued': case 'sending': return `Being sent to ${notice.to_email}.`;
+    case 'retry': return `Not delivered to ${notice.to_email} yet${detail}. It is tried again automatically.`;
+    case 'failed': return `Not delivered to ${notice.to_email}${detail}. It will not be tried again.`;
+    default: return `Not sent to ${notice.to_email}.`;
+  }
+}
+
 let view = { view: 'open', kind: '', source: '', priority: '', q: '', selected: null, pinned: null, reply: '', sent: '', error: '', note: null };
 
 function list() {
@@ -111,6 +124,7 @@ function render(outlet) {
         <div class="card__body stack gap-5">
           ${M.prioritySelect('rqImportance', item.priority)}
           <div><div class="t-eyebrow">Source</div><p>${esc(KINDS[item.kind])} · ${item.source === 'member' ? 'signed-in member' : 'public website'}${item.page ? ' · ' + esc(item.page) : ''}</p></div>
+          ${item.team_notice ? `<div data-testid="request-team-notice"><div class="t-eyebrow">Team email</div><p class="t-support">${esc(teamNotice(item.team_notice))}</p></div>` : ''}
           <div><div class="t-eyebrow">Message</div><p style="white-space:pre-wrap">${item.message ? esc(item.message) : '<span class="t-support">No message — a Join Beta request carries only the member’s identity.</span>'}</p></div>
           ${item.member_id && S.member(item.member_id) ? `<div><div class="t-eyebrow">Member</div><p><a href="${R.href('/members/' + item.member_id)}">Open Member 360</a></p></div>` : ''}
           ${item.handled_by || item.handled_at ? `<div><div class="t-eyebrow">Handling</div><p class="t-support">${esc(item.handled_by || '—')} · ${esc(H.fmtDate(item.handled_at))}</p></div>` : ''}

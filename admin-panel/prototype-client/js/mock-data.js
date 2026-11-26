@@ -604,7 +604,10 @@ function buildSeed(NOW) {
     delivery_status: failed ? 'failed' : 'sent', delivery_detail: failed ? '550 5.1.1 Mailbox unavailable' : null, created_at: ago(d, h) });
   const request = (key, o) => ({ id: uuid('request:' + key), kind: 'contact_us', status: 'new', source: 'public', member_id: null, name: '', email: '',
     subject: '', message: '', page: null, created_at: ago(o.d, o.h || 0), updated_at: ago(o.d, o.h || 0), handled_by: null, handled_at: null,
-    resolution_note: '', replies: [], priority: null, ...o });
+    resolution_note: '', replies: [], priority: null,
+    // The team's support address was told it arrived, a minute later.
+    team_notice: { status: 'sent', to_email: 'contact@veye.co', sent_at: new Date(Date.parse(ago(o.d, o.h || 0)) + 60 * 1000).toISOString(), detail: null },
+    ...o });
   const requests = [
     request('cara-history', { d: 0, h: 2, kind: 'contact_us', source: 'member', member_id: mid('cara-morgan'), name: 'Cara Morgan', email: 'cara.morgan@demo.veye.test',
       subject: 'Question about my assessment history', page: '/app/contact',
